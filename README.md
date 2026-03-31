@@ -1,10 +1,10 @@
 # actor-for-agents
 
-Asyncio-native Actor framework for Python agent systems — supervision trees, middleware pipeline, and pluggable mailbox.
+Asyncio-native Actor framework for Python agent systems — supervision trees, event streaming, and pluggable mailbox.
 
 Inspired by Erlang/Akka. Built for AI agent orchestration.
 
-**[Documentation](https://greatmengqi.github.io/actor-for-agents/)** · [Getting Started](https://greatmengqi.github.io/actor-for-agents/getting-started/) · [Agent Layer](https://greatmengqi.github.io/actor-for-agents/agents/) · [API Reference](https://greatmengqi.github.io/actor-for-agents/api/actor/)
+**[Documentation](https://greatmengqi.github.io/actor-for-agents/)** · [Getting Started](https://greatmengqi.github.io/actor-for-agents/getting-started/) · [Agent Layer](https://greatmengqi.github.io/actor-for-agents/agents/) · [API Reference](https://greatmengqi.github.io/actor-for-agents/api/agent-actor/)
 
 ## Install
 
@@ -15,37 +15,103 @@ pip install actor-for-agents
 pip install actor-for-agents[redis]
 ```
 
-## Quick Start
+## Agent Quick Start
 
 ```python
 import asyncio
-from actor_for_agents import Actor, ActorSystem
+from actor_for_agents.agents import AgentSystem, AgentActor, Task
 
-class GreetActor(Actor):
-    async def on_receive(self, message):
-        return f"Hello, {message}!"
+class SummaryAgent(AgentActor[str, str]):
+    async def execute(self, input: str) -> str:
+        await self.emit_progress("summarizing...")
+        return f"Summary: {input[:80]}..."
 
 async def main():
-    system = ActorSystem("demo")
-    ref = await system.spawn(GreetActor, "greeter")
+    system = AgentSystem("app")
 
-    result = await ref.ask("world")   # request-reply
-    print(result)                      # Hello, world!
-
-    await ref.tell("fire-and-forget")  # non-blocking
-
-    await system.shutdown()
+    # Stream every event from the entire agent tree
+    async for event in system.run(SummaryAgent, "Long document..."):
+        print(event.type, event.agent_path, event.data)
 
 asyncio.run(main())
 ```
 
-## Core API
+## Agent Layer
+
+### `AgentActor` — implement `execute()`, not `on_receive()`
+
+```python
+class ResearchAgent(AgentActor[str, list]):
+    async def on_started(self):
+        self.client = aiohttp.ClientSession()
+
+    async def execute(self, query: str) -> list:
+        await self.emit_progress("searching...")
+        results = await self.client.get(f"/search?q={query}")
+        return results
+
+    async def on_stopped(self):
+        await self.client.close()
+```
+
+### Streaming output via `yield`
+
+Each `yield` inside `execute()` emits a `task_chunk` event immediately — ideal for LLM tokens or file chunks.
+
+```python
+class LLMAgent(AgentActor[str, list]):
+    async def execute(self, prompt: str):
+        async for token in openai.stream(prompt):
+            yield token   # → task_chunk event
+```
+
+### Orchestration
+
+```python
+class OrchestratorAgent(AgentActor[str, dict]):
+    async def execute(self, query: str) -> dict:
+        # Fan-out to multiple agents concurrently
+        results = await self.context.dispatch_parallel([
+            (SearchAgent, Task(input=query)),
+            (FactCheckAgent, Task(input=query)),
+        ])
+        return {"search": results[0], "facts": results[1]}
+```
+
+### Event streaming
+
+```python
+system = AgentSystem("app")
+
+# Stream all events from a fresh agent run
+async for event in system.run(OrchestratorAgent, user_query):
+    if event.type == "task_progress":
+        print(event.data)
+
+# Or stream from an existing ref
+ref = await system.spawn(SummaryAgent, "summarizer")
+async for item in ref.ask_stream(Task(input="document...")):
+    match item:
+        case StreamEvent(event=e):
+            print(e.type, e.data)
+        case StreamResult(result=r):
+            print(r.output)
+```
+
+### Span linking
+
+Every `TaskEvent` carries `parent_task_id` and `parent_agent_path` — reconstruct the full call tree from a flat event stream (OpenTelemetry-style spans).
+
+---
+
+## Core Actor API
 
 | Class | Description |
 |-------|-------------|
 | `Actor` | Base class. Override `on_receive`, `on_started`, `on_stopped`, `on_restart` |
-| `ActorRef` | Lightweight handle. `tell(msg)` / `ask(msg, timeout)` |
-| `ActorSystem` | Container. `spawn(cls, name, mailbox, middlewares)` / `shutdown()` |
+| `ActorRef` | Lightweight handle. `tell(msg)` / `ask(msg)` / `ask_stream(task)` |
+| `ActorSystem` | Container. `spawn(cls, name)` / `shutdown()` |
+| `AgentSystem` | Drop-in replacement with event streaming. `run(cls, input)` / `abort(run_id)` |
 | `Mailbox` | Interface. `MemoryMailbox` (default) or `RedisMailbox` |
 | `Middleware` | Interceptor chain for all lifecycle events |
 | `OneForOneStrategy` | Restart only the failing child |
@@ -54,8 +120,6 @@ asyncio.run(main())
 ## Supervision
 
 ```python
-from actor_for_agents import Actor, ActorSystem, OneForOneStrategy, Directive
-
 class ParentActor(Actor):
     def supervisor_strategy(self):
         return OneForOneStrategy(max_restarts=3, within_seconds=60)
@@ -69,8 +133,6 @@ Directives: `resume` | `restart` | `stop` | `escalate`
 ## Middleware
 
 ```python
-from actor_for_agents import Middleware
-
 class LogMiddleware(Middleware):
     async def on_receive(self, ctx, message, next_fn):
         print(f"[{ctx.recipient.path}] ← {message}")
@@ -78,46 +140,23 @@ class LogMiddleware(Middleware):
         print(f"[{ctx.recipient.path}] → {result}")
         return result
 
-system = ActorSystem("app")
 ref = await system.spawn(MyActor, "worker", middlewares=[LogMiddleware()])
 ```
 
 ## Redis Mailbox
 
 ```python
-import redis.asyncio as redis
-from actor_for_agents import ActorSystem
 from actor_for_agents.plugins.redis import RedisMailbox
 
-pool = redis.ConnectionPool.from_url("redis://localhost:6379")
-
-system = ActorSystem("app")
 ref = await system.spawn(
     MyActor, "worker",
     mailbox=RedisMailbox(pool, "actor:inbox:worker", maxlen=1000),
 )
 ```
 
-Messages must be JSON-serializable. Survives process restarts.
-
-## Retry
-
-```python
-from actor_for_agents import ask_with_retry
-
-result = await ask_with_retry(
-    ref, "fetch",
-    max_attempts=3,
-    base_delay=0.1,
-    backoff=2.0,
-)
-```
-
 ## Benchmarks
 
 Apple M-series, Python 3.12, asyncio:
-
-### MemoryMailbox
 
 | Metric | Value |
 |--------|-------|
@@ -128,15 +167,6 @@ Apple M-series, Python 3.12, asyncio:
 | 1000 actors × 100 msgs | 790K msg/s, 0 loss |
 | Middleware overhead | +6.3% (1 middleware) |
 | Spawn 5000 actors | 32 ms |
-
-### RedisMailbox (localhost)
-
-| Metric | Value |
-|--------|-------|
-| `tell` throughput | 2K msg/s |
-| `ask` latency p50 | 526 µs |
-| `put_batch` enqueue | 219K msg/s (batch=100) |
-| 200 actors × 100 msgs | 11K msg/s, 0 loss |
 
 ## License
 
