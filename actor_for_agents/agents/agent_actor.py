@@ -86,6 +86,7 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
         """
         if self._current_task_id is None:
             return
+        parent = self.context.parent
         await self._emit_event(
             TaskEvent(
                 type="task_progress",
@@ -93,6 +94,7 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                 agent_path=self.context.self_ref.path,
                 data=data,
                 parent_task_id=self._current_parent_task_id,
+                parent_agent_path=parent.path if parent is not None else None,
             )
         )
 
@@ -113,6 +115,10 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
         self._current_parent_task_id = _current_task_id_var.get()
         token = _current_task_id_var.set(message.id)
 
+        # Parent agent path: dispatch() makes the caller the supervision parent
+        parent = self.context.parent
+        parent_agent_path = parent.path if parent is not None else None
+
         self._current_task_id = message.id
         await self._emit_event(
             TaskEvent(
@@ -120,6 +126,7 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                 task_id=message.id,
                 agent_path=self.context.self_ref.path,
                 parent_task_id=self._current_parent_task_id,
+                parent_agent_path=parent_agent_path,
             )
         )
         try:
@@ -132,6 +139,7 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                     agent_path=self.context.self_ref.path,
                     data=output,
                     parent_task_id=self._current_parent_task_id,
+                    parent_agent_path=parent_agent_path,
                 )
             )
             return result
@@ -143,6 +151,7 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                     agent_path=self.context.self_ref.path,
                     data=str(exc),
                     parent_task_id=self._current_parent_task_id,
+                    parent_agent_path=parent_agent_path,
                 )
             )
             raise

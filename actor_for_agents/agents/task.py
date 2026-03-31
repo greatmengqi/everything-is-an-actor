@@ -76,6 +76,7 @@ class TaskEvent:
     agent_path: str
     data: Any = None
     parent_task_id: str | None = None
+    parent_agent_path: str | None = None
 
 
 @dataclass

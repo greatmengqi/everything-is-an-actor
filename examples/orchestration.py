@@ -62,7 +62,10 @@ class ResearchOrchestrator(AgentActor[str, str]):
 
 
 def format_sse(event) -> str:
-    return f"data: [{event.type}] {event.agent_path} — {event.data or ''}\n"
+    path = event.agent_path
+    if event.parent_agent_path:
+        path = f"{event.parent_agent_path} → {event.agent_path}"
+    return f"data: [{event.type}] {path} — {event.data or ''}\n"
 
 
 async def handle_request(user_query: str) -> None:
