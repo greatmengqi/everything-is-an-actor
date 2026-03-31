@@ -45,6 +45,7 @@ class AgentActor(Actor[Task[I]], Generic[I, O]):
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self._current_task_id: str | None = None
         # Injected by AgentSystem (M3) to route TaskEvents to a RunStream.
         # None in plain ActorSystem usage — events are silently dropped.
@@ -121,12 +122,13 @@ class AgentActor(Actor[Task[I]], Generic[I, O]):
                 )
             )
             return result
-        except Exception:
+        except Exception as exc:
             await self._emit_event(
                 TaskEvent(
                     type="task_failed",
                     task_id=message.id,
                     agent_path=self.context.self_ref.path,
+                    data=str(exc),
                 )
             )
             raise
