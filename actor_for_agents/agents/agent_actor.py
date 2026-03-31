@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from actor_for_agents.ref import ActorRef
 
 
-class AgentActor(Actor[Task[InputT]], Generic[InputT, OutputT]):
+class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, OutputT]):
     """Full-power agent actor (Level 4).
 
     Type parameters::
