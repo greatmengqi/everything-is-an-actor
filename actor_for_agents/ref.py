@@ -85,7 +85,7 @@ class ActorRef(Generic[MsgT, RetT]):
                 if event.type == "task_progress":
                     print(event.data)
         """
-        from actor_for_agents.agents.run_stream import RunStream, _EventCollectorActor
+        from actor_for_agents.agents.run_stream import RunStream, make_collector_cls
         from actor_for_agents.agents.task import StreamEvent, StreamResult, Task
 
         if self._cell.stopped:
@@ -95,8 +95,7 @@ class ActorRef(Generic[MsgT, RetT]):
         stream = RunStream()
         system = self._cell.system
 
-        collector_ref = await system.spawn(_EventCollectorActor, f"_ask-collector-{stream_id}")
-        collector_ref._cell.actor._stream = stream  # type: ignore[union-attr]
+        collector_ref = await system.spawn(make_collector_cls(stream), f"_ask-collector-{stream_id}")
 
         # Inject per-ask sink so on_receive picks it up without re-spawning the actor
         tagged = (
@@ -151,8 +150,8 @@ class ActorRef(Generic[MsgT, RetT]):
             return
         try:
             await asyncio.shield(task)
-        except BaseException:
-            pass  # cancelled or failed — actor will stop on its own
+        except asyncio.CancelledError:
+            pass  # outer join() was cancelled — actor continues shutdown independently
 
     def __repr__(self) -> str:
         alive = "alive" if self.is_alive else "dead"

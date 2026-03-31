@@ -101,23 +101,70 @@ class ActorContext:
         """Dispatch multiple messages concurrently and collect results in order.
 
         Each entry is a ``(target, message)`` pair. Results preserve task order.
-        If any task raises, remaining tasks are cancelled and their cleanup
-        (``ref.stop()``) is awaited before propagating the exception — ensuring
-        no ephemeral child actors are left running after a partial failure.
+        If any task raises, remaining siblings are cancelled immediately and
+        their cleanup (``ref.stop()`` + ``join()``) is awaited via the dispatch
+        finally block before propagating the first exception.
         """
         import asyncio
 
         if not tasks:
             return []
         spawned = [asyncio.create_task(self.dispatch(t, msg, timeout=timeout)) for t, msg in tasks]
-        # return_exceptions=True: all tasks run to completion so every dispatch()
-        # finally block (stop + join) executes before we inspect results.
-        # This guarantees no ephemeral children outlive dispatch_parallel().
-        results = await asyncio.gather(*spawned, return_exceptions=True)
-        errors = [r for r in results if isinstance(r, BaseException)]
-        if errors:
-            raise errors[0]
-        return list(results)
+        # FIRST_EXCEPTION: unblock as soon as one task fails rather than waiting
+        # for all tasks to complete.  Pending siblings are cancelled immediately;
+        # their dispatch() finally blocks (ref.stop + join) still run on CancelledError,
+        # so no ephemeral children are left running after a partial failure.
+        _, pending = await asyncio.wait(spawned, return_when=asyncio.FIRST_EXCEPTION)
+        if pending:
+            for t in pending:
+                t.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+        # Raise first error in original task order
+        for t in spawned:
+            if not t.cancelled():
+                exc = t.exception()
+                if exc is not None:
+                    raise exc
+        return [t.result() for t in spawned]
+
+    async def dispatch_stream(
+        self,
+        target: type[Actor[MsgT, RetT]] | ActorRef[MsgT, RetT],
+        message: MsgT,
+        *,
+        timeout: float = 300.0,
+        name: str | None = None,
+    ):  # type: ignore[return]
+        """Spawn an ephemeral child actor (or reuse a ref) and stream its TaskEvents.
+
+        Yields ``StreamItem`` objects — ``StreamEvent`` for each event, ``StreamResult``
+        as the final item. Ephemeral actors are stopped after the stream is exhausted
+        or the caller breaks early.
+
+        Use inside a streaming ``execute()`` to transparently propagate child chunks::
+
+            async def execute(self, input: str):
+                async for item in self.context.dispatch_stream(LLMAgent, Task(input=input)):
+                    match item:
+                        case StreamEvent(event=e) if e.type == "task_chunk":
+                            yield e.data          # transparently stream up
+                        case StreamResult(result=r):
+                            return_value = r.result.output
+        """
+        import uuid
+
+        if isinstance(target, type):
+            actor_name = name or f"{target.__name__.lower()}-{uuid.uuid4().hex[:8]}"
+            ref = await self.spawn(target, actor_name)
+            try:
+                async for item in ref.ask_stream(message, timeout=timeout):
+                    yield item
+            finally:
+                ref.stop()
+                await ref.join()
+        else:
+            async for item in target.ask_stream(message, timeout=timeout):
+                yield item
 
     async def run_in_executor(self, fn: Callable[..., Any], *args: Any) -> Any:
         """Run a blocking function in the system's thread pool.

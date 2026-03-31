@@ -59,14 +59,30 @@ class RunStream:
 class _EventCollectorActor(Actor[TaskEvent, None]):
     """Internal actor that funnels TaskEvents into a RunStream.
 
-    One instance is spawned per AgentSystem.run() call.
+    One instance is spawned per AgentSystem.run() / ActorRef.ask_stream() call.
     Not part of the public API.
+
+    Use ``make_collector_cls(stream)`` to get a concrete subclass bound to a
+    specific stream — avoids post-spawn private attribute injection.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, stream: RunStream) -> None:
         super().__init__()
-        self._stream: RunStream | None = None  # injected by AgentSystem after spawn
+        self._stream = stream
 
     async def on_receive(self, message: TaskEvent) -> None:
-        if self._stream is not None:
-            await self._stream.put(message)
+        await self._stream.put(message)
+
+
+def make_collector_cls(stream: RunStream) -> type[_EventCollectorActor]:
+    """Return a concrete ``_EventCollectorActor`` subclass pre-bound to *stream*.
+
+    The returned class satisfies the actor framework's no-arg constructor
+    contract while capturing *stream* via closure — no post-spawn injection.
+    """
+
+    class _BoundCollector(_EventCollectorActor):
+        def __init__(self) -> None:
+            super().__init__(stream)
+
+    return _BoundCollector

@@ -154,25 +154,91 @@ These let you reconstruct the full call tree from a flat event stream (OpenTelem
 
 ---
 
+## Streaming output from execute()
+
+`execute()` supports two output modes:
+
+=== "Single result — `return await`"
+
+    The agent computes one value and returns it. Use when the consumer only needs the final result.
+
+    ```python
+    class GeoAgent(AgentActor[str, dict]):
+        async def execute(self, input: str) -> dict:
+            return await self.client.get(f"/geocode?q={input}")
+    ```
+
+    Result: `TaskResult.output` is a `dict`.
+
+=== "Stream — `yield`"
+
+    The agent is an async generator. Each `yield` emits a `task_chunk` event immediately.
+    Use when the consumer should process values as they arrive (LLM tokens, file chunks, etc.).
+
+    ```python
+    class LLMAgent(AgentActor[str, list]):
+        async def execute(self, prompt: str):
+            async for token in openai.stream(prompt):
+                yield token          # → task_chunk event, data=token
+    ```
+
+    Result: `TaskResult.output` is `list[token]` (all yielded values collected).
+
+**When to use which:**
+
+| | `return await` | `yield` |
+|--|--|--|
+| Consumer needs | Final result only | Values as they arrive |
+| `TaskResult.output` | The return value | `list` of all yielded values |
+| Event emitted | `task_completed` | `task_chunk` × N, then `task_completed` |
+| Example | DB query, API call | LLM tokens, file download, pipeline |
+
+---
+
 ## emit_progress
 
-Use `emit_progress()` inside `execute()` to stream intermediate results:
+Use `emit_progress()` for **status/progress updates** — not for streaming output content.
 
 ```python
-class StreamingAgent(AgentActor[str, str]):
-    async def execute(self, input: str) -> str:
-        chunks = []
-        async for token in llm.stream(input):
-            await self.emit_progress(token)   # emits task_progress
-            chunks.append(token)
-        return "".join(chunks)
+class SearchAgent(AgentActor[str, list]):
+    async def execute(self, input: str) -> list:
+        await self.emit_progress("searching...")   # status update
+        results = await self.search(input)
+        await self.emit_progress(f"found {len(results)} results")
+        return results
 ```
 
 !!! note
-    `emit_progress()` is a no-op if:
+    `emit_progress()` emits `task_progress` events — semantically "how is the task going",
+    not "here is output content". For streaming output use `yield` instead.
 
-    - Called outside of `execute()` (no active task)
-    - No event sink is attached (plain `ActorSystem` without `AgentSystem`)
+    It is a no-op if called outside of `execute()` or without an event sink attached.
+
+---
+
+## dispatch_stream
+
+Use `dispatch_stream()` inside `execute()` to stream results from a child agent — and optionally propagate them up:
+
+```python
+class OrchestratorAgent(AgentActor[str, list]):
+    async def execute(self, input: str):
+        # Transparently stream child chunks up to the caller
+        async for item in self.context.dispatch_stream(LLMAgent, Task(input=input)):
+            match item:
+                case StreamEvent(event=e) if e.type == "task_chunk":
+                    yield e.data          # re-yield → becomes task_chunk for caller
+                case StreamResult(result=r):
+                    pass                  # final result available here
+```
+
+`dispatch_stream` is the streaming counterpart of `dispatch`:
+
+| | `dispatch` | `dispatch_stream` |
+|--|--|--|
+| Child output | Single `TaskResult` | `StreamItem` sequence |
+| Ephemeral actor | Stopped after `await` | Stopped after generator exhausted |
+| Use when child | Returns one result | Streams chunks |
 
 ---
 

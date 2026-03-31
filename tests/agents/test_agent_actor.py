@@ -242,3 +242,136 @@ def test_no_warning_for_clean_subclass():
                 return input
 
     assert not any("on_receive" in str(w.message) for w in caught)
+
+
+# ---------------------------------------------------------------------------
+# Streaming execute() — async generator support
+# ---------------------------------------------------------------------------
+
+
+class ChunkAgent(AgentActor[str, list]):
+    async def execute(self, input: str):
+        for i in range(3):
+            yield f"{input}-{i}"
+
+
+class BrokenChunkAgent(AgentActor[str, list]):
+    async def execute(self, input: str):
+        yield "before-error"
+        raise ValueError("mid-stream failure")
+
+
+async def test_streaming_execute_yields_task_chunk_events():
+    """execute() as async generator emits task_chunk events for each yield."""
+    from actor_for_agents.agents import AgentSystem
+    from actor_for_agents.agents.task import StreamEvent, StreamResult
+
+    system = AgentSystem()
+    ref = await system.spawn(ChunkAgent, "chunker")
+
+    events: list[TaskEvent] = []
+    async for item in ref.ask_stream(Task(input="x")):
+        if isinstance(item, StreamEvent):
+            events.append(item.event)
+
+    chunks = [e for e in events if e.type == "task_chunk"]
+    assert len(chunks) == 3
+    assert [e.data for e in chunks] == ["x-0", "x-1", "x-2"]
+    await system.shutdown()
+
+
+async def test_streaming_execute_result_is_list_of_chunks():
+    """TaskResult.output is the list of all yielded chunks."""
+    from actor_for_agents.agents import AgentSystem
+    from actor_for_agents.agents.task import StreamResult
+
+    system = AgentSystem()
+    ref = await system.spawn(ChunkAgent, "chunker2")
+
+    result = None
+    async for item in ref.ask_stream(Task(input="y")):
+        if isinstance(item, StreamResult):
+            result = item.result
+
+    assert result is not None
+    assert result.output == ["y-0", "y-1", "y-2"]
+    await system.shutdown()
+
+
+async def test_streaming_execute_plain_ask_returns_list():
+    """Plain ref.ask() also works for streaming execute() — returns list."""
+    from actor_for_agents import ActorSystem
+
+    system = ActorSystem()
+    ref = await system.spawn(ChunkAgent, "chunker3")
+    result: TaskResult = await ref.ask(Task(input="z"))
+    assert result.output == ["z-0", "z-1", "z-2"]
+    await system.shutdown()
+
+
+async def test_streaming_execute_error_propagates():
+    """Exception raised inside async generator propagates to caller."""
+    from actor_for_agents.agents import AgentSystem
+
+    system = AgentSystem()
+    ref = await system.spawn(BrokenChunkAgent, "broken-chunker")
+
+    with pytest.raises(ValueError, match="mid-stream failure"):
+        async for _ in ref.ask_stream(Task(input="x")):
+            pass
+
+    await system.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# dispatch_stream — stream from within execute()
+# ---------------------------------------------------------------------------
+
+
+class PassthroughAgent(AgentActor[str, list]):
+    """Orchestrator that dispatch_streams a ChunkAgent and transparently re-yields chunks."""
+
+    async def execute(self, input: str):
+        from actor_for_agents.agents.task import StreamEvent, StreamResult
+
+        async for item in self.context.dispatch_stream(ChunkAgent, Task(input=input)):
+            match item:
+                case StreamEvent(event=e) if e.type == "task_chunk":
+                    yield e.data  # transparent passthrough
+                case StreamResult():
+                    pass  # final result captured implicitly
+
+
+async def test_dispatch_stream_yields_child_chunks():
+    """dispatch_stream propagates child task_chunk events to the caller."""
+    from actor_for_agents.agents import AgentSystem
+    from actor_for_agents.agents.task import StreamEvent, StreamResult
+
+    system = AgentSystem()
+    ref = await system.spawn(PassthroughAgent, "passthrough")
+
+    chunks = []
+    async for item in ref.ask_stream(Task(input="q")):
+        match item:
+            case StreamEvent(event=e) if e.type == "task_chunk":
+                chunks.append(e.data)
+            case StreamResult():
+                pass
+
+    assert chunks == ["q-0", "q-1", "q-2"]
+    await system.shutdown()
+
+
+async def test_dispatch_stream_ephemeral_child_cleaned_up():
+    """Ephemeral child actor spawned by dispatch_stream is stopped after stream ends."""
+    from actor_for_agents.agents import AgentSystem
+    from actor_for_agents.actor import ActorContext
+
+    system = AgentSystem()
+    ref = await system.spawn(PassthroughAgent, "passthrough2")
+
+    async for _ in ref.ask_stream(Task(input="x")):
+        pass
+
+    await system.shutdown()
+    # Smoke test: no assertions needed — if children leak, shutdown hangs
