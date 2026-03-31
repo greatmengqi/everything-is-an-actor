@@ -8,7 +8,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
-from actor_for_agents.actor import Actor, ActorContext
+from actor_for_agents.actor import Actor, ActorContext, MsgT, RetT
 from actor_for_agents.mailbox import Empty, Mailbox, MemoryMailbox
 from actor_for_agents.middleware import ActorMailboxContext, Middleware, NextFn, build_middleware_chain
 from actor_for_agents.ref import (
@@ -79,13 +79,13 @@ class ActorSystem:
 
     async def spawn(
         self,
-        actor_cls: type[Actor],
+        actor_cls: type[Actor[MsgT, RetT]],
         name: str,
         *,
         mailbox_size: int = 256,
         mailbox: Mailbox | None = None,
         middlewares: list[Middleware] | None = None,
-    ) -> ActorRef:
+    ) -> ActorRef[MsgT, RetT]:
         """Spawn a root-level actor.
 
         Args:
@@ -240,13 +240,13 @@ class _ActorCell:
 
     async def spawn_child(
         self,
-        actor_cls: type[Actor],
+        actor_cls: type[Actor[MsgT, RetT]],
         name: str,
         *,
         mailbox_size: int = 256,
         mailbox: Mailbox | None = None,
         middlewares: list[Middleware] | None = None,
-    ) -> ActorRef:
+    ) -> ActorRef[MsgT, RetT]:
         if name in self.children:
             raise ValueError(f"Child '{name}' already exists under {self.path}")
         child = _ActorCell(
