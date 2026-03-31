@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(commit-commands:commit-push-pr)",
+      "mcp__plugin_everything-claude-code_github__create_issue"
+    ]
+  }
+}

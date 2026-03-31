@@ -55,6 +55,70 @@ class ActorContext:
         """Spawn a child actor supervised by this actor."""
         return await self._cell.spawn_child(actor_cls, name, mailbox_size=mailbox_size, middlewares=middlewares)
 
+    async def dispatch(
+        self,
+        target: type[Actor[MsgT, RetT]] | ActorRef[MsgT, RetT],
+        message: MsgT,
+        *,
+        timeout: float = 300.0,
+        name: str | None = None,
+    ) -> RetT:
+        """Spawn an ephemeral child actor (or reuse an existing ref), send one message, return result.
+
+        ``target`` can be:
+
+        - An ``Actor`` subclass — a new child actor is spawned, used once, then stopped.
+        - An ``ActorRef`` — the message is sent to the already-running actor.
+
+        Type parameters are inferred from ``target``::
+
+            result: str = await ctx.dispatch(EchoActor, "hello")
+
+        Args:
+            name: Optional deterministic name for the ephemeral child actor.
+                  Defaults to ``{classname}-{uuid8}``. Provide a stable name
+                  to improve log correlation across retries.
+        """
+        import uuid
+
+        if isinstance(target, type):
+            actor_name = name or f"{target.__name__.lower()}-{uuid.uuid4().hex[:8]}"
+            ref = await self.spawn(target, actor_name)
+            try:
+                return await ref.ask(message, timeout=timeout)
+            finally:
+                ref.stop()
+                await ref.join()
+        else:
+            return await target.ask(message, timeout=timeout)
+
+    async def dispatch_parallel(
+        self,
+        tasks: list[tuple[type[Actor[Any, Any]] | ActorRef[Any, Any], Any]],
+        *,
+        timeout: float = 300.0,
+    ) -> list[Any]:
+        """Dispatch multiple messages concurrently and collect results in order.
+
+        Each entry is a ``(target, message)`` pair. Results preserve task order.
+        If any task raises, remaining tasks are cancelled and their cleanup
+        (``ref.stop()``) is awaited before propagating the exception — ensuring
+        no ephemeral child actors are left running after a partial failure.
+        """
+        import asyncio
+
+        if not tasks:
+            return []
+        spawned = [asyncio.create_task(self.dispatch(t, msg, timeout=timeout)) for t, msg in tasks]
+        # return_exceptions=True: all tasks run to completion so every dispatch()
+        # finally block (stop + join) executes before we inspect results.
+        # This guarantees no ephemeral children outlive dispatch_parallel().
+        results = await asyncio.gather(*spawned, return_exceptions=True)
+        errors = [r for r in results if isinstance(r, BaseException)]
+        if errors:
+            raise errors[0]
+        return list(results)
+
     async def run_in_executor(self, fn: Callable[..., Any], *args: Any) -> Any:
         """Run a blocking function in the system's thread pool.
 
