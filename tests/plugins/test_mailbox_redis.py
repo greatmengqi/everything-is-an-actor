@@ -4,7 +4,7 @@ import pytest
 
 redis = pytest.importorskip("redis.asyncio")
 
-from actor_for_agents.mailbox_redis import RedisMailbox
+from actor_for_agents.plugins.redis import RedisMailbox
 from actor_for_agents.ref import _Envelope, _Stop
 
 

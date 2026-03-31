@@ -6,7 +6,7 @@ Usage::
 
     import redis.asyncio as redis
     from actor_for_agents import ActorSystem
-    from actor_for_agents.mailbox_redis import RedisMailbox
+    from actor_for_agents.plugins.redis import RedisMailbox
 
     pool = redis.ConnectionPool.from_url("redis://localhost:6379")
 

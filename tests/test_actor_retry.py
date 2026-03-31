@@ -2,7 +2,8 @@ import asyncio
 
 import pytest
 
-from actor_for_agents import Actor, ActorSystem, IdempotentActorMixin, RetryEnvelope, ask_with_retry
+from actor_for_agents import Actor, ActorSystem
+from actor_for_agents.plugins.retry import IdempotentActorMixin, RetryEnvelope, ask_with_retry
 
 
 class FlakyIdempotentActor(IdempotentActorMixin, Actor):
