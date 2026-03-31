@@ -321,3 +321,57 @@ async def test_streaming_execute_error_propagates():
             pass
 
     await system.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# dispatch_stream — stream from within execute()
+# ---------------------------------------------------------------------------
+
+
+class PassthroughAgent(AgentActor[str, list]):
+    """Orchestrator that dispatch_streams a ChunkAgent and transparently re-yields chunks."""
+
+    async def execute(self, input: str):
+        from actor_for_agents.agents.task import StreamEvent, StreamResult
+
+        async for item in self.context.dispatch_stream(ChunkAgent, Task(input=input)):
+            match item:
+                case StreamEvent(event=e) if e.type == "task_chunk":
+                    yield e.data  # transparent passthrough
+                case StreamResult():
+                    pass  # final result captured implicitly
+
+
+async def test_dispatch_stream_yields_child_chunks():
+    """dispatch_stream propagates child task_chunk events to the caller."""
+    from actor_for_agents.agents import AgentSystem
+    from actor_for_agents.agents.task import StreamEvent, StreamResult
+
+    system = AgentSystem()
+    ref = await system.spawn(PassthroughAgent, "passthrough")
+
+    chunks = []
+    async for item in ref.ask_stream(Task(input="q")):
+        match item:
+            case StreamEvent(event=e) if e.type == "task_chunk":
+                chunks.append(e.data)
+            case StreamResult():
+                pass
+
+    assert chunks == ["q-0", "q-1", "q-2"]
+    await system.shutdown()
+
+
+async def test_dispatch_stream_ephemeral_child_cleaned_up():
+    """Ephemeral child actor spawned by dispatch_stream is stopped after stream ends."""
+    from actor_for_agents.agents import AgentSystem
+    from actor_for_agents.actor import ActorContext
+
+    system = AgentSystem()
+    ref = await system.spawn(PassthroughAgent, "passthrough2")
+
+    async for _ in ref.ask_stream(Task(input="x")):
+        pass
+
+    await system.shutdown()
+    # Smoke test: no assertions needed — if children leak, shutdown hangs
