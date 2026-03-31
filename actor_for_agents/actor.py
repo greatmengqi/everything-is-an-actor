@@ -63,6 +63,7 @@ class ActorContext:
             result = await self.context.run_in_executor(requests.get, url)
         """
         import asyncio
+
         executor = self._cell.system._executor
         return await asyncio.get_running_loop().run_in_executor(executor, fn, *args)
 
