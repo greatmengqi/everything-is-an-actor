@@ -42,7 +42,7 @@ class ActorRef(Generic[MsgT, RetT]):
     def is_alive(self) -> bool:
         return not self._cell.stopped
 
-    async def tell(self, message: MsgT, *, sender: ActorRef | None = None) -> None:
+    async def tell(self, message: MsgT, *, sender: ActorRef[Any, Any] | None = None) -> None:
         """Fire-and-forget message delivery."""
         if self._cell.stopped:
             self._cell.system._dead_letter(self, message, sender)

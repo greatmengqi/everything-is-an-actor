@@ -92,7 +92,7 @@ class Actor(Generic[MsgT, RetT]):
         Return value is sent back as reply for ``ask`` calls.
         For ``tell`` calls, the return value is discarded.
         """
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement on_receive()")
 
     async def on_started(self) -> None:
         """Called after creation, before receiving messages."""
