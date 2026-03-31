@@ -5,8 +5,8 @@ import warnings
 
 import pytest
 
-from actor_for_agents import ActorSystem
-from actor_for_agents.agents import AgentActor, Task, TaskResult, TaskStatus
+from actor_for_agents import Actor, ActorSystem
+from actor_for_agents.agents import AgentActor, Task, TaskEvent, TaskResult, TaskStatus
 
 
 pytestmark = pytest.mark.anyio
@@ -98,6 +98,29 @@ async def test_execute_exception_propagates_to_caller():
     ref = await system.spawn(BrokenAgent, "broken")
     with pytest.raises(Exception, match="boom: bad"):
         await ref.ask(Task(input="bad"))
+    await system.shutdown()
+
+
+async def test_task_failed_event_carries_error_context():
+    """task_failed event data must contain the exception message."""
+    collected: list[TaskEvent] = []
+
+    class CollectorActor(Actor):
+        async def on_receive(self, message):
+            collected.append(message)
+
+    system = ActorSystem("t")
+    sink_ref = await system.spawn(CollectorActor, "sink")
+    ref = await system.spawn(BrokenAgent, "broken")
+    ref._cell.actor._event_sink = sink_ref  # type: ignore[union-attr]
+
+    with pytest.raises(Exception, match="boom: bad"):
+        await ref.ask(Task(input="bad"))
+
+    await asyncio.sleep(0.05)  # let tell() deliver
+    failed_events = [e for e in collected if e.type == "task_failed"]
+    assert len(failed_events) == 1
+    assert "boom: bad" in failed_events[0].data
     await system.shutdown()
 
 
