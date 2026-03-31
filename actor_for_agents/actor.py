@@ -88,6 +88,7 @@ class ActorContext:
                 return await ref.ask(message, timeout=timeout)
             finally:
                 ref.stop()
+                await ref.join()
         else:
             return await target.ask(message, timeout=timeout)
 
@@ -109,14 +110,14 @@ class ActorContext:
         if not tasks:
             return []
         spawned = [asyncio.create_task(self.dispatch(t, msg, timeout=timeout)) for t, msg in tasks]
-        try:
-            return list(await asyncio.gather(*spawned))
-        except BaseException:
-            for task in spawned:
-                if not task.done():
-                    task.cancel()
-            await asyncio.gather(*spawned, return_exceptions=True)
-            raise
+        # return_exceptions=True: all tasks run to completion so every dispatch()
+        # finally block (stop + join) executes before we inspect results.
+        # This guarantees no ephemeral children outlive dispatch_parallel().
+        results = await asyncio.gather(*spawned, return_exceptions=True)
+        errors = [r for r in results if isinstance(r, BaseException)]
+        if errors:
+            raise errors[0]
+        return list(results)
 
     async def run_in_executor(self, fn: Callable[..., Any], *args: Any) -> Any:
         """Run a blocking function in the system's thread pool.

@@ -74,6 +74,26 @@ class ActorRef(Generic[MsgT, RetT]):
         """Request graceful shutdown."""
         self._cell.request_stop()
 
+    async def join(self) -> None:
+        """Wait until the actor has fully stopped (on_stopped completed).
+
+        Pairs with ``stop()`` when callers need a hard lifecycle guarantee::
+
+            ref.stop()
+            await ref.join()  # on_stopped() has returned, children removed
+
+        No-op if the actor has already stopped or was never started.
+        On cancellation, the wait is abandoned but the actor continues its
+        own shutdown — use ``system.shutdown()`` to force-stop stuck actors.
+        """
+        task = self._cell.task
+        if task is None or task.done():
+            return
+        try:
+            await asyncio.shield(task)
+        except BaseException:
+            pass  # cancelled or failed — actor will stop on its own
+
     def __repr__(self) -> str:
         alive = "alive" if self.is_alive else "dead"
         return f"ActorRef({self.path}, {alive})"

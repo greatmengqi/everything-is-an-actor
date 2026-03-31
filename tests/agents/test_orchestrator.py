@@ -101,7 +101,7 @@ async def test_dispatch_child_stopped_after_completion():
     class EphemeralCaller(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
             r: TaskResult[str] = await self.context.dispatch(EchoAgent, Task(input=input))
-            await asyncio.sleep(0.05)  # let stop propagate
+            # no sleep needed — dispatch() awaits join() so child is fully stopped on return
             assert len(self.context.children) == 0, "child should be stopped and removed"
             return r.output
 
@@ -121,7 +121,7 @@ async def test_dispatch_child_stopped_on_exception():
                 await self.context.dispatch(BrokenAgent, Task(input=input))
             except Exception:
                 pass
-            await asyncio.sleep(0.05)
+            # no sleep needed — dispatch() awaits join() even on exception path
             assert len(self.context.children) == 0
             return "recovered"
 
@@ -290,7 +290,7 @@ async def test_dispatch_parallel_no_child_leak_on_failure():
                 ])
             except Exception:
                 pass
-            await asyncio.sleep(0.1)  # let stop propagate
+            # no sleep — dispatch_parallel cancels+joins all children before raising
             return {"children": len(self.context.children)}
 
     system = ActorSystem("t")
