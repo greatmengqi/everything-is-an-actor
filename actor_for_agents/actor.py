@@ -61,6 +61,7 @@ class ActorContext:
         message: MsgT,
         *,
         timeout: float = 300.0,
+        name: str | None = None,
     ) -> RetT:
         """Spawn an ephemeral child actor (or reuse an existing ref), send one message, return result.
 
@@ -73,14 +74,16 @@ class ActorContext:
 
             result: str = await ctx.dispatch(EchoActor, "hello")
 
-        This is a low-level primitive. For agent-to-agent calls with automatic
-        ``Task`` wrapping, use ``AgentActor.dispatch()`` instead.
+        Args:
+            name: Optional deterministic name for the ephemeral child actor.
+                  Defaults to ``{classname}-{uuid8}``. Provide a stable name
+                  to improve log correlation across retries.
         """
         import uuid
 
         if isinstance(target, type):
-            name = f"{target.__name__.lower()}-{uuid.uuid4().hex[:8]}"
-            ref = await self.spawn(target, name)
+            actor_name = name or f"{target.__name__.lower()}-{uuid.uuid4().hex[:8]}"
+            ref = await self.spawn(target, actor_name)
             try:
                 return await ref.ask(message, timeout=timeout)
             finally:
@@ -97,11 +100,23 @@ class ActorContext:
         """Dispatch multiple messages concurrently and collect results in order.
 
         Each entry is a ``(target, message)`` pair. Results preserve task order.
-        If any task raises, the exception propagates immediately.
+        If any task raises, remaining tasks are cancelled and their cleanup
+        (``ref.stop()``) is awaited before propagating the exception — ensuring
+        no ephemeral child actors are left running after a partial failure.
         """
         import asyncio
 
-        return list(await asyncio.gather(*[self.dispatch(t, msg, timeout=timeout) for t, msg in tasks]))
+        if not tasks:
+            return []
+        spawned = [asyncio.create_task(self.dispatch(t, msg, timeout=timeout)) for t, msg in tasks]
+        try:
+            return list(await asyncio.gather(*spawned))
+        except BaseException:
+            for task in spawned:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*spawned, return_exceptions=True)
+            raise
 
     async def run_in_executor(self, fn: Callable[..., Any], *args: Any) -> Any:
         """Run a blocking function in the system's thread pool.

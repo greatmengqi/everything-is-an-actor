@@ -274,6 +274,50 @@ async def test_dispatch_parallel_mix_class_and_ref():
 
 
 # ---------------------------------------------------------------------------
+# Regression: no child leaks after dispatch_parallel partial failure
+# ---------------------------------------------------------------------------
+
+
+async def test_dispatch_parallel_no_child_leak_on_failure():
+    """After a partial failure in dispatch_parallel, all ephemeral children are stopped."""
+
+    class LeakCheckAgent(AgentActor[str, dict]):
+        async def execute(self, input: str) -> dict:
+            try:
+                await self.context.dispatch_parallel([
+                    (DelayedAgent, Task(input="slow")),  # still running when BrokenAgent raises
+                    (BrokenAgent, Task(input="bad")),
+                ])
+            except Exception:
+                pass
+            await asyncio.sleep(0.1)  # let stop propagate
+            return {"children": len(self.context.children)}
+
+    system = ActorSystem("t")
+    ref = await system.spawn(LeakCheckAgent, "lc")
+    result = await ref.ask(Task(input="x"), timeout=5.0)
+    assert result.output["children"] == 0, "orphaned children after partial failure"
+    await system.shutdown()
+
+
+async def test_dispatch_deterministic_name():
+    """dispatch() with explicit name uses that name for the ephemeral child."""
+
+    class NamedCaller(AgentActor[str, str]):
+        async def execute(self, input: str) -> str:
+            r: TaskResult[str] = await self.context.dispatch(
+                EchoAgent, Task(input=input), name="my-echo"
+            )
+            return r.output
+
+    system = ActorSystem("t")
+    ref = await system.spawn(NamedCaller, "caller")
+    result = await ref.ask(Task(input="hello"))
+    assert result.output == "hello"
+    await system.shutdown()
+
+
+# ---------------------------------------------------------------------------
 # Nested dispatch
 # ---------------------------------------------------------------------------
 
