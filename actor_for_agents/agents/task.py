@@ -67,7 +67,8 @@ class TaskEvent:
 
     type:
         - ``task_started``   — execute() began
-        - ``task_progress``  — intermediate update via emit_progress()
+        - ``task_chunk``     — one yielded value from a streaming execute() (async generator)
+        - ``task_progress``  — status/progress update via emit_progress()
         - ``task_completed`` — execute() returned successfully
         - ``task_failed``    — execute() raised an exception
 
