@@ -32,6 +32,7 @@ nav:
   - Getting Started: getting-started.md
   - Guides:
     - Agent Layer: agents.md
+    - Design: design.md
   - API Reference:
     - AgentActor: api/agent-actor.md
     - Core Actor: api/actor.md
