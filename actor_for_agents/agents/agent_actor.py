@@ -9,14 +9,14 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 from actor_for_agents.actor import Actor
 from actor_for_agents.agents.task import Task, TaskEvent, TaskResult, TaskStatus
 
-I = TypeVar("I")
-O = TypeVar("O")
+InputT = TypeVar("InputT")
+OutputT = TypeVar("OutputT")
 
 if TYPE_CHECKING:
     from actor_for_agents.ref import ActorRef
 
 
-class AgentActor(Actor[Task[I]], Generic[I, O]):
+class AgentActor(Actor[Task[InputT]], Generic[InputT, OutputT]):
     """Full-power agent actor (Level 4).
 
     Type parameters::
@@ -45,6 +45,7 @@ class AgentActor(Actor[Task[I]], Generic[I, O]):
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self._current_task_id: str | None = None
         # Injected by AgentSystem (M3) to route TaskEvents to a RunStream.
         # None in plain ActorSystem usage — events are silently dropped.
@@ -65,7 +66,7 @@ class AgentActor(Actor[Task[I]], Generic[I, O]):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    async def execute(self, input: I) -> O:
+    async def execute(self, input: InputT) -> OutputT:
         """Implement agent logic here. Return value becomes TaskResult.output.
 
         Raise any exception to signal failure — the framework emits
@@ -81,18 +82,20 @@ class AgentActor(Actor[Task[I]], Generic[I, O]):
         """
         if self._current_task_id is None:
             return
-        await self._emit_event(TaskEvent(
-            type="task_progress",
-            task_id=self._current_task_id,
-            agent_path=self.context.self_ref.path,
-            data=data,
-        ))
+        await self._emit_event(
+            TaskEvent(
+                type="task_progress",
+                task_id=self._current_task_id,
+                agent_path=self.context.self_ref.path,
+                data=data,
+            )
+        )
 
     # ------------------------------------------------------------------
     # Framework-managed — do not override
     # ------------------------------------------------------------------
 
-    async def on_receive(self, message: Task[I]) -> TaskResult[O]:
+    async def on_receive(self, message: Task[InputT]) -> TaskResult[OutputT]:
         if not isinstance(message, Task):
             raise TypeError(
                 f"{type(self).__name__} expects Task, got {type(message).__name__}. "
@@ -100,27 +103,34 @@ class AgentActor(Actor[Task[I]], Generic[I, O]):
             )
 
         self._current_task_id = message.id
-        await self._emit_event(TaskEvent(
-            type="task_started",
-            task_id=message.id,
-            agent_path=self.context.self_ref.path,
-        ))
+        await self._emit_event(
+            TaskEvent(
+                type="task_started",
+                task_id=message.id,
+                agent_path=self.context.self_ref.path,
+            )
+        )
         try:
             output = await self.execute(message.input)
-            result: TaskResult[O] = TaskResult(task_id=message.id, output=output, status=TaskStatus.COMPLETED)
-            await self._emit_event(TaskEvent(
-                type="task_completed",
-                task_id=message.id,
-                agent_path=self.context.self_ref.path,
-                data=output,
-            ))
+            result: TaskResult[OutputT] = TaskResult(task_id=message.id, output=output, status=TaskStatus.COMPLETED)
+            await self._emit_event(
+                TaskEvent(
+                    type="task_completed",
+                    task_id=message.id,
+                    agent_path=self.context.self_ref.path,
+                    data=output,
+                )
+            )
             return result
-        except Exception:
-            await self._emit_event(TaskEvent(
-                type="task_failed",
-                task_id=message.id,
-                agent_path=self.context.self_ref.path,
-            ))
+        except Exception as exc:
+            await self._emit_event(
+                TaskEvent(
+                    type="task_failed",
+                    task_id=message.id,
+                    agent_path=self.context.self_ref.path,
+                    data=str(exc),
+                )
+            )
             raise
         finally:
             self._current_task_id = None

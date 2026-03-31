@@ -37,14 +37,18 @@ def _serialize(msg: _Envelope | _Stop) -> str:
     if isinstance(msg, _Stop):
         return json.dumps({"__type__": "stop"})
     try:
-        return json.dumps({
-            "__type__": "envelope",
-            "payload": msg.payload,
-            "correlation_id": msg.correlation_id,
-            "reply_to": msg.reply_to,
-        })
+        return json.dumps(
+            {
+                "__type__": "envelope",
+                "payload": msg.payload,
+                "correlation_id": msg.correlation_id,
+                "reply_to": msg.reply_to,
+            }
+        )
     except (TypeError, ValueError) as e:
-        raise TypeError(f"Payload is not JSON-serializable: {e}. RedisMailbox requires JSON-compatible messages.") from e
+        raise TypeError(
+            f"Payload is not JSON-serializable: {e}. RedisMailbox requires JSON-compatible messages."
+        ) from e
 
 
 def _deserialize(data: str | bytes) -> _Envelope | _Stop:
@@ -90,6 +94,7 @@ class RedisMailbox(Mailbox):
         # Lazy import to avoid hard dependency on redis
         try:
             import redis.asyncio as aioredis
+
             self._redis: aioredis.Redis = aioredis.Redis(connection_pool=pool)
         except ImportError:
             raise ImportError("RedisMailbox requires 'redis' package. Install with: uv add redis[hiredis]")

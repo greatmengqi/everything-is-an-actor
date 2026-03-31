@@ -7,8 +7,8 @@ from enum import Enum
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
-I = TypeVar("I")  # input type
-O = TypeVar("O")  # output type
+InputT = TypeVar("InputT")  # input type
+OutputT = TypeVar("OutputT")  # output type
 
 
 class TaskStatus(Enum):
@@ -20,7 +20,7 @@ class TaskStatus(Enum):
 
 
 @dataclass
-class Task(Generic[I]):
+class Task(Generic[InputT]):
     """A unit of work sent to an AgentActor.
 
     Args:
@@ -33,16 +33,16 @@ class Task(Generic[I]):
         task: Task[dict] = Task(input={"query": "actor model", "limit": 5})
     """
 
-    input: I
+    input: InputT
     id: str = field(default_factory=lambda: uuid4().hex)
 
 
 @dataclass
-class TaskResult(Generic[O]):
+class TaskResult(Generic[OutputT]):
     """The outcome of a task execution.
 
     Returned by AgentActor.on_receive() after execute() completes.
-    The type parameter ``O`` matches the return type of execute().
+    The type parameter ``OutputT`` matches the return type of execute().
 
     Example::
 
@@ -51,7 +51,7 @@ class TaskResult(Generic[O]):
     """
 
     task_id: str
-    output: O | None = None
+    output: OutputT | None = None
     error: str | None = None
     status: TaskStatus = TaskStatus.COMPLETED
 
