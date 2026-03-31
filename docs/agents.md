@@ -174,8 +174,8 @@ class StreamingAgent(AgentActor[str, str]):
 - The `ask()` caller receives the exception
 
 ```python
-class FlakyAgent(AgentActor):
-    async def execute(self, input):
+class FlakyAgent(AgentActor[str, str]):
+    async def execute(self, input: str) -> str:
         if random.random() < 0.3:
             raise TransientError("try again")
         return process(input)
@@ -197,7 +197,7 @@ result = await ask_with_retry(
 If you accidentally override `on_receive()` in an `AgentActor` subclass, the framework emits a `UserWarning` at class definition time:
 
 ```python
-class MyAgent(AgentActor):
+class MyAgent(AgentActor[str, str]):
     async def on_receive(self, message):  # ← UserWarning
         ...
 ```
