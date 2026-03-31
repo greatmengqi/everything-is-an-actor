@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import warnings
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
@@ -136,7 +137,24 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
             )
         )
         try:
-            output = await self.execute(message.input)
+            gen_or_coro = self.execute(message.input)
+            if inspect.isasyncgen(gen_or_coro):
+                chunks: list[Any] = []
+                async for chunk in gen_or_coro:
+                    await self._emit_event(
+                        TaskEvent(
+                            type="task_chunk",
+                            task_id=message.id,
+                            agent_path=self.context.self_ref.path,
+                            data=chunk,
+                            parent_task_id=self._current_parent_task_id,
+                            parent_agent_path=parent_agent_path,
+                        )
+                    )
+                    chunks.append(chunk)
+                output: Any = chunks
+            else:
+                output = await gen_or_coro
             result: TaskResult[OutputT] = TaskResult(task_id=message.id, output=output, status=TaskStatus.COMPLETED)
             await self._emit_event(
                 TaskEvent(
