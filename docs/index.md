@@ -40,9 +40,9 @@ pip install actor-for-agents[redis]
 ```python
 import asyncio
 from actor_for_agents import ActorSystem
-from actor_for_agents.agents import AgentActor, Task
+from actor_for_agents.agents import AgentActor, Task, TaskResult
 
-class SummaryAgent(AgentActor):
+class SummaryAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
         await self.emit_progress("processing...")
         return f"Summary: {input[:50]}..."
@@ -51,7 +51,7 @@ async def main():
     system = ActorSystem("app")
     ref = await system.spawn(SummaryAgent, "summarizer")
 
-    result = await ref.ask(Task(input="Long document content here..."))
+    result: TaskResult[str] = await ref.ask(Task(input="Long document content here..."))
     print(result.output)  # Summary: Long document content here...
 
     await system.shutdown()
