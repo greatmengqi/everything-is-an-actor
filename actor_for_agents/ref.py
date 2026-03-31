@@ -133,6 +133,21 @@ class ActorRef(Generic[MsgT, RetT]):
         """Request graceful shutdown."""
         self._cell.request_stop()
 
+    def interrupt(self) -> None:
+        """Cancel the actor's asyncio task immediately, interrupting in-progress work.
+
+        Use when an ephemeral actor must stop now — e.g., when the calling task is
+        itself being cancelled. Unlike ``stop()``, this does not wait for the actor
+        to finish its current message; it raises ``CancelledError`` directly in the
+        actor's ``_run`` loop, which then calls ``on_stopped`` and removes the actor
+        from its parent's children.
+
+        No-op if the actor has already stopped.
+        """
+        task = self._cell.task
+        if task is not None and not task.done():
+            task.cancel()
+
     async def join(self) -> None:
         """Wait until the actor has fully stopped (on_stopped completed).
 
