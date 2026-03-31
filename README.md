@@ -4,6 +4,8 @@ Asyncio-native Actor framework for Python agent systems — supervision trees, m
 
 Inspired by Erlang/Akka. Built for AI agent orchestration.
 
+**[Documentation](https://greatmengqi.github.io/actor-for-agents/)** · [Getting Started](https://greatmengqi.github.io/actor-for-agents/getting-started/) · [Agent Layer](https://greatmengqi.github.io/actor-for-agents/agents/) · [API Reference](https://greatmengqi.github.io/actor-for-agents/api/actor/)
+
 ## Install
 
 ```bash
