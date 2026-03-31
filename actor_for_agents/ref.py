@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 if TYPE_CHECKING:
     from .system import _ActorCell
 
+MsgT = TypeVar("MsgT")
+RetT = TypeVar("RetT")
 
-class ActorRef:
+
+class ActorRef(Generic[MsgT, RetT]):
     """Immutable handle for sending messages to an actor.
+
+    Type parameters ``MsgT`` and ``RetT`` match the actor's message and return types::
+
+        ref: ActorRef[str, str] = await system.spawn(GreetActor, "greeter")
+        result: str = await ref.ask("world")
 
     Users never construct this directly — it is returned by
     ``ActorSystem.spawn`` or ``ActorContext.spawn``.
@@ -34,14 +42,14 @@ class ActorRef:
     def is_alive(self) -> bool:
         return not self._cell.stopped
 
-    async def tell(self, message: Any, *, sender: ActorRef | None = None) -> None:
+    async def tell(self, message: MsgT, *, sender: ActorRef | None = None) -> None:
         """Fire-and-forget message delivery."""
         if self._cell.stopped:
             self._cell.system._dead_letter(self, message, sender)
             return
         await self._cell.enqueue(_Envelope(message, sender))
 
-    async def ask(self, message: Any, *, timeout: float = 5.0) -> Any:
+    async def ask(self, message: MsgT, *, timeout: float = 5.0) -> RetT:
         """Request-response with timeout.
 
         Uses correlation ID + ReplyRegistry instead of passing a Future

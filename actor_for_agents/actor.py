@@ -10,9 +10,9 @@ from actor_for_agents.supervision import OneForOneStrategy, SupervisorStrategy
 if TYPE_CHECKING:
     from actor_for_agents.ref import ActorRef
 
-# Message type variable — use Actor[MyMsg] for typed actors
-M = TypeVar("M")
-R = TypeVar("R")
+# Message and return type variables — use Actor[MyMsg, MyReturn] for typed actors
+MsgT = TypeVar("MsgT")
+RetT = TypeVar("RetT")
 
 
 class ActorContext:
@@ -46,12 +46,12 @@ class ActorContext:
 
     async def spawn(
         self,
-        actor_cls: type[Actor],
+        actor_cls: type[Actor[MsgT, RetT]],
         name: str,
         *,
         mailbox_size: int = 256,
         middlewares: list | None = None,
-    ) -> ActorRef:
+    ) -> ActorRef[MsgT, RetT]:
         """Spawn a child actor supervised by this actor."""
         return await self._cell.spawn_child(actor_cls, name, mailbox_size=mailbox_size, middlewares=middlewares)
 
@@ -68,30 +68,31 @@ class ActorContext:
         return await asyncio.get_running_loop().run_in_executor(executor, fn, *args)
 
 
-class Actor(Generic[M]):
+class Actor(Generic[MsgT, RetT]):
     """Base class for all actors.
 
-    Type parameter ``M`` constrains the message type::
+    Type parameters ``MsgT`` and ``RetT`` constrain message and return types::
 
-        class Greeter(Actor[str]):
+        class Greeter(Actor[str, str]):
             async def on_receive(self, message: str) -> str:
                 return f"Hello, {message}!"
 
-        class Calculator(Actor[int | tuple[str, int, int]]):
-            async def on_receive(self, message: int | tuple[str, int, int]) -> int:
+        class Calculator(Actor[int, int]):
+            async def on_receive(self, message: int) -> int:
                 ...
 
-    Unparameterized ``Actor`` accepts ``Any`` (backward-compatible).
+    Unparameterized ``Actor`` accepts and returns ``Any`` (backward-compatible).
     """
 
     context: ActorContext
 
-    async def on_receive(self, message: M) -> Any:
+    async def on_receive(self, message: MsgT) -> RetT:
         """Handle an incoming message.
 
         Return value is sent back as reply for ``ask`` calls.
         For ``tell`` calls, the return value is discarded.
         """
+        ...
 
     async def on_started(self) -> None:
         """Called after creation, before receiving messages."""
@@ -101,6 +102,7 @@ class Actor(Generic[M]):
 
     async def on_restart(self, error: Exception) -> None:
         """Called on the *new* instance before resuming after a crash."""
+        ...
 
     def supervisor_strategy(self) -> SupervisorStrategy:
         """Override to customize how this actor supervises its children.
