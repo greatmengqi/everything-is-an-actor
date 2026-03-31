@@ -88,8 +88,7 @@ class AgentSystem(ActorSystem):
 
         if run_id in self._active_runs:
             raise ValueError(
-                f"Run '{run_id}' is already active. "
-                "Provide a unique run_id or wait for the existing run to finish."
+                f"Run '{run_id}' is already active. Provide a unique run_id or wait for the existing run to finish."
             )
 
         stream = RunStream()
