@@ -176,7 +176,9 @@ class _ReplyMessage:
 
     __slots__ = ("correlation_id", "result", "error", "exception")
 
-    def __init__(self, correlation_id: str, result: Any = None, error: str | None = None, exception: Exception | None = None) -> None:
+    def __init__(
+        self, correlation_id: str, result: Any = None, error: str | None = None, exception: Exception | None = None
+    ) -> None:
         self.correlation_id = correlation_id
         self.result = result
         self.error = error

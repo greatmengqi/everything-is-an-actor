@@ -76,8 +76,7 @@ class MemoryMailbox(Mailbox):
     def __init__(self, maxsize: int = 256, *, backpressure_policy: str = BACKPRESSURE_BLOCK) -> None:
         if backpressure_policy not in BACKPRESSURE_POLICIES:
             raise ValueError(
-                f"Invalid backpressure_policy={backpressure_policy!r}, "
-                f"expected one of {sorted(BACKPRESSURE_POLICIES)}"
+                f"Invalid backpressure_policy={backpressure_policy!r}, expected one of {sorted(BACKPRESSURE_POLICIES)}"
             )
         self._queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=maxsize)
         self._maxsize = maxsize

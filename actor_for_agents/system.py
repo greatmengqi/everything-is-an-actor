@@ -11,7 +11,16 @@ from typing import Any
 from actor_for_agents.actor import Actor, ActorContext
 from actor_for_agents.mailbox import Empty, Mailbox, MemoryMailbox
 from actor_for_agents.middleware import ActorMailboxContext, Middleware, NextFn, build_middleware_chain
-from actor_for_agents.ref import ActorRef, ActorStoppedError, MailboxFullError, ReplyChannel, _Envelope, _ReplyMessage, _ReplyRegistry, _Stop
+from actor_for_agents.ref import (
+    ActorRef,
+    ActorStoppedError,
+    MailboxFullError,
+    ReplyChannel,
+    _Envelope,
+    _ReplyMessage,
+    _ReplyRegistry,
+    _Stop,
+)
 from actor_for_agents.supervision import Directive, SupervisorStrategy
 
 logger = logging.getLogger(__name__)
@@ -50,6 +59,7 @@ class ActorSystem:
         reply_channel: ReplyChannel | None = None,
     ) -> None:
         import uuid as _uuid
+
         self.name = name
         self.system_id = f"{name}-{_uuid.uuid4().hex[:8]}"
         self._root_cells: dict[str, _ActorCell] = {}
@@ -60,7 +70,12 @@ class ActorSystem:
         self._reply_channel = reply_channel or ReplyChannel()
         # Shared thread pool for actors to run blocking I/O
         from concurrent.futures import ThreadPoolExecutor
-        self._executor = ThreadPoolExecutor(max_workers=executor_workers, thread_name_prefix=f"actor-{name}") if executor_workers else None
+
+        self._executor = (
+            ThreadPoolExecutor(max_workers=executor_workers, thread_name_prefix=f"actor-{name}")
+            if executor_workers
+            else None
+        )
 
     async def spawn(
         self,
@@ -181,8 +196,10 @@ class _ActorCell:
     async def start(self) -> None:
         self.actor = self.actor_cls()
         self.actor.context = ActorContext(self)
+
         async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
             return await self.actor.on_receive(message)  # type: ignore[union-attr]
+
         if self._middlewares:
             self._receive_chain = build_middleware_chain(self._middlewares, _inner_handler)
         else:
@@ -270,17 +287,27 @@ class _ActorCell:
                     result = await self._receive_chain(ctx, msg.payload)  # type: ignore[misc]
                     if msg.correlation_id is not None:
                         reply = _ReplyMessage(msg.correlation_id, result=result)
-                        await self.system._reply_channel.send_reply(msg.reply_to or self.system.system_id, reply, self.system._replies)
+                        await self.system._reply_channel.send_reply(
+                            msg.reply_to or self.system.system_id, reply, self.system._replies
+                        )
                     consecutive_failures = 0
                 except Exception as exc:
                     if isinstance(msg, _Envelope) and msg.correlation_id is not None:
                         reply = _ReplyMessage(msg.correlation_id, error=str(exc), exception=exc)
-                        await self.system._reply_channel.send_reply(msg.reply_to or self.system.system_id, reply, self.system._replies)
+                        await self.system._reply_channel.send_reply(
+                            msg.reply_to or self.system.system_id, reply, self.system._replies
+                        )
                     if self.parent is not None:
                         await self.parent._handle_child_failure(self, exc)
                     else:
                         consecutive_failures += 1
-                        logger.error("Uncaught error in root actor %s (%d/%d): %s", self.path, consecutive_failures, _MAX_CONSECUTIVE_FAILURES, exc)
+                        logger.error(
+                            "Uncaught error in root actor %s (%d/%d): %s",
+                            self.path,
+                            consecutive_failures,
+                            _MAX_CONSECUTIVE_FAILURES,
+                            exc,
+                        )
                         if consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
                             logger.error("Root actor %s hit consecutive failure limit — stopping", self.path)
                             break
@@ -360,7 +387,12 @@ class _ActorCell:
                 c = self.children.get(name)
                 if c is not None:
                     c.request_stop()
-            logger.info("Supervisor %s: stop %s after %s", self.path, [self.children[n].path for n in affected if n in self.children], type(error).__name__)
+            logger.info(
+                "Supervisor %s: stop %s after %s",
+                self.path,
+                [self.children[n].path for n in affected if n in self.children],
+                type(error).__name__,
+            )
             return
 
         if directive == Directive.escalate:
@@ -369,7 +401,9 @@ class _ActorCell:
             # loop instead of notifying the grandparent's supervisor.
             child.request_stop()
             if self.parent is not None:
-                logger.info("Supervisor %s: escalate %s to grandparent %s", self.path, type(error).__name__, self.parent.path)
+                logger.info(
+                    "Supervisor %s: escalate %s to grandparent %s", self.path, type(error).__name__, self.parent.path
+                )
                 await self.parent._handle_child_failure(self, error)
             else:
                 logger.error("Uncaught escalation at root actor %s: %s", self.path, error)

@@ -31,3 +31,6 @@ jobs:
 
       - name: Lint
         run: uv run ruff check actor_for_agents/
+
+      - name: Format
+        run: uv run ruff format --check actor_for_agents/
