@@ -17,6 +17,7 @@ Usage::
 """
 
 from actor_for_agents.actor import Actor, ActorContext
+from actor_for_agents.agents.system import AgentSystem
 from actor_for_agents.mailbox import Mailbox, MemoryMailbox
 from actor_for_agents.middleware import Middleware
 from actor_for_agents.ref import ActorRef, MailboxFullError, ReplyChannel
@@ -28,6 +29,7 @@ __all__ = [
     "ActorContext",
     "ActorRef",
     "ActorSystem",
+    "AgentSystem",
     "AllForOneStrategy",
     "DeadLetter",
     "Directive",

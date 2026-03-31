@@ -30,11 +30,15 @@ Levels 1-3 require AgentSystem (M3). Level 4-5 work with plain ActorSystem.
 """
 
 from actor_for_agents.agents.agent_actor import AgentActor
+from actor_for_agents.agents.run_stream import RunStream
+from actor_for_agents.agents.system import AgentSystem
 from actor_for_agents.agents.task import ActorConfig, Task, TaskEvent, TaskResult, TaskStatus
 
 __all__ = [
     "ActorConfig",
     "AgentActor",
+    "AgentSystem",
+    "RunStream",
     "Task",
     "TaskEvent",
     "TaskResult",

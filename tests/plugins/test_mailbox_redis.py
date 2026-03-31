@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 
 redis = pytest.importorskip("redis.asyncio")

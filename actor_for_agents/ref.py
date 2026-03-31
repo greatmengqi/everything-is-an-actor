@@ -70,6 +70,66 @@ class ActorRef(Generic[MsgT, RetT]):
         finally:
             self._cell.system._replies.discard(corr_id)
 
+    async def ask_stream(self, message: MsgT, *, timeout: float = 30.0):  # type: ignore[return]
+        """Stream TaskEvents from a single ask to an AgentActor.
+
+        Yields ``TaskEvent`` objects as they are emitted during execution.
+        Child agents spawned via ``dispatch()`` inside ``execute()`` inherit
+        the same event sink automatically.
+
+        Raises the agent's exception (if any) after the stream is exhausted.
+
+        Example::
+
+            async for event in ref.ask_stream(Task(input="...")):
+                if event.type == "task_progress":
+                    print(event.data)
+        """
+        from actor_for_agents.agents.run_stream import RunStream, _EventCollectorActor
+        from actor_for_agents.agents.task import StreamEvent, StreamResult, Task
+
+        if self._cell.stopped:
+            raise ActorStoppedError(f"Actor {self.path} is stopped")
+
+        stream_id = uuid.uuid4().hex
+        stream = RunStream()
+        system = self._cell.system
+
+        collector_ref = await system.spawn(_EventCollectorActor, f"_ask-collector-{stream_id}")
+        collector_ref._cell.actor._stream = stream  # type: ignore[union-attr]
+
+        # Inject per-ask sink so on_receive picks it up without re-spawning the actor
+        tagged = (
+            Task(input=message.input, id=message.id, event_sink_ref=collector_ref)
+            if isinstance(message, Task)
+            else message
+        )  # type: ignore[attr-defined]
+
+        run_exc: list[BaseException] = []
+        run_result: list[Any] = []
+
+        async def _drive() -> None:
+            try:
+                run_result.append(await self.ask(tagged, timeout=timeout))
+            except Exception as exc:
+                run_exc.append(exc)
+            finally:
+                collector_ref.stop()
+                await collector_ref.join()
+                system._root_cells.pop(f"_ask-collector-{stream_id}", None)
+                await stream.close()
+
+        asyncio.create_task(_drive(), name=f"ask-stream:{stream_id}")
+
+        async for event in stream:
+            yield StreamEvent(event=event)
+
+        if run_exc:
+            raise run_exc[0]
+
+        if run_result:
+            yield StreamResult(result=run_result[0])
+
     def stop(self) -> None:
         """Request graceful shutdown."""
         self._cell.request_stop()

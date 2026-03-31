@@ -139,7 +139,18 @@ class TaskEvent:
     data: Any         # the progress data or final output
 ```
 
-Events flow to a `RunStream` when using `AgentSystem` (coming in M3). With plain `ActorSystem`, events are silently dropped unless you attach an event sink manually.
+Events flow to a `RunStream` when using `AgentSystem.run()` or `ActorRef.ask_stream()`. With plain `ActorSystem`, events are silently dropped.
+
+### Span linking fields
+
+`TaskEvent` also carries two fields for distributed trace reconstruction:
+
+| Field | Description |
+|-------|-------------|
+| `parent_task_id` | `task_id` of the calling agent's task. `None` for the root agent. |
+| `parent_agent_path` | Actor path of the parent agent. `None` for the root agent. |
+
+These let you reconstruct the full call tree from a flat event stream (OpenTelemetry-style spans).
 
 ---
 
@@ -189,6 +200,78 @@ result = await ask_with_retry(
     base_backoff_s=0.1,
 )
 ```
+
+---
+
+## AgentSystem
+
+`AgentSystem` extends `ActorSystem` with event streaming. It is a drop-in replacement — all existing APIs work unchanged.
+
+```python
+from actor_for_agents.agents import AgentSystem
+
+system = AgentSystem("app")
+```
+
+### `run()` — spawn and stream
+
+Spawns a fresh root agent for each call, streams all `TaskEvent`s from the entire actor tree.
+
+```python
+async for event in system.run(ResearchOrchestrator, user_query):
+    if event.type == "task_progress":
+        print(event.data)
+```
+
+Child agents spawned via `dispatch()` automatically route their events to the same stream.
+
+### `ask_stream()` — stream from existing ref
+
+Reuses an already-spawned agent. Returns a stream of `StreamItem` objects — events first, then the final result.
+
+```python
+ref = await system.spawn(SummaryAgent, "summarizer")
+
+async for item in ref.ask_stream(Task(input="long document...")):
+    match item:
+        case StreamEvent(event=e):
+            print(e.type, e.data)    # intermediate events
+        case StreamResult(result=r):
+            print(r.output)          # final output (last item)
+```
+
+`ask_stream` is symmetric with `ref.ask()`. Use it when the agent is long-lived and handles multiple requests.
+
+### Comparison
+
+| | `run()` | `ask_stream()` |
+|--|---------|----------------|
+| Agent lifecycle | Fresh spawn per call | Reuse existing ref |
+| Where to call | On the system | On the ref |
+| Input | raw value | `Task` |
+| Output | `TaskEvent` stream | `StreamItem` stream (`StreamEvent \| StreamResult`) |
+
+---
+
+## Stream types
+
+`ask_stream()` yields a sealed `StreamItem` ADT:
+
+```python
+from actor_for_agents.agents.task import StreamEvent, StreamResult
+
+async for item in ref.ask_stream(Task(input="...")):
+    match item:
+        case StreamEvent(event=e):   # TaskEvent wrapper
+            ...
+        case StreamResult(result=r): # TaskResult wrapper — always last
+            ...
+```
+
+| Type | Field | Description |
+|------|-------|-------------|
+| `StreamEvent` | `event: TaskEvent` | One lifecycle event |
+| `StreamResult` | `result: TaskResult` | Final outcome, always the last item |
 
 ---
 

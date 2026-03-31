@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `AgentSystem` — drop-in `ActorSystem` replacement with event-streaming support
+- `AgentSystem.run(agent_cls, input)` — spawn root agent and stream all `TaskEvent`s from the actor tree
+- `AgentSystem.abort(run_id)` — cancel a running agent tree
+- `ActorRef.ask_stream(task)` — stream `TaskEvent`s from an existing ref; symmetric with `ref.ask()`
+- `RunStream` — async-iterable `TaskEvent` queue backed by `asyncio.Queue`
+- `StreamItem` sealed ADT (`StreamEvent | StreamResult`) for `ask_stream` consumers; supports `match/case`
+- `TaskEvent.parent_task_id` — links child events to the calling agent's task (OpenTelemetry-style span)
+- `TaskEvent.parent_agent_path` — human-readable parent path for hierarchy visualization
+- `ActorContext.dispatch(target, message)` — spawn ephemeral child actor, send one message, await result
+- `ActorContext.dispatch_parallel(tasks)` — fan-out to multiple agents concurrently, results in order
+
 ## [0.1.0] - 2025-03-31
 
 ### Added

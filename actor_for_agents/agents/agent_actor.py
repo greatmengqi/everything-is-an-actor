@@ -47,9 +47,14 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
     def __init__(self) -> None:
         super().__init__()
         self._current_task_id: str | None = None
-        # Injected by AgentSystem (M3) to route TaskEvents to a RunStream.
+        self._current_parent_task_id: str | None = None  # span link; set per on_receive call
+        self._active_sink: ActorRef | None = None  # effective sink for the current on_receive call
+        # Read from ContextVar set by AgentSystem.run() — propagates automatically
+        # to all child actors via asyncio task context inheritance.
         # None in plain ActorSystem usage — events are silently dropped.
-        self._event_sink: ActorRef | None = None
+        from actor_for_agents.agents.run_stream import _run_event_sink
+
+        self._event_sink: ActorRef | None = _run_event_sink.get()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -82,12 +87,15 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
         """
         if self._current_task_id is None:
             return
+        parent = self.context.parent
         await self._emit_event(
             TaskEvent(
                 type="task_progress",
                 task_id=self._current_task_id,
                 agent_path=self.context.self_ref.path,
                 data=data,
+                parent_task_id=self._current_parent_task_id,
+                parent_agent_path=parent.path if parent is not None else None,
             )
         )
 
@@ -102,12 +110,29 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                 "Wrap your input: ref.ask(Task(input=your_data))"
             )
 
+        from actor_for_agents.agents.run_stream import _current_task_id_var, _run_event_sink
+
+        # Capture parent span before overwriting the ContextVar
+        self._current_parent_task_id = _current_task_id_var.get()
+        token = _current_task_id_var.set(message.id)
+
+        # Per-ask sink (event_sink_ref) overrides actor-level sink (_event_sink).
+        # Set the ContextVar so child actors spawned during execute() inherit the sink.
+        self._active_sink = message.event_sink_ref or self._event_sink
+        sink_token = _run_event_sink.set(self._active_sink)
+
+        # Parent agent path: dispatch() makes the caller the supervision parent
+        parent = self.context.parent
+        parent_agent_path = parent.path if parent is not None else None
+
         self._current_task_id = message.id
         await self._emit_event(
             TaskEvent(
                 type="task_started",
                 task_id=message.id,
                 agent_path=self.context.self_ref.path,
+                parent_task_id=self._current_parent_task_id,
+                parent_agent_path=parent_agent_path,
             )
         )
         try:
@@ -119,6 +144,8 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                     task_id=message.id,
                     agent_path=self.context.self_ref.path,
                     data=output,
+                    parent_task_id=self._current_parent_task_id,
+                    parent_agent_path=parent_agent_path,
                 )
             )
             return result
@@ -129,12 +156,18 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                     task_id=message.id,
                     agent_path=self.context.self_ref.path,
                     data=str(exc),
+                    parent_task_id=self._current_parent_task_id,
+                    parent_agent_path=parent_agent_path,
                 )
             )
             raise
         finally:
             self._current_task_id = None
+            self._current_parent_task_id = None
+            self._active_sink = None
+            _current_task_id_var.reset(token)
+            _run_event_sink.reset(sink_token)
 
     async def _emit_event(self, event: TaskEvent) -> None:
-        if self._event_sink is not None:
-            await self._event_sink.tell(event)
+        if self._active_sink is not None:
+            await self._active_sink.tell(event)

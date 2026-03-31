@@ -78,6 +78,47 @@ An event emitted during task execution.
 | `task_id` | `str` | The associated task ID |
 | `agent_path` | `str` | Actor path (e.g. `/app/summarizer`) |
 | `data` | `Any` | Progress data or final output |
+| `parent_task_id` | `str \| None` | `task_id` of the calling agent's task. `None` for the root agent. |
+| `parent_agent_path` | `str \| None` | Actor path of the parent agent. `None` for the root agent. |
+
+`parent_task_id` and `parent_agent_path` enable OpenTelemetry-style trace reconstruction from a flat event stream.
+
+---
+
+## StreamItem
+
+```python
+from actor_for_agents.agents.task import StreamItem, StreamEvent, StreamResult
+```
+
+Sealed ADT yielded by `ActorRef.ask_stream()`. Use `match/case` for exhaustive handling.
+
+### StreamEvent
+
+Wraps a `TaskEvent` emitted during execution.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `event` | `TaskEvent` | The wrapped lifecycle event |
+
+### StreamResult
+
+Wraps the final `TaskResult`. Always the **last** item in the stream.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `result` | `TaskResult[OutputT]` | The wrapped task outcome |
+
+**Example**
+
+```python
+async for item in ref.ask_stream(Task(input="...")):
+    match item:
+        case StreamEvent(event=e):
+            print(e.type, e.data)
+        case StreamResult(result=r):
+            print(r.output)
+```
 
 ---
 
@@ -216,4 +257,73 @@ print(result.output)    # str
 print(result.status)    # TaskStatus.COMPLETED
 
 await system.shutdown()
+```
+
+---
+
+## ActorRef.ask_stream
+
+```python
+async def ask_stream(self, message: Task, *, timeout: float = 30.0) -> AsyncIterator[StreamItem]
+```
+
+Stream `TaskEvent`s from an already-spawned `AgentActor` ref, then yield the final `TaskResult`.
+
+- The agent is **not** re-spawned. Reuse the same ref across multiple calls.
+- Child agents spawned via `dispatch()` inside `execute()` inherit the event sink automatically.
+- Raises the agent's exception after the stream is exhausted (if `execute()` raised).
+
+```python
+from actor_for_agents.agents.system import AgentSystem
+from actor_for_agents.agents.task import StreamEvent, StreamResult
+
+system = AgentSystem()
+ref = await system.spawn(SummaryAgent, "summarizer")
+
+# First call
+async for item in ref.ask_stream(Task(input="doc 1")):
+    match item:
+        case StreamEvent(event=e):
+            print(e.type, e.data)
+        case StreamResult(result=r):
+            print(r.output)
+
+# Reuse same ref
+async for item in ref.ask_stream(Task(input="doc 2")):
+    ...
+```
+
+---
+
+## AgentSystem
+
+```python
+from actor_for_agents.agents import AgentSystem
+```
+
+Drop-in replacement for `ActorSystem` with event-streaming support.
+
+### `run(agent_cls, input, *, run_id, timeout)`
+
+Spawns a fresh root agent and streams all `TaskEvent`s from the entire actor tree.
+
+```python
+async for event in system.run(ResearchOrchestrator, user_query, timeout=120.0):
+    if event.type == "task_progress":
+        yield event.data
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `agent_cls` | `type[AgentActor]` | required | Root agent class to instantiate |
+| `input` | `Any` | required | Passed to root agent as `Task.input` |
+| `run_id` | `str \| None` | auto | Stable ID for log correlation |
+| `timeout` | `float` | `600.0` | Max seconds for root agent to complete |
+
+### `abort(run_id)`
+
+Cancel a running agent tree by `run_id`. No-op if already finished.
+
+```python
+await system.abort(run_id)
 ```
