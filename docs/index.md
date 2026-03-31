@@ -39,22 +39,20 @@ pip install actor-for-agents[redis]
 
 ```python
 import asyncio
-from actor_for_agents import ActorSystem
-from actor_for_agents.agents import AgentActor, Task, TaskResult
+from actor_for_agents.agents import AgentSystem, AgentActor, Task
 
-class SummaryAgent(AgentActor[str, str]):
+class ResearchAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
-        await self.emit_progress("processing...")
-        return f"Summary: {input[:50]}..."
+        await self.emit_progress("searching...")
+        result = await self.context.dispatch(SummaryAgent, Task(input=input))
+        return result
 
 async def main():
-    system = ActorSystem("app")
-    ref = await system.spawn(SummaryAgent, "summarizer")
+    system = AgentSystem("app")
 
-    result: TaskResult[str] = await ref.ask(Task(input="Long document content here..."))
-    print(result.output)  # Summary: Long document content here...
-
-    await system.shutdown()
+    # Stream every event from the entire agent tree
+    async for event in system.run(ResearchAgent, "actor model"):
+        print(event.type, event.agent_path, event.data)
 
 asyncio.run(main())
 ```
@@ -75,8 +73,21 @@ asyncio.run(main())
 
 - `Task` / `TaskResult` / `TaskEvent` — first-class task lifecycle
 - `AgentActor` — implement `execute()`, not `on_receive()`
-- `emit_progress()` — stream intermediate results
+- `emit_progress()` — status/progress updates during execution
+- Streaming `execute()` — `yield` tokens/chunks as an async generator; emits `task_chunk` events
 - Progressive API: plain classes → full actor control (5 levels)
+
+**Orchestration**
+
+- `dispatch(AgentCls, message)` — spawn ephemeral child, send once, await result
+- `dispatch_parallel([(A, msg), (B, msg)])` — fan-out with fail-fast sibling cancellation
+- `dispatch_stream(AgentCls, message)` — streaming counterpart; forward child chunks upstream
+
+**Event streaming**
+
+- `AgentSystem.run(AgentCls, input)` — spawn root agent, stream all `TaskEvent`s from the entire actor tree
+- `ref.ask_stream(Task(...))` — stream events from an existing ref; `StreamItem` ADT (`StreamEvent | StreamResult`) for `match/case`
+- `TaskEvent.parent_task_id` + `parent_agent_path` — OpenTelemetry-style span linking; reconstruct full call tree from flat event stream
 
 ---
 
