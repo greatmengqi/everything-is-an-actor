@@ -9,7 +9,7 @@ from typing import Any
 
 from actor_for_agents.actor import Actor, MsgT, RetT
 from actor_for_agents.agents.agent_actor import AgentActor
-from actor_for_agents.agents.run_stream import RunStream, _EventCollectorActor, _run_event_sink
+from actor_for_agents.agents.run_stream import RunStream, _run_event_sink, make_collector_cls
 from actor_for_agents.agents.task import Task, TaskEvent
 from actor_for_agents.mailbox import Mailbox
 from actor_for_agents.middleware import Middleware
@@ -85,11 +85,15 @@ class AgentSystem(ActorSystem):
                     print(event.data)
         """
         run_id = run_id or uuid.uuid4().hex
-        stream = RunStream()
 
-        # Spawn the event collector and inject the stream into it
-        collector_ref = await self.spawn(_EventCollectorActor, f"_collector-{run_id}")
-        collector_ref._cell.actor._stream = stream  # type: ignore[union-attr]
+        if run_id in self._active_runs:
+            raise ValueError(
+                f"Run '{run_id}' is already active. "
+                "Provide a unique run_id or wait for the existing run to finish."
+            )
+
+        stream = RunStream()
+        collector_ref = await self.spawn(make_collector_cls(stream), f"_collector-{run_id}")
 
         # Set ContextVar so every AgentActor instantiated during this run
         # (including deeply nested children via dispatch) gets the sink automatically
