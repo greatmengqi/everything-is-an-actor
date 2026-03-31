@@ -74,7 +74,7 @@ An event emitted during task execution.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | `str` | `task_started`, `task_progress`, `task_completed`, `task_failed` |
+| `type` | `str` | `task_started`, `task_progress`, `task_chunk`, `task_completed`, `task_failed` |
 | `task_id` | `str` | The associated task ID |
 | `agent_path` | `str` | Actor path (e.g. `/app/summarizer`) |
 | `data` | `Any` | Progress data or final output |
@@ -174,9 +174,9 @@ Type parameters flow end-to-end: `Task[InputT]` → `execute(input: InputT) -> O
 async def execute(self, input: InputT) -> OutputT
 ```
 
-Implement your agent logic here. The return value becomes `TaskResult.output`.
+Implement your agent logic here. Supports two output modes:
 
-Raise any exception to signal failure. The framework emits `task_failed` (with the error message in `data`) and supervision handles the restart.
+**Single result** — `return` a value. Becomes `TaskResult.output`.
 
 ```python
 class SummaryAgent(AgentActor[str, str]):
@@ -184,19 +184,33 @@ class SummaryAgent(AgentActor[str, str]):
         return await llm.summarize(input)
 ```
 
+**Streaming** — `yield` values (async generator). Each `yield` emits a `task_chunk` event immediately. `TaskResult.output` is the collected list of all yielded values.
+
+```python
+class LLMAgent(AgentActor[str, list]):
+    async def execute(self, prompt: str):
+        async for token in openai.stream(prompt):
+            yield token   # → task_chunk event, data=token
+```
+
+Raise any exception to signal failure. The framework emits `task_failed` and supervision handles the restart.
+
 #### `emit_progress(data)`
 
 ```python
 async def emit_progress(self, data: Any) -> None
 ```
 
-Emit a `task_progress` event during `execute()`. No-op if called outside an active task or without an event sink attached.
+Emit a `task_progress` event for **status/progress updates** during `execute()`. No-op if called outside an active task or without an event sink attached.
+
+Use `yield` (streaming mode) for output content; use `emit_progress()` for "how is the task going" messages.
 
 ```python
 async def execute(self, input):
-    async for chunk in llm.stream(input):
-        await self.emit_progress(chunk)
-    return "done"
+    await self.emit_progress("searching...")
+    results = await self.search(input)
+    await self.emit_progress(f"found {len(results)} results")
+    return results
 ```
 
 #### `on_started()`
@@ -238,6 +252,54 @@ Override to customize child supervision. Default: `OneForOneStrategy(max_restart
 Managed by the framework. Handles `Task` wrapping, event emission, and error propagation.
 
 Accidentally overriding this method emits a `UserWarning` at class definition time.
+
+---
+
+## ActorContext
+
+Injected as `self.context` before `on_started`. Available inside all lifecycle hooks and `execute()`.
+
+### `dispatch(target, message, *, timeout, name)`
+
+Spawn an ephemeral child actor (or send to an existing ref), await the result, stop the child.
+
+```python
+result = await self.context.dispatch(SearchAgent, Task(input=query))
+```
+
+### `dispatch_parallel(tasks, *, timeout)`
+
+Fan-out to multiple agents concurrently; results preserve task order. If any task raises, remaining tasks are cancelled and all ephemeral children are cleaned up before the exception propagates.
+
+```python
+results = await self.context.dispatch_parallel([
+    (AgentA, Task(input="x")),
+    (AgentB, Task(input="y")),
+])
+```
+
+### `dispatch_stream(target, message, *, timeout, name)`
+
+Streaming counterpart of `dispatch`. Yields `StreamItem` objects — events first, then the final `StreamResult`. Ephemeral children are stopped after the stream is exhausted or the caller breaks early.
+
+Use inside a streaming `execute()` to transparently forward child chunks:
+
+```python
+class OrchestratorAgent(AgentActor[str, list]):
+    async def execute(self, input: str):
+        async for item in self.context.dispatch_stream(LLMAgent, Task(input=input)):
+            match item:
+                case StreamEvent(event=e) if e.type == "task_chunk":
+                    yield e.data          # re-yield → becomes task_chunk for caller
+                case StreamResult(result=r):
+                    pass                  # final result available here
+```
+
+| | `dispatch` | `dispatch_stream` |
+|--|--|--|
+| Child output | Single `TaskResult` | `StreamItem` sequence |
+| Ephemeral actor | Stopped after `await` | Stopped after generator exhausted |
+| Use when child | Returns one result | Streams chunks |
 
 ---
 
