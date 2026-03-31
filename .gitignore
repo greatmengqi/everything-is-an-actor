@@ -36,3 +36,6 @@ log/
 # Project
 .omc/
 uv.lock
+
+# MkDocs
+site/
