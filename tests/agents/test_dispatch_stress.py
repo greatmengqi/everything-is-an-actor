@@ -113,9 +113,7 @@ async def test_dispatch_reuse_ref_1000():
         async def execute(self, input: int) -> int:
             count = 0
             for i in range(input):
-                r: TaskResult[str] = await self.context.dispatch(
-                    persistent, Task(input=str(i))
-                )
+                r: TaskResult[str] = await self.context.dispatch(persistent, Task(input=str(i)))
                 assert r.output == str(i)
                 count += 1
             return count
@@ -147,9 +145,7 @@ async def test_dispatch_nested_depth_10():
 
         class ChainAgent(AgentActor[str, str]):
             async def execute(self, input: str) -> str:
-                r: TaskResult[str] = await self.context.dispatch(
-                    inner_cls, Task(input=input)
-                )
+                r: TaskResult[str] = await self.context.dispatch(inner_cls, Task(input=input))
                 return r.output
 
         ChainAgent.__name__ = f"Chain{depth}"
@@ -184,9 +180,7 @@ async def test_dispatch_mixed_workload():
             # Phase 2: sequential aggregation dispatch
             total = 0
             for i in range(input // 10):
-                r: TaskResult[str] = await self.context.dispatch(
-                    EchoAgent, Task(input=f"s{i}")
-                )
+                r: TaskResult[str] = await self.context.dispatch(EchoAgent, Task(input=f"s{i}"))
                 total += len(r.output)
             return {"parallel": len(batch1), "sequential": total}
 

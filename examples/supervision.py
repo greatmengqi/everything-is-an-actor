@@ -33,11 +33,11 @@ async def main():
 
     print(await parent.ask("msg-1"))  # ok:msg-1
     try:
-        await parent.ask("msg-2")    # triggers crash
+        await parent.ask("msg-2")  # triggers crash
     except Exception as e:
         print(f"caught: {e}")
-    await asyncio.sleep(0.1)         # let supervisor restart worker
-    print(await parent.ask("msg-3")) # ok:msg-3  (fresh instance)
+    await asyncio.sleep(0.1)  # let supervisor restart worker
+    print(await parent.ask("msg-3"))  # ok:msg-3  (fresh instance)
 
     await system.shutdown()
 

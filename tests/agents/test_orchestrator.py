@@ -135,9 +135,7 @@ async def test_dispatch_child_stopped_on_exception():
 async def test_dispatch_timeout_raises():
     class SlowCaller(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
-            result: TaskResult[str] = await self.context.dispatch(
-                SlowAgent, Task(input=input), timeout=0.1
-            )
+            result: TaskResult[str] = await self.context.dispatch(SlowAgent, Task(input=input), timeout=0.1)
             return result.output
 
     system = ActorSystem("t")
@@ -170,10 +168,12 @@ async def test_dispatch_parallel_returns_ordered_results():
 async def test_dispatch_parallel_different_agent_types():
     class MixedCaller(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
-            results = await self.context.dispatch_parallel([
-                (EchoAgent, Task(input=input)),
-                (UpperAgent, Task(input=input)),
-            ])
+            results = await self.context.dispatch_parallel(
+                [
+                    (EchoAgent, Task(input=input)),
+                    (UpperAgent, Task(input=input)),
+                ]
+            )
             return [r.output for r in results]
 
     system = ActorSystem("t")
@@ -198,10 +198,12 @@ async def test_dispatch_parallel_empty_list():
 async def test_dispatch_parallel_exception_propagates():
     class FailingCaller(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
-            return await self.context.dispatch_parallel([
-                (EchoAgent, Task(input="ok")),
-                (BrokenAgent, Task(input="bad")),
-            ])
+            return await self.context.dispatch_parallel(
+                [
+                    (EchoAgent, Task(input="ok")),
+                    (BrokenAgent, Task(input="bad")),
+                ]
+            )
 
     system = ActorSystem("t")
     ref = await system.spawn(FailingCaller, "a")
@@ -215,11 +217,13 @@ async def test_dispatch_parallel_is_concurrent():
 
     class ConcurrentCaller(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
-            results = await self.context.dispatch_parallel([
-                (DelayedAgent, Task(input="a")),
-                (DelayedAgent, Task(input="b")),
-                (DelayedAgent, Task(input="c")),
-            ])
+            results = await self.context.dispatch_parallel(
+                [
+                    (DelayedAgent, Task(input="a")),
+                    (DelayedAgent, Task(input="b")),
+                    (DelayedAgent, Task(input="c")),
+                ]
+            )
             return [r.output for r in results]
 
     system = ActorSystem("t")
@@ -261,10 +265,12 @@ async def test_dispatch_parallel_mix_class_and_ref():
 
     class MixedAgent(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
-            results = await self.context.dispatch_parallel([
-                (EchoAgent, Task(input=input)),
-                (persistent, Task(input=input)),
-            ])
+            results = await self.context.dispatch_parallel(
+                [
+                    (EchoAgent, Task(input=input)),
+                    (persistent, Task(input=input)),
+                ]
+            )
             return [r.output for r in results]
 
     ref = await system.spawn(MixedAgent, "mixer")
@@ -284,10 +290,12 @@ async def test_dispatch_parallel_no_child_leak_on_failure():
     class LeakCheckAgent(AgentActor[str, dict]):
         async def execute(self, input: str) -> dict:
             try:
-                await self.context.dispatch_parallel([
-                    (DelayedAgent, Task(input="slow")),  # still running when BrokenAgent raises
-                    (BrokenAgent, Task(input="bad")),
-                ])
+                await self.context.dispatch_parallel(
+                    [
+                        (DelayedAgent, Task(input="slow")),  # still running when BrokenAgent raises
+                        (BrokenAgent, Task(input="bad")),
+                    ]
+                )
             except Exception:
                 pass
             # no sleep — dispatch_parallel cancels+joins all children before raising
@@ -305,9 +313,7 @@ async def test_dispatch_deterministic_name():
 
     class NamedCaller(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
-            r: TaskResult[str] = await self.context.dispatch(
-                EchoAgent, Task(input=input), name="my-echo"
-            )
+            r: TaskResult[str] = await self.context.dispatch(EchoAgent, Task(input=input), name="my-echo")
             return r.output
 
     system = ActorSystem("t")
@@ -327,10 +333,12 @@ async def test_nested_dispatch():
 
     class InnerAgent(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
-            results = await self.context.dispatch_parallel([
-                (EchoAgent, Task(input=input + "-1")),
-                (EchoAgent, Task(input=input + "-2")),
-            ])
+            results = await self.context.dispatch_parallel(
+                [
+                    (EchoAgent, Task(input=input + "-1")),
+                    (EchoAgent, Task(input=input + "-2")),
+                ]
+            )
             return [r.output for r in results]
 
     class OuterAgent(AgentActor[str, list]):

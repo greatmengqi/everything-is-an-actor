@@ -11,30 +11,30 @@ class SlowActor(Actor):
         self.count = 0
 
     async def on_receive(self, message):
-        if message == 'inc':
+        if message == "inc":
             await asyncio.sleep(0.01)
             self.count += 1
             return None
-        if message == 'get':
+        if message == "get":
             return self.count
         return None
 
 
 @pytest.mark.anyio
 async def test_memory_mailbox_drop_new_policy_drops_tell_to_dead_letters():
-    system = ActorSystem('bp')
+    system = ActorSystem("bp")
     ref = await system.spawn(
         SlowActor,
-        'slow',
+        "slow",
         mailbox=MemoryMailbox(1, backpressure_policy=BACKPRESSURE_DROP_NEW),
     )
 
     # Overfill quickly
     for _ in range(20):
-        await ref.tell('inc')
+        await ref.tell("inc")
 
     await asyncio.sleep(0.4)
-    count = await ref.ask('get', timeout=2.0)
+    count = await ref.ask("get", timeout=2.0)
     await system.shutdown()
 
     # Some messages should be dropped under drop_new
@@ -44,21 +44,21 @@ async def test_memory_mailbox_drop_new_policy_drops_tell_to_dead_letters():
 
 @pytest.mark.anyio
 async def test_memory_mailbox_fail_policy_rejects_ask_when_full():
-    system = ActorSystem('bp')
+    system = ActorSystem("bp")
     ref = await system.spawn(
         SlowActor,
-        'slow',
+        "slow",
         mailbox=MemoryMailbox(1, backpressure_policy=BACKPRESSURE_FAIL),
     )
 
     # Fill queue with tell first
-    await ref.tell('inc')
+    await ref.tell("inc")
 
     # Then ask may be rejected when queue still full
     got_reject = False
     for _ in range(30):
         try:
-            await ref.ask('inc', timeout=0.02)
+            await ref.ask("inc", timeout=0.02)
         except MailboxFullError:
             got_reject = True
             break
@@ -71,18 +71,18 @@ async def test_memory_mailbox_fail_policy_rejects_ask_when_full():
 
 @pytest.mark.anyio
 async def test_memory_mailbox_block_policy_eventually_accepts():
-    system = ActorSystem('bp')
+    system = ActorSystem("bp")
     ref = await system.spawn(
         SlowActor,
-        'slow',
+        "slow",
         mailbox=MemoryMailbox(1, backpressure_policy=BACKPRESSURE_BLOCK),
     )
 
     for _ in range(10):
-        await ref.tell('inc')
+        await ref.tell("inc")
 
     await asyncio.sleep(0.25)
-    count = await ref.ask('get', timeout=2.0)
+    count = await ref.ask("get", timeout=2.0)
     await system.shutdown()
 
     # Block policy should avoid dropping on tell path

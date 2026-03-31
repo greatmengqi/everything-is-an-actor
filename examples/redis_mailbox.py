@@ -22,7 +22,8 @@ async def main():
 
     system = ActorSystem("demo")
     ref = await system.spawn(
-        EchoActor, "echo",
+        EchoActor,
+        "echo",
         mailbox=RedisMailbox(pool, "actor:inbox:echo", maxlen=1000),
     )
 

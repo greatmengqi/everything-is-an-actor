@@ -29,9 +29,9 @@ class CounterActor(Actor):
 
 def fmt(n):
     if n >= 1_000_000:
-        return f"{n/1_000_000:.1f}M"
+        return f"{n / 1_000_000:.1f}M"
     if n >= 1_000:
-        return f"{n/1_000:.0f}K"
+        return f"{n / 1_000:.0f}K"
     return str(n)
 
 
@@ -223,10 +223,7 @@ async def bench_redis_put_batch(n=50_000, batch_size=100):
 
     from actor_for_agents.ref import _Envelope
 
-    batches = [
-        [_Envelope(payload="inc") for _ in range(batch_size)]
-        for _ in range(n // batch_size)
-    ]
+    batches = [[_Envelope(payload="inc") for _ in range(batch_size)] for _ in range(n // batch_size)]
 
     t0 = time.perf_counter()
     for batch in batches:

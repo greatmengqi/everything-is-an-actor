@@ -42,17 +42,17 @@ class ResearchOrchestrator(AgentActor[str, str]):
         await self.emit_progress("starting research")
 
         # Fan out to two parallel searches
-        search_results: list[TaskResult[list[str]]] = await self.context.dispatch_parallel([
-            (SearchAgent, Task(input=f"{input} news")),
-            (SearchAgent, Task(input=f"{input} docs")),
-        ])
+        search_results: list[TaskResult[list[str]]] = await self.context.dispatch_parallel(
+            [
+                (SearchAgent, Task(input=f"{input} news")),
+                (SearchAgent, Task(input=f"{input} docs")),
+            ]
+        )
 
         combined = search_results[0].output + search_results[1].output
 
         # Sequential summarization
-        summary: TaskResult[str] = await self.context.dispatch(
-            SummaryAgent, Task(input=combined)
-        )
+        summary: TaskResult[str] = await self.context.dispatch(SummaryAgent, Task(input=combined))
         return summary.output
 
 

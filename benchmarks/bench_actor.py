@@ -26,6 +26,7 @@ class CounterActor(Actor):
 
 class ChainActor(Actor):
     """Forwards message to next actor in chain."""
+
     next_ref = None
 
     async def on_receive(self, message):
@@ -36,12 +37,14 @@ class ChainActor(Actor):
 
 class ComputeActor(Actor):
     """Simulates CPU work via thread pool."""
+
     async def on_receive(self, message):
         def fib(n):
             a, b = 0, 1
             for _ in range(n):
                 a, b = b, a + b
             return a
+
         return await self.context.run_in_executor(fib, message)
 
 
@@ -56,9 +59,9 @@ class CountMiddleware(Middleware):
 
 def fmt(n):
     if n >= 1_000_000:
-        return f"{n/1_000_000:.1f}M"
+        return f"{n / 1_000_000:.1f}M"
     if n >= 1_000:
-        return f"{n/1_000:.0f}K"
+        return f"{n / 1_000:.0f}K"
     return str(n)
 
 
@@ -143,7 +146,9 @@ async def bench_concurrent_actors(num_actors=1000, msgs_per_actor=100):
     delivered = sum(results)
     rate = total / elapsed
     loss = total - delivered
-    print(f"  {num_actors} actors × {msgs_per_actor} msgs: {fmt(total)} in {elapsed:.2f}s = {fmt(int(rate))}/s (loss: {loss})")
+    print(
+        f"  {num_actors} actors × {msgs_per_actor} msgs: {fmt(total)} in {elapsed:.2f}s = {fmt(int(rate))}/s (loss: {loss})"
+    )
 
     await system.shutdown()
 
@@ -164,7 +169,7 @@ async def bench_actor_chain(depth=100):
 
     assert result == "ping"
     per_hop = elapsed / depth * 1_000_000  # µs
-    print(f"  chain {depth} hops:     {elapsed*1000:.1f}ms total, {per_hop:.0f}µs/hop")
+    print(f"  chain {depth} hops:     {elapsed * 1000:.1f}ms total, {per_hop:.0f}µs/hop")
 
     await system.shutdown()
 
@@ -207,7 +212,7 @@ async def bench_executor_parallel(num_tasks=16):
     results = await asyncio.gather(*[r.ask(10_000, timeout=30.0) for r in refs])
     elapsed = time.perf_counter() - start
 
-    print(f"  executor parallel:  {num_tasks} fib(10K) in {elapsed*1000:.0f}ms ({num_tasks/elapsed:.0f} tasks/s)")
+    print(f"  executor parallel:  {num_tasks} fib(10K) in {elapsed * 1000:.0f}ms ({num_tasks / elapsed:.0f} tasks/s)")
 
     await system.shutdown()
 
@@ -226,8 +231,8 @@ async def bench_spawn_teardown(n=5000):
     await system.shutdown()
     shutdown_elapsed = time.perf_counter() - start
 
-    print(f"  spawn {n}:          {spawn_elapsed*1000:.0f}ms ({n/spawn_elapsed:.0f}/s)")
-    print(f"  shutdown {n}:       {shutdown_elapsed*1000:.0f}ms")
+    print(f"  spawn {n}:          {spawn_elapsed * 1000:.0f}ms ({n / spawn_elapsed:.0f}/s)")
+    print(f"  shutdown {n}:       {shutdown_elapsed * 1000:.0f}ms")
 
 
 async def main():
