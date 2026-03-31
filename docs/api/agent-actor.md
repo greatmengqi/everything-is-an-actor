@@ -8,18 +8,20 @@ from actor_for_agents.agents import Task
 
 A unit of work sent to an `AgentActor`.
 
+Generic type parameter `InputT` constrains the input type.
+
 **Fields**
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `input` | `Any` | required | The input data for the agent |
+| `input` | `InputT` | required | The input data for the agent |
 | `id` | `str` | auto (uuid hex) | Unique task identifier |
 
 **Example**
 
 ```python
-task = Task(input="summarize this document")
-task = Task(input={"query": "actor model", "limit": 5}, id="my-task-001")
+task: Task[str] = Task(input="summarize this document")
+task: Task[dict] = Task(input={"query": "actor model", "limit": 5}, id="my-task-001")
 ```
 
 ---
@@ -37,7 +39,7 @@ The outcome returned by `AgentActor.on_receive()` after `execute()` completes.
 | Field | Type | Description |
 |-------|------|-------------|
 | `task_id` | `str` | Matches the originating `Task.id` |
-| `output` | `Any` | The value returned by `execute()` |
+| `output` | `OutputT \| None` | The value returned by `execute()` |
 | `error` | `str \| None` | Error message if status is `FAILED` |
 | `status` | `TaskStatus` | `COMPLETED` or `FAILED` |
 
@@ -114,22 +116,29 @@ class MyAgent:
 from actor_for_agents.agents import AgentActor
 ```
 
-Base class for AI agents (Level 4). Inherits from `Actor`.
+Base class for AI agents (Level 4). Inherits from `Actor`. Generic over input type `InputT` and output type `OutputT`.
+
+```python
+class MyAgent(AgentActor[str, str]):
+    async def execute(self, input: str) -> str: ...
+```
+
+Type parameters flow end-to-end: `Task[InputT]` → `execute(input: InputT) -> OutputT` → `TaskResult[OutputT]`.
 
 ### Methods to override
 
 #### `execute(input)`
 
 ```python
-async def execute(self, input: Any) -> Any
+async def execute(self, input: InputT) -> OutputT
 ```
 
 Implement your agent logic here. The return value becomes `TaskResult.output`.
 
-Raise any exception to signal failure. The framework emits `task_failed` and supervision handles the restart.
+Raise any exception to signal failure. The framework emits `task_failed` (with the error message in `data`) and supervision handles the restart.
 
 ```python
-class SummaryAgent(AgentActor):
+class SummaryAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
         return await llm.summarize(input)
 ```
@@ -202,8 +211,8 @@ from actor_for_agents.agents import AgentActor, Task
 system = ActorSystem("app")
 ref = await system.spawn(SummaryAgent, "summarizer")
 
-result = await ref.ask(Task(input="..."))
-print(result.output)
+result: TaskResult[str] = await ref.ask(Task(input="..."))
+print(result.output)    # str
 print(result.status)    # TaskStatus.COMPLETED
 
 await system.shutdown()

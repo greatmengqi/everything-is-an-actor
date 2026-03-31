@@ -52,12 +52,12 @@ The agent layer has 5 levels. Start at the lowest level you need — upgrading l
 
 === "Level 4 — AgentActor"
 
-    Full power: supervision strategy, `emit_progress()`, access to actor context.
+    Full power: strong typing, supervision strategy, `emit_progress()`, access to actor context.
 
     ```python
     from actor_for_agents.agents import AgentActor
 
-    class SearchAgent(AgentActor):
+    class SearchAgent(AgentActor[str, str]):
         def supervisor_strategy(self):
             return OneForOneStrategy(max_restarts=5)
 
@@ -96,10 +96,10 @@ Every message to an `AgentActor` is a `Task`. The framework manages the lifecycl
 ```python
 from actor_for_agents.agents import Task, TaskResult, TaskStatus
 
-task = Task(input="what is the actor model?")
+task: Task[str] = Task(input="what is the actor model?")
 # task.id is auto-generated (uuid hex)
 
-result: TaskResult = await ref.ask(task)
+result: TaskResult[str] = await ref.ask(task)
 print(result.output)        # the value execute() returned
 print(result.status)        # TaskStatus.COMPLETED
 print(result.task_id)       # same as task.id
@@ -128,7 +128,7 @@ PENDING → RUNNING → COMPLETED
 | `task_started` | `execute()` begins |
 | `task_progress` | You call `emit_progress(data)` |
 | `task_completed` | `execute()` returns successfully |
-| `task_failed` | `execute()` raises an exception |
+| `task_failed` | `execute()` raises an exception (`data` contains the error message) |
 
 ```python
 @dataclass
@@ -148,7 +148,7 @@ Events flow to a `RunStream` when using `AgentSystem` (coming in M3). With plain
 Use `emit_progress()` inside `execute()` to stream intermediate results:
 
 ```python
-class StreamingAgent(AgentActor):
+class StreamingAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
         chunks = []
         async for token in llm.stream(input):
