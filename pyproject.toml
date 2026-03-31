@@ -31,6 +31,7 @@ dev = [
     "pytest>=8.0",
     "anyio[asyncio]>=4.0",
     "pytest-anyio>=0.0.0",
+    "ruff>=0.4",
 ]
 
 [tool.hatch.build.targets.wheel]
