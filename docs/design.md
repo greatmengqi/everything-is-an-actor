@@ -135,7 +135,7 @@ There are two ways to attach a sink:
 
 **`AgentSystem.run()`** — sets `_run_event_sink` ContextVar before spawning the root agent. All `AgentActor` instances created within that asyncio task context automatically inherit the sink via `asyncio.create_task()` context copy.
 
-**`ActorRef.ask_stream()`** — injects `event_sink_ref` into the `Task` itself. `AgentActor.on_receive()` picks it up as `message.event_sink_ref` and sets it as `_active_sink` for the duration of that call. It also sets the `_run_event_sink` ContextVar so child actors spawned via `dispatch()` during `execute()` inherit the same sink.
+**`ActorRef.ask_stream()`** — injects `event_sink_ref` into the `Task` itself. `AgentActor.on_receive()` picks it up as `message.event_sink_ref` and sets it as `_active_sink` for the duration of that call. It also sets the `_run_event_sink` ContextVar so child actors spawned via `ask()` during `execute()` inherit the same sink.
 
 The per-ask sink (`event_sink_ref`) takes precedence over the run-level sink (`_run_event_sink`). This lets `ask_stream()` work on existing agents that were already spawned inside a `run()` session.
 
@@ -148,7 +148,7 @@ run() sets _run_event_sink = collector
     │
     └─ create_task(_drive) ──→ context copied
                                 AgentActor.__init__ reads _run_event_sink
-                                dispatch() → create_task → context copied again
+                                ask() → create_task → context copied again
                                     └─ child AgentActor.__init__ gets same sink
 ```
 
@@ -166,7 +166,7 @@ Instantiated via `make_collector_cls(stream)` — a factory that returns a subcl
 
 ## Orchestration
 
-### dispatch()
+### ask()
 
 Spawn a child, send one message, await result, stop child. The finally block guarantees cleanup even if the caller raises or is cancelled:
 
@@ -176,18 +176,22 @@ try:
     return await ref.ask(message, timeout=timeout)
 finally:
     ref.stop()
+    if cancelling() > 0:
+        ref.interrupt()
     await ref.join()
 ```
 
-### dispatch_parallel()
+`interrupt()` is called when the wrapper task is itself being cancelled (e.g. as a sibling in `sequence()`). It cancels the actor's asyncio task directly, so `join()` returns immediately instead of waiting for the actor's current sleep/IO to finish.
 
-Fan-out to N agents using `asyncio.wait(FIRST_EXCEPTION)`. When the first task fails, siblings are cancelled immediately — their `dispatch()` finally blocks still run on `CancelledError`, so no ephemeral children are left running.
+### sequence()
 
-The key decision: fail-fast (stop expensive side effects ASAP) over guaranteed synchronous cleanup (wait for all tasks). Cleanup is still guaranteed via supervision — cancelled children process the `_Stop` sentinel from `ref.stop()` and shut down cleanly.
+Fan-out to N agents using `asyncio.wait(FIRST_EXCEPTION)`. When the first task fails, siblings are cancelled immediately — their `ask()` finally blocks still run on `CancelledError`, so no ephemeral children are left running.
 
-### dispatch_stream()
+The key decision: fail-fast (stop expensive side effects ASAP) over guaranteed synchronous cleanup (wait for all tasks). Cleanup is still guaranteed — cancelled children process the `_Stop` sentinel from `ref.stop()` and shut down cleanly.
 
-Streaming counterpart of `dispatch()`. An async generator that:
+### stream()
+
+Streaming counterpart of `ask()`. An async generator that:
 
 1. Spawns ephemeral child (if class target)
 2. Iterates `ref.ask_stream(message)` and yields each `StreamItem`
@@ -197,7 +201,7 @@ This enables transparent chunk forwarding in orchestrators:
 
 ```python
 async def execute(self, input: str):
-    async for item in self.context.dispatch_stream(LLMAgent, Task(input=input)):
+    async for item in self.context.stream(LLMAgent, Task(input=input)):
         match item:
             case StreamEvent(event=e) if e.type == "task_chunk":
                 yield e.data   # becomes task_chunk for the orchestrator's caller
@@ -213,7 +217,7 @@ Every `TaskEvent` carries:
 - `parent_task_id` — the calling agent's `task_id` (None for root)
 - `parent_agent_path` — the calling agent's actor path (None for root)
 
-`parent_task_id` is read from `_current_task_id_var` ContextVar at the start of `on_receive()`, before the current task_id is set. Child actors spawned via `dispatch()` inherit the parent's task_id through the context copy, so the full call tree is reconstructable from a flat event stream — equivalent to OpenTelemetry parent span injection.
+`parent_task_id` is read from `_current_task_id_var` ContextVar at the start of `on_receive()`, before the current task_id is set. Child actors spawned via `ask()` inherit the parent's task_id through the context copy, so the full call tree is reconstructable from a flat event stream — equivalent to OpenTelemetry parent span injection.
 
 ---
 
@@ -221,7 +225,7 @@ Every `TaskEvent` carries:
 
 ### Sequential actor processing
 
-Actors process one message at a time. This eliminates data races on actor state without locks. The tradeoff: a slow `execute()` blocks subsequent messages to the same actor. Solution: use ephemeral actors via `dispatch()` — each call gets a fresh actor with no queuing contention.
+Actors process one message at a time. This eliminates data races on actor state without locks. The tradeoff: a slow `execute()` blocks subsequent messages to the same actor. Solution: use ephemeral actors via `ask()` — each call gets a fresh actor with no queuing contention.
 
 ### ask_stream uses a sidecar collector actor
 
