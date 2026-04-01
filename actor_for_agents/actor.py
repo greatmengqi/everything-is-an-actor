@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
 
-DEFAULT_MAILBOX_SIZE = 256
-
 from actor_for_agents.supervision import OneForOneStrategy, SupervisorStrategy
+
+DEFAULT_MAILBOX_SIZE = 256
 
 if TYPE_CHECKING:
     from actor_for_agents.ref import ActorRef

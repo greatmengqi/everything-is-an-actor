@@ -97,4 +97,8 @@ __all__ = [
     "StopF",
     "tell",
     "tell_direct",
+    "map2",
+    "product",
+    "sequence",
+    "traverse",
 ]
