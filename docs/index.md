@@ -44,8 +44,8 @@ from actor_for_agents.agents import AgentSystem, AgentActor, Task
 class ResearchAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
         await self.emit_progress("searching...")
-        result = await self.context.dispatch(SummaryAgent, Task(input=input))
-        return result
+        r = await self.context.ask(SummaryAgent, Task(input=input))
+        return r.output
 
 async def main():
     system = AgentSystem("app")
@@ -79,9 +79,12 @@ asyncio.run(main())
 
 **Orchestration**
 
-- `dispatch(AgentCls, message)` — spawn ephemeral child, send once, await result
-- `dispatch_parallel([(A, msg), (B, msg)])` — fan-out with fail-fast sibling cancellation
-- `dispatch_stream(AgentCls, message)` — streaming counterpart; forward child chunks upstream
+- `ask(AgentCls, message)` — spawn ephemeral child, send once, await result
+- `sequence([(A, msg), (B, msg)])` — fan-out with fail-fast sibling cancellation; results in order
+- `traverse(inputs, AgentCls)` — map a list through one agent concurrently
+- `race([(A, msg), (B, msg)])` — first-wins, cancel the rest
+- `zip((A, msg), (B, msg))` — two tasks, typed pair
+- `stream(AgentCls, message)` — streaming counterpart; forward child chunks upstream
 
 **Event streaming**
 
