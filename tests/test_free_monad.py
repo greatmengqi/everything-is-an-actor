@@ -270,3 +270,114 @@ def test_task_result_apply():
     tr = TaskResult(task_id="t1", output=5, status=TaskStatus.COMPLETED)
     result = tr.apply(lambda x: x * 2)
     assert result.output == 10
+
+
+# ---------------------------------------------------------------------------
+# ActorRef.free_xxx API tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_ref_free_ask():
+    """ActorRef.free_ask returns a Free that can be executed."""
+    system = ActorSystem()
+    try:
+        ref = await system.spawn(EchoActor, "echo")
+        result = await run_free(system, ref.free_ask("hello"))
+        assert result == "echo: hello"
+    finally:
+        await system.shutdown()
+
+
+@pytest.mark.anyio
+async def test_ref_free_tell():
+    """ActorRef.free_tell returns a Free that can be executed."""
+    system = ActorSystem()
+    try:
+        ref = await system.spawn(IncrementActor, "counter")
+        await run_free(system, ref.free_tell("inc"))
+        await run_free(system, ref.free_tell("inc"))
+        result = await run_free(system, ref.free_ask("get"))
+        assert result == 2
+    finally:
+        await system.shutdown()
+
+
+@pytest.mark.anyio
+async def test_ref_free_stop():
+    """ActorRef.free_stop returns a Free that can be executed."""
+    system = ActorSystem()
+    ref = await system.spawn(EchoActor, "to_stop")
+    assert ref.is_alive
+
+    await run_free(system, ref.free_stop())
+
+    import asyncio
+    await asyncio.sleep(0.1)
+    assert not ref.is_alive
+
+    await system.shutdown()
+
+
+@pytest.mark.anyio
+async def test_ref_free_composition():
+    """ActorRef.free_xxx supports flatMap chaining."""
+    system = ActorSystem()
+    try:
+        ref = await system.spawn(IncrementActor, "counter")
+
+        def workflow():
+            return ref.free_tell("inc").flatMap(lambda _: ref.free_tell("inc")).flatMap(lambda _: ref.free_ask("get"))
+
+        result = await run_free(system, workflow())
+        assert result == 2
+    finally:
+        await system.shutdown()
+
+
+def test_ref_free_ask_returns_suspend():
+    """ActorRef.free_ask returns a Suspend wrapping AskF."""
+    from actor_for_agents.ref import ActorRef
+
+    class MockCell:
+        name = "mock"
+        path = "/mock"
+        stopped = False
+
+    ref = ActorRef.__new__(ActorRef)
+    ref._cell = MockCell()
+
+    op = ref.free_ask("hello")
+    assert isinstance(op, Suspend)
+
+
+def test_ref_free_tell_returns_suspend():
+    """ActorRef.free_tell returns a Suspend wrapping TellF."""
+    from actor_for_agents.ref import ActorRef
+
+    class MockCell:
+        name = "mock"
+        path = "/mock"
+        stopped = False
+
+    ref = ActorRef.__new__(ActorRef)
+    ref._cell = MockCell()
+
+    op = ref.free_tell("hello")
+    assert isinstance(op, Suspend)
+
+
+def test_ref_free_stop_returns_suspend():
+    """ActorRef.free_stop returns a Suspend wrapping StopF."""
+    from actor_for_agents.ref import ActorRef
+
+    class MockCell:
+        name = "mock"
+        path = "/mock"
+        stopped = False
+
+    ref = ActorRef.__new__(ActorRef)
+    ref._cell = MockCell()
+
+    op = ref.free_stop()
+    assert isinstance(op, Suspend)

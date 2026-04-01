@@ -6,6 +6,8 @@ import asyncio
 import uuid
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
+from actor_for_agents.frees import Free, Suspend
+
 if TYPE_CHECKING:
     from .system import _ActorCell
 
@@ -167,6 +169,52 @@ class ActorRef(Generic[MsgT, RetT]):
             await asyncio.shield(task)
         except asyncio.CancelledError:
             pass  # outer join() was cancelled — actor continues shutdown independently
+
+    # -------------------------------------------------------------------------
+    # Free Monad API — describe operations as pure data, execute later
+    # -------------------------------------------------------------------------
+
+    def free_ask(self, msg: MsgT) -> Free[ActorF, RetT]:
+        """Lift an ask operation into the Free monad.
+
+        Use with ``ActorSystem.run_free()`` for pure, composable workflows::
+
+            async def workflow(ref: ActorRef) -> Free[ActorF, str]:
+                return ref.free_ask("hello").flatMap(lambda r: ref.free_ask(r + " world"))
+
+            result = await system.run_free(workflow)
+        """
+        from actor_for_agents.actor_f import AskF
+
+        return Suspend(AskF(self, msg))  # type: ignore[return-value]
+
+    def free_tell(self, msg: MsgT) -> Free[ActorF, None]:
+        """Lift a tell operation into the Free monad.
+
+        Use with ``ActorSystem.run_free()`` for pure, composable workflows::
+
+            async def workflow(ref: ActorRef) -> Free[ActorF, None]:
+                return ref.free_tell("hello")
+
+            await system.run_free(workflow)
+        """
+        from actor_for_agents.actor_f import TellF
+
+        return Suspend(TellF(self, msg))  # type: ignore[return-value]
+
+    def free_stop(self) -> Free[ActorF, None]:
+        """Lift a stop operation into the Free monad.
+
+        Use with ``ActorSystem.run_free()`` for pure, composable workflows::
+
+            async def workflow(ref: ActorRef) -> Free[ActorF, None]:
+                return ref.free_stop()
+
+            await system.run_free(workflow)
+        """
+        from actor_for_agents.actor_f import StopF
+
+        return Suspend(StopF(self))  # type: ignore[return-value]
 
     def __repr__(self) -> str:
         alive = "alive" if self.is_alive else "dead"
