@@ -167,10 +167,10 @@ async def test_run_free_composition():
         ref = await system.spawn(IncrementActor, "counter")
 
         def workflow():
-            return tell(ref, "inc").flatMap(lambda _: ask(ref, "get"))
+            return tell(ref, "inc").flatMap(lambda _: tell(ref, "inc")).flatMap(lambda _: ask(ref, "get"))
 
         result = await run_free(system, workflow())
-        assert result == 1
+        assert result == 2
     finally:
         await system.shutdown()
 

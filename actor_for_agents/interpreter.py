@@ -88,32 +88,39 @@ async def run_free(system: "ActorSystem", free: Free[ActorF, A]) -> A:
 
 
 async def _run_trampoline(free: Free[ActorF, Any], interpreter: LiveInterpreter) -> Any:
-    """Trampolining interpreter that handles Free chains iteratively."""
+    """Trampolining interpreter that handles Free chains iteratively.
+
+    Walks the Free structure, interpreting Suspend operations as it encounters them.
+    """
+    # Stack to track the chain - avoid deep recursion
+    stack: list[Callable[[Any], Free[ActorF, Any]]] = []
+
     current: Free[ActorF, Any] = free
 
     while True:
         if isinstance(current, Pure):
-            return current.value
+            # Hit a pure value - unwind the stack
+            if not stack:
+                return current.value
+            # Pop continuation and apply
+            f = stack.pop()
+            current = f(current.value)
         elif isinstance(current, Suspend):
-            # Execute the suspended operation via interpreter, continue with result
-            interpreted = await interpreter(current.thunk)
-            current = interpreted
-        elif isinstance(current, FlatMap):
-            # Re-associate: evaluate thunk, then apply f to result
-            thunk = current.thunk
-            if isinstance(thunk, Suspend):
-                # Suspend case: interpret, then flatMap with f
-                interpreted = await interpreter(thunk.thunk)
-                current = interpreted.flatMap(current.f)
-            elif isinstance(thunk, FlatMap):
-                # Nested FlatMap: fuse to avoid stack growth
-                inner: FlatMap[ActorF, Any, Any] = thunk
-                current = inner.thunk.flatMap(lambda v: inner.f(v).flatMap(current.f))
-            elif isinstance(thunk, Pure):
-                # Pure case: just apply f directly
-                current = current.f(thunk.value)
+            # Execute the suspended operation, then apply any continuations
+            result = await interpreter(current.thunk)
+            if not stack:
+                # No more continuations, return directly
+                if isinstance(result, Pure):
+                    return result.value
+                current = result
             else:
-                raise RuntimeError(f"Unreachable thunk: {type(thunk)}")
+                # Apply continuations to the result
+                f = stack.pop()
+                current = result.flatMap(f)
+        elif isinstance(current, FlatMap):
+            # Push the continuation and recurse into the thunk
+            stack.append(current.f)
+            current = current.thunk
         else:
             raise RuntimeError(f"Unreachable Free state: {type(current)}")
 
@@ -211,27 +218,37 @@ def run_free_mock(
 
 
 def _run_trampoline_sync(free: Free[ActorF, Any], interpreter: MockInterpreter) -> Any:
-    """Synchronous trampolining interpreter for MockSystem."""
+    """Synchronous trampolining interpreter for MockSystem.
+
+    Uses explicit stack to handle deeply nested flatMap chains.
+    """
+    stack: list[Callable[[Any], Free[ActorF, Any]]] = []
     current: Free[ActorF, Any] = free
 
     while True:
         if isinstance(current, Pure):
-            return current.value
+            # Hit a pure value - unwind the stack
+            if not stack:
+                return current.value
+            # Pop continuation and apply
+            f = stack.pop()
+            current = f(current.value)
         elif isinstance(current, Suspend):
-            interpreted = interpreter(current.thunk)
-            current = interpreted
-        elif isinstance(current, FlatMap):
-            thunk = current.thunk
-            if isinstance(thunk, Suspend):
-                interpreted = interpreter(thunk.thunk)
-                current = interpreted.flatMap(current.f)
-            elif isinstance(thunk, FlatMap):
-                inner: FlatMap[ActorF, Any, Any] = thunk
-                current = inner.thunk.flatMap(lambda v: inner.f(v).flatMap(current.f))
-            elif isinstance(thunk, Pure):
-                current = current.f(thunk.value)
+            # Execute the suspended operation, then apply any continuations
+            result = interpreter(current.thunk)
+            if not stack:
+                # No more continuations, return directly
+                if isinstance(result, Pure):
+                    return result.value
+                current = result
             else:
-                raise RuntimeError(f"Unreachable thunk: {type(thunk)}")
+                # Apply continuations to the result
+                f = stack.pop()
+                current = result.flatMap(f)
+        elif isinstance(current, FlatMap):
+            # Push the continuation and recurse into the thunk
+            stack.append(current.f)
+            current = current.thunk
         else:
             raise RuntimeError(f"Unreachable Free state: {type(current)}")
 
