@@ -21,7 +21,16 @@ from actor_for_agents.agents.system import AgentSystem
 from actor_for_agents.mailbox import Mailbox, MemoryMailbox
 from actor_for_agents.middleware import Middleware
 from actor_for_agents.ref import ActorRef, MailboxFullError, ReplyChannel
-from actor_for_agents.supervision import AllForOneStrategy, Directive, OneForOneStrategy, SupervisorStrategy
+from actor_for_agents.supervision import (
+    AllForOneStrategy,
+    Directive,
+    DirectiveResult,
+    Either,
+    Left,
+    OneForOneStrategy,
+    Right,
+    SupervisorStrategy,
+)
 from actor_for_agents.system import ActorSystem, DeadLetter
 
 __all__ = [
@@ -33,11 +42,15 @@ __all__ = [
     "AllForOneStrategy",
     "DeadLetter",
     "Directive",
+    "DirectiveResult",
+    "Either",
+    "Left",
     "Mailbox",
     "MailboxFullError",
     "MemoryMailbox",
     "Middleware",
     "OneForOneStrategy",
     "ReplyChannel",
+    "Right",
     "SupervisorStrategy",
 ]
