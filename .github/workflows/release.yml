@@ -16,6 +16,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
+          cache-dependency-glob: "uv.lock"
 
       - run: uv python install 3.12
 
