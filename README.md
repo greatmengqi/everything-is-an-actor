@@ -67,15 +67,47 @@ class LLMAgent(AgentActor[str, list]):
 
 ### Orchestration
 
+Six concurrency primitives for composing child agents — all ephemeral actors are cleaned up automatically.
+
 ```python
-class OrchestratorAgent(AgentActor[str, dict]):
-    async def execute(self, query: str) -> dict:
-        # Fan-out to multiple agents concurrently
-        results = await self.context.sequence([
+class OrchestratorAgent(AgentActor[str, Any]):
+    async def execute(self, query: str):
+
+        # ask — single child, one result
+        r = await self.context.ask(SearchAgent, Task(input=query))
+        result = r.output
+
+        # sequence — fan-out, results in order, fail-fast
+        a, b = await self.context.sequence([
             (SearchAgent, Task(input=query)),
             (FactCheckAgent, Task(input=query)),
         ])
-        return {"search": results[0].output, "facts": results[1].output}
+        combined = {"search": a.output, "facts": b.output}
+
+        # traverse — map a list through one agent
+        summaries = await self.context.traverse(["doc1", "doc2", "doc3"], SummaryAgent)
+        texts = [r.output for r in summaries]
+
+        # race — first wins, cancel the rest
+        fastest = await self.context.race([
+            (FastAgent, Task(input=query)),
+            (SlowAgent, Task(input=query)),
+        ])
+        winner = fastest.output
+
+        # zip — two tasks, typed pair
+        search, facts = await self.context.zip(
+            (SearchAgent, Task(input=query)),
+            (FactCheckAgent, Task(input=query)),
+        )
+
+        # stream — forward child chunks upstream
+        async for item in self.context.stream(LLMAgent, Task(input=query)):
+            match item:
+                case StreamEvent(event=e) if e.type == "task_chunk":
+                    yield e.data
+                case StreamResult():
+                    pass
 ```
 
 ### Event streaming
