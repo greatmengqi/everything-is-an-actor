@@ -71,11 +71,11 @@ class LLMAgent(AgentActor[str, list]):
 class OrchestratorAgent(AgentActor[str, dict]):
     async def execute(self, query: str) -> dict:
         # Fan-out to multiple agents concurrently
-        results = await self.context.dispatch_parallel([
+        results = await self.context.sequence([
             (SearchAgent, Task(input=query)),
             (FactCheckAgent, Task(input=query)),
         ])
-        return {"search": results[0], "facts": results[1]}
+        return {"search": results[0].output, "facts": results[1].output}
 ```
 
 ### Event streaming
