@@ -1,0 +1,200 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Rust bindings to the Python interpreter."><title>pyo3 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pyo3" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate pyo3</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pyo3/index.html">pyo3</a><span class="version">0.22.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#pyo3s-object-types" title="PyO3’s object types">PyO3’s object types</a><ul><li><a href="#the-pythonpy-object-and-the-py-lifetime" title="The `Python&#60;&#39;py&#62;` object, and the `&#39;py` lifetime">The <code>Python&lt;'py&gt;</code> object, and the <code>'py</code> lifetime</a></li><li><a href="#python-object-smart-pointers" title="Python object smart pointers">Python object smart pointers</a></li><li><a href="#pyerr" title="PyErr">PyErr</a></li></ul></li><li><a href="#feature-flags" title="Feature flags">Feature flags</a><ul><li><a href="#default-feature-flags" title="Default feature flags">Default feature flags</a></li><li><a href="#optional-feature-flags" title="Optional feature flags">Optional feature flags</a></li><li><a href="#unstable-features" title="Unstable features">Unstable features</a></li><li><a href="#rustc-environment-flags" title="`rustc` environment flags"><code>rustc</code> environment flags</a></li></ul></li><li><a href="#minimum-supported-rust-and-python-versions" title="Minimum supported Rust and Python versions">Minimum supported Rust and Python versions</a></li><li><a href="#example-building-a-native-python-module" title="Example: Building a native Python module">Example: Building a native Python module</a></li><li><a href="#example-using-python-from-rust" title="Example: Using Python from Rust">Example: Using Python from Rust</a></li><li><a href="#other-examples" title="Other Examples">Other Examples</a></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li><li><a href="#attributes" title="Attribute Macros">Attribute Macros</a></li><li><a href="#derives" title="Derive Macros">Derive Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>pyo3</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/pyo3/lib.rs.html#1-562">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Rust bindings to the Python interpreter.</p>
+<p>PyO3 can be used to write native Python modules or run Python code and modules from Rust.</p>
+<p>See <a href="https://pyo3.rs" title="PyO3 user guide">the guide</a> for a detailed introduction.</p>
+<h2 id="pyo3s-object-types"><a class="doc-anchor" href="#pyo3s-object-types">§</a>PyO3’s object types</h2>
+<p>PyO3 has several core types that you should familiarize yourself with:</p>
+<h3 id="the-pythonpy-object-and-the-py-lifetime"><a class="doc-anchor" href="#the-pythonpy-object-and-the-py-lifetime">§</a>The <code>Python&lt;'py&gt;</code> object, and the <code>'py</code> lifetime</h3>
+<p>Holding the <a href="https://docs.python.org/3/glossary.html#term-global-interpreter-lock">global interpreter lock</a> (GIL) is modeled with the <a href="marker/struct.Python.html" title="struct pyo3::marker::Python"><code>Python&lt;'py&gt;</code></a> token. Many
+Python APIs require that the GIL is held, and PyO3 uses this token as proof that these APIs
+can be called safely. It can be explicitly acquired and is also implicitly acquired by PyO3
+as it wraps Rust functions and structs into Python functions and objects.</p>
+<p>The <a href="marker/struct.Python.html" title="struct pyo3::marker::Python"><code>Python&lt;'py&gt;</code></a> token’s lifetime <code>'py</code> is common to many PyO3 APIs:</p>
+<ul>
+<li>Types that also have the <code>'py</code> lifetime, such as the <a href="struct.Bound.html" title="struct pyo3::Bound"><code>Bound&lt;'py, T&gt;</code></a> smart pointer, are
+bound to the Python GIL and rely on this to offer their functionality. These types often
+have a <a href="struct.Bound.html#method.py" title="method pyo3::Bound::py"><code>.py()</code></a> method to get the associated <a href="marker/struct.Python.html" title="struct pyo3::marker::Python"><code>Python&lt;'py&gt;</code></a> token.</li>
+<li>Functions which depend on the <code>'py</code> lifetime, such as <a href="types/struct.PyList.html#method.new_bound" title="associated function pyo3::types::PyList::new_bound"><code>PyList::new_bound</code></a>,
+require a <a href="marker/struct.Python.html" title="struct pyo3::marker::Python"><code>Python&lt;'py&gt;</code></a> token as an input. Sometimes the token is passed implicitly by
+taking a <a href="struct.Bound.html" title="struct pyo3::Bound"><code>Bound&lt;'py, T&gt;</code></a> or other type which is bound to the <code>'py</code> lifetime.</li>
+<li>Traits which depend on the <code>'py</code> lifetime, such as <a href="conversion/trait.FromPyObject.html" title="trait pyo3::conversion::FromPyObject"><code>FromPyObject&lt;'py&gt;</code></a>, usually have
+inputs or outputs which depend on the lifetime. Adding the lifetime to the trait allows
+these inputs and outputs to express their binding to the GIL in the Rust type system.</li>
+</ul>
+<h3 id="python-object-smart-pointers"><a class="doc-anchor" href="#python-object-smart-pointers">§</a>Python object smart pointers</h3>
+<p>PyO3 has two core smart pointers to refer to Python objects, <a href="struct.Py.html" title="struct pyo3::Py"><code>Py&lt;T&gt;</code></a> and its GIL-bound
+form <a href="struct.Bound.html" title="struct pyo3::Bound"><code>Bound&lt;'py, T&gt;</code></a> which carries the <code>'py</code> lifetime. (There is also
+<a href="struct.Borrowed.html" title="struct pyo3::Borrowed"><code>Borrowed&lt;'a, 'py, T&gt;</code></a>, but it is used much more rarely).</p>
+<p>The type parameter <code>T</code> in these smart pointers can be filled by:</p>
+<ul>
+<li><a href="types/struct.PyAny.html" title="struct pyo3::types::PyAny"><code>PyAny</code></a>, e.g. <code>Py&lt;PyAny&gt;</code> or <code>Bound&lt;'py, PyAny&gt;</code>, where the Python object type is not
+known. <code>Py&lt;PyAny&gt;</code> is so common it has a type alias <a href="type.PyObject.html" title="type pyo3::PyObject"><code>PyObject</code></a>.</li>
+<li>Concrete Python types like <a href="types/struct.PyList.html" title="struct pyo3::types::PyList"><code>PyList</code></a> or <a href="types/struct.PyTuple.html" title="struct pyo3::types::PyTuple"><code>PyTuple</code></a>.</li>
+<li>Rust types which are exposed to Python using the <a href="attr.pyclass.html" title="attr pyo3::pyclass"><code>#[pyclass]</code></a> macro.</li>
+</ul>
+<p>See the <a href="https://pyo3.rs/v0.22.6/types.html" title="GIL lifetimes, mutability and Python object types">guide</a> for an explanation of the different Python object types.</p>
+<h3 id="pyerr"><a class="doc-anchor" href="#pyerr">§</a>PyErr</h3>
+<p>The vast majority of operations in this library will return <a href="type.PyResult.html" title="type pyo3::PyResult"><code>PyResult&lt;...&gt;</code></a>.
+This is an alias for the type <code>Result&lt;..., PyErr&gt;</code>.</p>
+<p>A <code>PyErr</code> represents a Python exception. A <code>PyErr</code> returned to Python code will be raised as a
+Python exception. Errors from <code>PyO3</code> itself are also exposed as Python exceptions.</p>
+<h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature flags</h2>
+<p>PyO3 uses <a href="https://doc.rust-lang.org/cargo/reference/features.html" title="Features - The Cargo Book">feature flags</a> to enable you to opt-in to additional functionality. For a detailed
+description, see the <a href="https://pyo3.rs/v0.22.6/features.html#features-reference" title="Features Reference - PyO3 user guide">Features chapter of the guide</a>.</p>
+<h3 id="default-feature-flags"><a class="doc-anchor" href="#default-feature-flags">§</a>Default feature flags</h3>
+<p>The following features are turned on by default:</p>
+<ul>
+<li><code>macros</code>: Enables various macros, including all the attribute macros.</li>
+</ul>
+<h3 id="optional-feature-flags"><a class="doc-anchor" href="#optional-feature-flags">§</a>Optional feature flags</h3>
+<p>The following features customize PyO3’s behavior:</p>
+<ul>
+<li><code>abi3</code>: Restricts PyO3’s API to a subset of the full Python API which is guaranteed by
+<a href="https://www.python.org/dev/peps/pep-0384" title="PEP 384 -- Defining a Stable ABI">PEP 384</a> to be forward-compatible with future Python versions.</li>
+<li><code>auto-initialize</code>: Changes <a href="marker/struct.Python.html#method.with_gil" title="associated function pyo3::marker::Python::with_gil"><code>Python::with_gil</code></a> to automatically initialize the Python
+interpreter if needed.</li>
+<li><code>extension-module</code>: This will tell the linker to keep the Python symbols unresolved, so that
+your module can also be used with statically linked Python interpreters. Use this feature when
+building an extension module.</li>
+<li><code>multiple-pymethods</code>: Enables the use of multiple <a href="attr.pymethods.html" title="attr pyo3::pymethods"><code>#[pymethods]</code></a>
+blocks per <a href="attr.pyclass.html" title="attr pyo3::pyclass"><code>#[pyclass]</code></a>. This adds a dependency on the <a href="https://docs.rs/inventory">inventory</a>
+crate, which is not supported on all platforms.</li>
+</ul>
+<p>The following features enable interactions with other crates in the Rust ecosystem:</p>
+<ul>
+<li><a href="./anyhow/index.html" title="Documentation about the `anyhow` feature."><code>anyhow</code></a>: Enables a conversion from <a href="https://docs.rs/anyhow/" title="A trait object based error system for easy idiomatic error handling in Rust applications.">anyhow</a>’s <a href="https://docs.rs/anyhow/latest/anyhow/struct.Error.html" title="Anyhows `Error` type, a wrapper around a dynamic error type"><code>Error</code></a> type to <a href="struct.PyErr.html" title="struct pyo3::PyErr"><code>PyErr</code></a>.</li>
+<li><a href="./chrono/index.html" title="Documentation about the `chrono` feature."><code>chrono</code></a>: Enables a conversion from <a href="https://docs.rs/chrono/" title="Date and Time for Rust.">chrono</a>’s structures to the equivalent Python ones.</li>
+<li><a href="./chrono-tz/index.html" title="Documentation about the `chrono-tz` feature."><code>chrono-tz</code></a>: Enables a conversion from <a href="https://docs.rs/chrono-tz/" title="TimeZone implementations for chrono from the IANA database.">chrono-tz</a>’s <code>Tz</code> enum. Requires Python 3.9+.</li>
+<li><a href="./either/index.html" title="Documentation about the `either` feature."><code>either</code></a>: Enables conversions between Python objects and <a href="https://docs.rs/either/" title="A type that represents one of two alternatives.">either</a>’s <a href="./either/index.html" title="Documentation about the `either` feature."><code>Either</code></a> type.</li>
+<li><a href="./eyre/index.html" title="Documentation about the `eyre` feature."><code>eyre</code></a>: Enables a conversion from <a href="https://docs.rs/eyre/" title="A library for easy idiomatic error handling and reporting in Rust applications.">eyre</a>’s <a href="https://docs.rs/eyre/latest/eyre/struct.Report.html"><code>Report</code></a> type to <a href="struct.PyErr.html" title="struct pyo3::PyErr"><code>PyErr</code></a>.</li>
+<li><a href="./hashbrown/index.html" title="Documentation about the `hashbrown` feature."><code>hashbrown</code></a>: Enables conversions between Python objects and <a href="https://docs.rs/hashbrown">hashbrown</a>’s <a href="https://docs.rs/hashbrown/latest/hashbrown/struct.HashMap.html"><code>HashMap</code></a> and
+<a href="https://docs.rs/hashbrown/latest/hashbrown/struct.HashSet.html"><code>HashSet</code></a> types.</li>
+<li><a href="./indexmap/index.html" title="Documentation about the `indexmap` feature."><code>indexmap</code></a>: Enables conversions between Python dictionary and <a href="https://docs.rs/indexmap">indexmap</a>’s <a href="https://docs.rs/indexmap/latest/indexmap/map/struct.IndexMap.html"><code>IndexMap</code></a>.</li>
+<li><a href="./num_bigint/index.html" title="Documentation about the `num-bigint` feature."><code>num-bigint</code></a>: Enables conversions between Python objects and <a href="https://docs.rs/num-bigint">num-bigint</a>’s <a href="https://docs.rs/num-bigint/latest/num_bigint/struct.BigInt.html"><code>BigInt</code></a> and
+<a href="https://docs.rs/num-bigint/latest/num_bigint/struct.BigUint.html"><code>BigUint</code></a> types.</li>
+<li><a href="./num_complex/index.html" title="Documentation about the `num-complex` feature."><code>num-complex</code></a>: Enables conversions between Python objects and <a href="https://docs.rs/num-complex">num-complex</a>’s <a href="https://docs.rs/num-complex/latest/num_complex/struct.Complex.html"><code>Complex</code></a>
+type.</li>
+<li><a href="./num_rational/index.html" title="Documentation about the `num-rational` feature."><code>num-rational</code></a>: Enables conversions between Python’s fractions.Fraction and <a href="https://docs.rs/num-rational">num-rational</a>’s types</li>
+<li><a href="./rust_decimal/index.html" title="Documenation about the `rust_decimal` feature."><code>rust_decimal</code></a>: Enables conversions between Python’s decimal.Decimal and <a href="https://docs.rs/rust_decimal">rust_decimal</a>’s
+<a href="https://docs.rs/rust_decimal/latest/rust_decimal/struct.Decimal.html"><code>Decimal</code></a> type.</li>
+<li><a href="./serde/index.html" title="Documentation about the `serde` feature."><code>serde</code></a>: Allows implementing <a href="https://docs.rs/serde">serde</a>’s <a href="https://docs.rs/serde/latest/serde/trait.Serialize.html"><code>Serialize</code></a> and <a href="https://docs.rs/serde/latest/serde/trait.Deserialize.html"><code>Deserialize</code></a> traits for
+<a href="struct.Py.html" title="struct pyo3::Py"><code>Py</code></a><code>&lt;T&gt;</code> for all <code>T</code> that implement <a href="https://docs.rs/serde/latest/serde/trait.Serialize.html"><code>Serialize</code></a> and <a href="https://docs.rs/serde/latest/serde/trait.Deserialize.html"><code>Deserialize</code></a>.</li>
+<li><a href="https://docs.rs/smallvec"><code>smallvec</code></a>: Enables conversions between Python list and <a href="https://docs.rs/smallvec">smallvec</a>’s <a href="https://docs.rs/smallvec/latest/smallvec/struct.SmallVec.html"><code>SmallVec</code></a>.</li>
+</ul>
+<h3 id="unstable-features"><a class="doc-anchor" href="#unstable-features">§</a>Unstable features</h3>
+<ul>
+<li><code>nightly</code>: Uses  <code>#![feature(auto_traits, negative_impls)]</code> to define <a href="marker/trait.Ungil.html" title="trait pyo3::marker::Ungil"><code>Ungil</code></a> as an auto trait.</li>
+</ul>
+<h3 id="rustc-environment-flags"><a class="doc-anchor" href="#rustc-environment-flags">§</a><code>rustc</code> environment flags</h3>
+<p>PyO3 uses <code>rustc</code>’s <code>--cfg</code> flags to enable or disable code used for different Python versions.
+If you want to do this for your own crate, you can do so with the <a href="https://docs.rs/pyo3-build-config"><code>pyo3-build-config</code></a> crate.</p>
+<ul>
+<li><code>Py_3_7</code>, <code>Py_3_8</code>, <code>Py_3_9</code>, <code>Py_3_10</code>: Marks code that is only enabled when
+compiling for a given minimum Python version.</li>
+<li><code>Py_LIMITED_API</code>: Marks code enabled when the <code>abi3</code> feature flag is enabled.</li>
+<li><code>PyPy</code> - Marks code enabled when compiling for PyPy.</li>
+</ul>
+<h2 id="minimum-supported-rust-and-python-versions"><a class="doc-anchor" href="#minimum-supported-rust-and-python-versions">§</a>Minimum supported Rust and Python versions</h2>
+<p>PyO3 supports the following software versions:</p>
+<ul>
+<li>Python 3.7 and up (CPython and PyPy)</li>
+<li>Rust 1.63 and up</li>
+</ul>
+<h2 id="example-building-a-native-python-module"><a class="doc-anchor" href="#example-building-a-native-python-module">§</a>Example: Building a native Python module</h2>
+<p>PyO3 can be used to generate a native Python module. The easiest way to try this out for the
+first time is to use <a href="https://github.com/PyO3/maturin" title="Build and publish crates with pyo3, rust-cpython and cffi bindings as well as rust binaries as python packages"><code>maturin</code></a>. <code>maturin</code> is a tool for building and publishing Rust-based
+Python packages with minimal configuration. The following steps set up some files for an example
+Python module, install <code>maturin</code>, and then show how to build and import the Python module.</p>
+<p>First, create a new folder (let’s call it <code>string_sum</code>) containing the following two files:</p>
+<p><strong><code>Cargo.toml</code></strong></p>
+<div class="example-wrap"><pre class="language-toml"><code>[package]
+name = &quot;string-sum&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[lib]
+name = &quot;string_sum&quot;
+# &quot;cdylib&quot; is necessary to produce a shared library for Python to import from.
+#
+# Downstream Rust code (including code in `bin/`, `examples/`, and `tests/`) will not be able
+# to `use string_sum;` unless the &quot;rlib&quot; or &quot;lib&quot; crate type is also included, e.g.:
+# crate-type = [&quot;cdylib&quot;, &quot;rlib&quot;]
+crate-type = [&quot;cdylib&quot;]
+
+[dependencies.pyo3]
+version = &quot;0.22.6&quot;
+features = [&quot;extension-module&quot;]</code></pre></div>
+<p><strong><code>src/lib.rs</code></strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+
+<span class="doccomment">/// Formats the sum of two numbers as string.
+</span><span class="attr">#[pyfunction]
+</span><span class="kw">fn </span>sum_as_string(a: usize, b: usize) -&gt; PyResult&lt;String&gt; {
+    <span class="prelude-val">Ok</span>((a + b).to_string())
+}
+
+<span class="doccomment">/// A Python module implemented in Rust.
+</span><span class="attr">#[pymodule]
+</span><span class="kw">fn </span>string_sum(m: <span class="kw-2">&amp;</span>Bound&lt;<span class="lifetime">'_</span>, PyModule&gt;) -&gt; PyResult&lt;()&gt; {
+    m.add_function(<span class="macro">wrap_pyfunction!</span>(sum_as_string, m)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>With those two files in place, now <code>maturin</code> needs to be installed. This can be done using
+Python’s package manager <code>pip</code>. First, load up a new Python <code>virtualenv</code>, and install <code>maturin</code>
+into it:</p>
+<div class="example-wrap"><pre class="language-bash"><code>$ cd string_sum
+$ python -m venv .env
+$ source .env/bin/activate
+$ pip install maturin</code></pre></div>
+<p>Now build and execute the module:</p>
+<div class="example-wrap"><pre class="language-bash"><code>$ maturin develop
+# lots of progress output as maturin runs the compilation...
+$ python
+&gt;&gt;&gt; import string_sum
+&gt;&gt;&gt; string_sum.sum_as_string(5, 20)
+&#39;25&#39;</code></pre></div>
+<p>As well as with <code>maturin</code>, it is possible to build using <a href="https://github.com/PyO3/setuptools-rust" title="Setuptools plugin for Rust extensions">setuptools-rust</a> or
+<a href="https://pyo3.rs/v0.22.6/building-and-distribution.html#manual-builds" title="Manual builds - Building and Distribution - PyO3 user guide">manually</a>. Both offer more flexibility than <code>maturin</code> but require further
+configuration.</p>
+<h2 id="example-using-python-from-rust"><a class="doc-anchor" href="#example-using-python-from-rust">§</a>Example: Using Python from Rust</h2>
+<p>To embed Python into a Rust binary, you need to ensure that your Python installation contains a
+shared library. The following steps demonstrate how to ensure this (for Ubuntu), and then give
+some example code which runs an embedded Python interpreter.</p>
+<p>To install the Python shared library on Ubuntu:</p>
+<div class="example-wrap"><pre class="language-bash"><code>sudo apt install python3-dev</code></pre></div>
+<p>Start a new project with <code>cargo new</code> and add  <code>pyo3</code> to the <code>Cargo.toml</code> like this:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies.pyo3]
+version = &quot;0.22.6&quot;
+# this is necessary to automatically initialize the Python interpreter
+features = [&quot;auto-initialize&quot;]</code></pre></div>
+<p>Example program displaying the value of <code>sys.version</code> and the current user name:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>pyo3::types::IntoPyDict;
+
+<span class="kw">fn </span>main() -&gt; PyResult&lt;()&gt; {
+    Python::with_gil(|py| {
+        <span class="kw">let </span>sys = py.import_bound(<span class="string">"sys"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>version: String = sys.getattr(<span class="string">"version"</span>)<span class="question-mark">?</span>.extract()<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>locals = [(<span class="string">"os"</span>, py.import_bound(<span class="string">"os"</span>)<span class="question-mark">?</span>)].into_py_dict_bound(py);
+        <span class="kw">let </span>code = <span class="string">"os.getenv('USER') or os.getenv('USERNAME') or 'Unknown'"</span>;
+        <span class="kw">let </span>user: String = py.eval_bound(code, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>locals))<span class="question-mark">?</span>.extract()<span class="question-mark">?</span>;
+
+        <span class="macro">println!</span>(<span class="string">"Hello {}, I'm Python {}"</span>, user, version);
+        <span class="prelude-val">Ok</span>(())
+    })
+}</code></pre></div>
+<p>The guide has <a href="https://pyo3.rs/v0.22.6/python-from-rust.html" title="Calling Python from Rust - PyO3 user guide">a section</a> with lots of examples about this topic.</p>
+<h2 id="other-examples"><a class="doc-anchor" href="#other-examples">§</a>Other Examples</h2>
+<p>The PyO3 <a href="https://github.com/PyO3/pyo3#readme">README</a> contains quick-start examples for both
+using <a href="https://github.com/PyO3/pyo3#using-rust-from-python">Rust from Python</a> and <a href="https://github.com/PyO3/pyo3#using-python-from-rust">Python from Rust</a>.</p>
+<p>The PyO3 repository’s <a href="https://github.com/PyO3/pyo3/tree/main/examples">examples subdirectory</a>
+contains some basic packages to demonstrate usage of PyO3.</p>
+<p>There are many projects using PyO3 - see a list of some at
+<a href="https://github.com/PyO3/pyo3#examples">https://github.com/PyO3/pyo3#examples</a>.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.AsPyPointer"><code>pub use crate::conversion::<a class="trait" href="conversion/trait.AsPyPointer.html" title="trait pyo3::conversion::AsPyPointer">AsPyPointer</a>;</code></dt><dt id="reexport.FromPyObject"><code>pub use crate::conversion::<a class="trait" href="conversion/trait.FromPyObject.html" title="trait pyo3::conversion::FromPyObject">FromPyObject</a>;</code></dt><dt id="reexport.IntoPy"><code>pub use crate::conversion::<a class="trait" href="conversion/trait.IntoPy.html" title="trait pyo3::conversion::IntoPy">IntoPy</a>;</code></dt><dt id="reexport.ToPyObject"><code>pub use crate::conversion::<a class="trait" href="conversion/trait.ToPyObject.html" title="trait pyo3::conversion::ToPyObject">ToPyObject</a>;</code></dt><dt id="reexport.Python"><code>pub use crate::marker::<a class="struct" href="marker/struct.Python.html" title="struct pyo3::marker::Python">Python</a>;</code></dt><dt id="reexport.PyRef"><code>pub use crate::pycell::<a class="struct" href="pycell/struct.PyRef.html" title="struct pyo3::pycell::PyRef">PyRef</a>;</code></dt><dt id="reexport.PyRefMut"><code>pub use crate::pycell::<a class="struct" href="pycell/struct.PyRefMut.html" title="struct pyo3::pycell::PyRefMut">PyRefMut</a>;</code></dt><dt id="reexport.PyClass"><code>pub use crate::pyclass::<a class="trait" href="pyclass/trait.PyClass.html" title="trait pyo3::pyclass::PyClass">PyClass</a>;</code></dt><dt id="reexport.PyClassInitializer"><code>pub use crate::pyclass_init::<a class="struct" href="pyclass_init/struct.PyClassInitializer.html" title="struct pyo3::pyclass_init::PyClassInitializer">PyClassInitializer</a>;</code></dt><dt id="reexport.PyTypeCheck"><code>pub use crate::type_object::<a class="trait" href="type_object/trait.PyTypeCheck.html" title="trait pyo3::type_object::PyTypeCheck">PyTypeCheck</a>;</code></dt><dt id="reexport.PyTypeInfo"><code>pub use crate::type_object::<a class="trait" href="type_object/trait.PyTypeInfo.html" title="trait pyo3::type_object::PyTypeInfo">PyTypeInfo</a>;</code></dt><dt id="reexport.PyAny"><code>pub use crate::types::<a class="struct" href="types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>;</code></dt><dt><code>pub use crate::<a class="mod" href="class/index.html" title="mod pyo3::class">class</a>::*;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="buffer/index.html" title="mod pyo3::buffer">buffer</a></dt><dd><code>PyBuffer</code> implementation</dd><dt><a class="mod" href="class/index.html" title="mod pyo3::class">class</a></dt><dd>Old module which contained some implementation details of the <code>#[pyproto]</code> module.</dd><dt><a class="mod" href="conversion/index.html" title="mod pyo3::conversion">conversion</a></dt><dd>Defines conversions between Rust and Python types.</dd><dt><a class="mod" href="exceptions/index.html" title="mod pyo3::exceptions">exceptions</a></dt><dd>Exception and warning types defined by Python.</dd><dt><a class="mod" href="ffi/index.html" title="mod pyo3::ffi">ffi</a></dt><dd>Raw FFI declarations for Python’s C API.</dd><dt><a class="mod" href="marker/index.html" title="mod pyo3::marker">marker</a></dt><dd>Fundamental properties of objects tied to the Python interpreter.</dd><dt><a class="mod" href="marshal/index.html" title="mod pyo3::marshal">marshal</a></dt><dd>Support for the Python <code>marshal</code> format.</dd><dt><a class="mod" href="panic/index.html" title="mod pyo3::panic">panic</a></dt><dd>Helper to convert Rust panics to Python exceptions.</dd><dt><a class="mod" href="prelude/index.html" title="mod pyo3::prelude">prelude</a></dt><dd>PyO3’s prelude.</dd><dt><a class="mod" href="pybacked/index.html" title="mod pyo3::pybacked">pybacked</a></dt><dd>Contains types for working with Python objects that own the underlying data.</dd><dt><a class="mod" href="pycell/index.html" title="mod pyo3::pycell">pycell</a></dt><dd>PyO3’s interior mutability primitive.</dd><dt><a class="mod" href="pyclass/index.html" title="mod pyo3::pyclass">pyclass</a></dt><dd><code>PyClass</code> and related traits.</dd><dt><a class="mod" href="pyclass_init/index.html" title="mod pyo3::pyclass_init">pyclass_<wbr>init</a></dt><dd>Contains initialization utilities for <code>#[pyclass]</code>.</dd><dt><a class="mod" href="sync/index.html" title="mod pyo3::sync">sync</a></dt><dd>Synchronization mechanisms based on the Python GIL.</dd><dt><a class="mod" href="type_object/index.html" title="mod pyo3::type_object">type_<wbr>object</a></dt><dd>Python type object information</dd><dt><a class="mod" href="types/index.html" title="mod pyo3::types">types</a></dt><dd>Various types defined by the Python interpreter such as <code>int</code>, <code>str</code> and <code>tuple</code>.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.append_to_inittab.html" title="macro pyo3::append_to_inittab">append_<wbr>to_<wbr>inittab</a></dt><dd>Add the module to the initialization table in order to make embedded Python code to use it.
+Module name is the argument.</dd><dt><a class="macro" href="macro.create_exception.html" title="macro pyo3::create_exception">create_<wbr>exception</a></dt><dd>Defines a new exception type.</dd><dt><a class="macro" href="macro.import_exception.html" title="macro pyo3::import_exception">import_<wbr>exception</a></dt><dd>Defines a Rust type for an exception defined in Python code.</dd><dt><a class="macro" href="macro.import_exception_bound.html" title="macro pyo3::import_exception_bound">import_<wbr>exception_<wbr>bound</a></dt><dd>Variant of <a href="macro.import_exception.html" title="macro pyo3::import_exception"><code>import_exception</code></a> that does not emit code needed to
+use the imported exception type as a GIL Ref.</dd><dt><a class="macro" href="macro.intern.html" title="macro pyo3::intern">intern</a></dt><dd>Interns <code>text</code> as a Python string and stores a reference to it in static storage.</dd><dt><a class="macro" href="macro.py_run.html" title="macro pyo3::py_run">py_run</a></dt><dd>A convenient macro to execute a Python code snippet, with some local variables set.</dd><dt><a class="macro" href="macro.wrap_pyfunction.html" title="macro pyo3::wrap_pyfunction">wrap_<wbr>pyfunction</a></dt><dd>Wraps a Rust function annotated with <a href="attr.pyfunction.html" title="attr pyo3::pyfunction"><code>#[pyfunction]</code></a>.</dd><dt><a class="macro" href="macro.wrap_pyfunction_bound.html" title="macro pyo3::wrap_pyfunction_bound">wrap_<wbr>pyfunction_<wbr>bound</a></dt><dd>Wraps a Rust function annotated with <a href="attr.pyfunction.html" title="attr pyo3::pyfunction"><code>#[pyfunction]</code></a>.</dd><dt><a class="macro" href="macro.wrap_pymodule.html" title="macro pyo3::wrap_pymodule">wrap_<wbr>pymodule</a></dt><dd>Returns a function that takes a <a href="marker/struct.Python.html" title="struct pyo3::marker::Python"><code>Python</code></a> instance and returns a
+Python module.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a></dt><dd>A borrowed equivalent to <code>Bound</code>.</dd><dt><a class="struct" href="struct.Bound.html" title="struct pyo3::Bound">Bound</a></dt><dd>A GIL-attached equivalent to <a href="struct.Py.html" title="struct pyo3::Py"><code>Py&lt;T&gt;</code></a>.</dd><dt><a class="struct" href="struct.DowncastError.html" title="struct pyo3::DowncastError">Downcast<wbr>Error</a></dt><dd>Error that indicates a failure to convert a PyAny to a more specific Python type.</dd><dt><a class="struct" href="struct.DowncastIntoError.html" title="struct pyo3::DowncastIntoError">Downcast<wbr>Into<wbr>Error</a></dt><dd>Error that indicates a failure to convert a PyAny to a more specific Python type.</dd><dt><a class="struct" href="struct.Py.html" title="struct pyo3::Py">Py</a></dt><dd>A GIL-independent reference to an object allocated on the Python heap.</dd><dt><a class="struct" href="struct.PyErr.html" title="struct pyo3::PyErr">PyErr</a></dt><dd>Represents a Python exception.</dd><dt><a class="struct" href="struct.PythonVersionInfo.html" title="struct pyo3::PythonVersionInfo">Python<wbr>Version<wbr>Info</a></dt><dd>Represents the major, minor, and patch (if any) versions of this interpreter.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.PyErrArguments.html" title="trait pyo3::PyErrArguments">PyErr<wbr>Arguments</a></dt><dd>Helper conversion trait that allows to use custom arguments for lazy exception construction.</dd><dt><a class="trait" href="trait.ToPyErr.html" title="trait pyo3::ToPyErr">ToPyErr</a></dt><dd>Python exceptions that can be converted to <a href="struct.PyErr.html" title="struct pyo3::PyErr"><code>PyErr</code></a>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.prepare_freethreaded_python.html" title="fn pyo3::prepare_freethreaded_python">prepare_<wbr>freethreaded_<wbr>python</a></dt><dd>Prepares the use of Python in a free-threaded context.</dd><dt><a class="fn" href="fn.with_embedded_python_interpreter.html" title="fn pyo3::with_embedded_python_interpreter">with_<wbr>embedded_<wbr>python_<wbr>interpreter</a><sup title="unsafe function">⚠</sup></dt><dd>Executes the provided closure with an embedded Python interpreter.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.PyObject.html" title="type pyo3::PyObject">PyObject</a></dt><dd>A commonly-used alias for <code>Py&lt;PyAny&gt;</code>.</dd><dt><a class="type" href="type.PyResult.html" title="type pyo3::PyResult">PyResult</a></dt><dd>Represents the result of a Python call.</dd></dl><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><dl class="item-table"><dt><a class="attr" href="attr.pyclass.html" title="attr pyo3::pyclass">pyclass</a></dt><dd>A proc macro used to expose Rust structs and fieldless enums as Python objects.</dd><dt><a class="attr" href="attr.pyfunction.html" title="attr pyo3::pyfunction">pyfunction</a></dt><dd>A proc macro used to expose Rust functions to Python.</dd><dt><a class="attr" href="attr.pymethods.html" title="attr pyo3::pymethods">pymethods</a></dt><dd>A proc macro used to expose methods to Python.</dd><dt><a class="attr" href="attr.pymodule.html" title="attr pyo3::pymodule">pymodule</a></dt><dd>A proc macro used to implement Python modules.</dd></dl><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><dl class="item-table"><dt><a class="derive" href="derive.FromPyObject.html" title="derive pyo3::FromPyObject">From<wbr>PyObject</a></dt></dl></section></div></main></body></html>

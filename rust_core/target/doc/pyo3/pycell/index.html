@@ -1,0 +1,101 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="PyO3’s interior mutability primitive."><title>pyo3::pycell - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="pyo3" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module pycell</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../pyo3/index.html">pyo3</a><span class="version">0.22.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module pycell</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#when-not-to-use-pycell" title="When not to use PyCell">When not to use PyCell</a></li><li><a href="#when-to-use-pycell" title="When to use PyCell">When to use PyCell</a><ul><li><a href="#using-pyclasses-from-rust" title="Using pyclasses from Rust">Using pyclasses from Rust</a></li><li><a href="#dealing-with-possibly-overlapping-mutable-references" title="Dealing with possibly overlapping mutable references">Dealing with possibly overlapping mutable references</a></li></ul></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate pyo3</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">pyo3</a></div><h1>Module <span>pycell</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/pyo3/pycell.rs.html#1-1295">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>PyO3’s interior mutability primitive.</p>
+<p>Rust has strict aliasing rules - you can either have any number of immutable (shared) references or one mutable
+reference. Python’s ownership model is the complete opposite of that - any Python object
+can be referenced any number of times, and mutation is allowed from any reference.</p>
+<p>PyO3 deals with these differences by employing the <a href="https://doc.rust-lang.org/book/ch15-05-interior-mutability.html" title="RefCell&lt;T&gt; and the Interior Mutability Pattern - The Rust Programming Language">Interior Mutability</a>
+pattern. This requires that PyO3 enforces the borrowing rules and it has two mechanisms for
+doing so:</p>
+<ul>
+<li>Statically it can enforce threadsafe access with the <a href="../marker/struct.Python.html" title="struct pyo3::marker::Python"><code>Python&lt;'py&gt;</code></a> token.
+All Rust code holding that token, or anything derived from it, can assume that they have
+safe access to the Python interpreter’s state. For this reason all the native Python objects
+can be mutated through shared references.</li>
+<li>However, methods and functions in Rust usually <em>do</em> need <code>&amp;mut</code> references. While PyO3 can
+use the <a href="../marker/struct.Python.html" title="struct pyo3::marker::Python"><code>Python&lt;'py&gt;</code></a> token to guarantee thread-safe access to them, it cannot
+statically guarantee uniqueness of <code>&amp;mut</code> references. As such those references have to be tracked
+dynamically at runtime, using <code>PyCell</code> and the other types defined in this module. This works
+similar to std’s <a href="https://doc.rust-lang.org/1.91.1/core/cell/struct.RefCell.html" title="struct core::cell::RefCell"><code>RefCell</code></a> type.</li>
+</ul>
+<h2 id="when-not-to-use-pycell"><a class="doc-anchor" href="#when-not-to-use-pycell">§</a>When <em>not</em> to use PyCell</h2>
+<p>Usually you can use <code>&amp;mut</code> references as method and function receivers and arguments, and you
+won’t need to use <code>PyCell</code> directly:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[pyclass]
+</span><span class="kw">struct </span>Number {
+    inner: u32,
+}
+
+<span class="attr">#[pymethods]
+</span><span class="kw">impl </span>Number {
+    <span class="kw">fn </span>increment(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.inner += <span class="number">1</span>;
+    }
+}</code></pre></div>
+<p>The <a href="../attr.pymethods.html" title="attr pyo3::pymethods"><code>#[pymethods]</code></a> proc macro will generate this wrapper function (and more),
+using <code>PyCell</code> under the hood:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// The function which is exported to Python looks roughly like the following
+</span><span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>__pymethod_increment__(
+    _slf: <span class="kw-2">*mut </span>pyo3::ffi::PyObject,
+    _args: <span class="kw-2">*mut </span>pyo3::ffi::PyObject,
+) -&gt; <span class="kw-2">*mut </span>pyo3::ffi::PyObject {
+    <span class="kw">use </span>:: pyo3 <span class="kw">as </span>_pyo3;
+    _pyo3::impl_::trampoline::noargs(_slf, _args, |py, _slf| {
+        <span class="kw">let </span>_cell = py
+            .from_borrowed_ptr::&lt;_pyo3::PyAny&gt;(_slf)
+            .downcast::&lt;_pyo3::PyCell&lt;Number&gt;&gt;()<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>_ref = _cell.try_borrow_mut()<span class="question-mark">?</span>;
+        <span class="kw">let </span>_slf: <span class="kw-2">&amp;mut </span>Number = <span class="kw-2">&amp;mut *</span>_ref;
+        _pyo3::callback::convert(py, Number::increment(_slf))
+    })
+}</code></pre></div><h2 id="when-to-use-pycell"><a class="doc-anchor" href="#when-to-use-pycell">§</a>When to use PyCell</h2><h3 id="using-pyclasses-from-rust"><a class="doc-anchor" href="#using-pyclasses-from-rust">§</a>Using pyclasses from Rust</h3>
+<p>However, we <em>do</em> need <code>PyCell</code> if we want to call its methods from Rust:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>Python::with_gil(|py| {
+    <span class="kw">let </span>n = Py::new(py, Number { inner: <span class="number">0 </span>})<span class="question-mark">?</span>;
+
+    <span class="comment">// We borrow the guard and then dereference
+    // it to get a mutable reference to Number
+    </span><span class="kw">let </span><span class="kw-2">mut </span>guard: PyRefMut&lt;<span class="lifetime">'_</span>, Number&gt; = n.bind(py).borrow_mut();
+    <span class="kw">let </span>n_mutable: <span class="kw-2">&amp;mut </span>Number = <span class="kw-2">&amp;mut *</span>guard;
+
+    n_mutable.increment();
+
+    <span class="comment">// To avoid panics we must dispose of the
+    // `PyRefMut` before borrowing again.
+    </span>drop(guard);
+
+    <span class="kw">let </span>n_immutable: <span class="kw-2">&amp;</span>Number = <span class="kw-2">&amp;</span>n.bind(py).borrow();
+    <span class="macro">assert_eq!</span>(n_immutable.inner, <span class="number">1</span>);
+
+    <span class="prelude-val">Ok</span>(())
+})</code></pre></div><h3 id="dealing-with-possibly-overlapping-mutable-references"><a class="doc-anchor" href="#dealing-with-possibly-overlapping-mutable-references">§</a>Dealing with possibly overlapping mutable references</h3>
+<p>It is also necessary to use <code>PyCell</code> if you can receive mutable arguments that may overlap.
+Suppose the following function that swaps the values of two <code>Number</code>s:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[pyfunction]
+</span><span class="kw">fn </span>swap_numbers(a: <span class="kw-2">&amp;mut </span>Number, b: <span class="kw-2">&amp;mut </span>Number) {
+    std::mem::swap(<span class="kw-2">&amp;mut </span>a.inner, <span class="kw-2">&amp;mut </span>b.inner);
+}</code></pre></div>
+<p>When users pass in the same <code>Number</code> as both arguments, one of the mutable borrows will
+fail and raise a <code>RuntimeError</code>:</p>
+<div class="example-wrap"><pre class="language-text"><code>&gt;&gt;&gt; a = Number()
+&gt;&gt;&gt; swap_numbers(a, a)
+Traceback (most recent call last):
+  File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt;
+  RuntimeError: Already borrowed</code></pre></div>
+<p>It is better to write that function like this:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[pyfunction]
+</span><span class="kw">fn </span>swap_numbers(a: <span class="kw-2">&amp;</span>PyCell&lt;Number&gt;, b: <span class="kw-2">&amp;</span>PyCell&lt;Number&gt;) {
+    <span class="comment">// Check that the pointers are unequal
+    </span><span class="kw">if </span>!a.is(b) {
+        std::mem::swap(<span class="kw-2">&amp;mut </span>a.borrow_mut().inner, <span class="kw-2">&amp;mut </span>b.borrow_mut().inner);
+    } <span class="kw">else </span>{
+        <span class="comment">// Do nothing - they are the same object, so don't need swapping.
+    </span>}
+}</code></pre></div>
+<p>See the <a href="https://pyo3.rs/latest/class.html#pycell-and-interior-mutability" title="PyCell and interior mutability">guide</a> for more information.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.PyBorrowError.html" title="struct pyo3::pycell::PyBorrowError">PyBorrow<wbr>Error</a></dt><dd>An error type returned by <a href="../struct.Bound.html#method.try_borrow" title="method pyo3::Bound::try_borrow"><code>Bound::try_borrow</code></a>.</dd><dt><a class="struct" href="struct.PyBorrowMutError.html" title="struct pyo3::pycell::PyBorrowMutError">PyBorrow<wbr>MutError</a></dt><dd>An error type returned by <a href="../struct.Bound.html#method.try_borrow_mut" title="method pyo3::Bound::try_borrow_mut"><code>Bound::try_borrow_mut</code></a>.</dd><dt><a class="struct" href="struct.PyRef.html" title="struct pyo3::pycell::PyRef">PyRef</a></dt><dd>A wrapper type for an immutably borrowed value from a <a href="../struct.Bound.html" title="struct pyo3::Bound"><code>Bound&lt;'py, T&gt;</code></a>.</dd><dt><a class="struct" href="struct.PyRefMut.html" title="struct pyo3::pycell::PyRefMut">PyRef<wbr>Mut</a></dt><dd>A wrapper type for a mutably borrowed value from a <a href="../struct.Bound.html" title="struct pyo3::Bound"><code>Bound&lt;'py, T&gt;</code></a>.</dd></dl></section></div></main></body></html>

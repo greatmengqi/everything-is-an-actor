@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Executes the provided closure with an embedded Python interpreter."><title>with_embedded_python_interpreter in pyo3 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pyo3" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">with_embedded_python_interpreter</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pyo3/index.html">pyo3</a><span class="version">0.22.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">with_<wbr>embedded_<wbr>python_<wbr>interpreter</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#panics" title="Panics">Panics</a></li><li><a href="#safety" title="Safety">Safety</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate pyo3</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">pyo3</a></div><h1>Function <span class="fn">with_<wbr>embedded_<wbr>python_<wbr>interpreter</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/pyo3/gil.rs.html#121-148">Source</a> </span></div><pre class="rust item-decl"><code>pub unsafe fn with_embedded_python_interpreter&lt;F, R&gt;(f: F) -&gt; R<div class="where">where
+    F: for&lt;'p&gt; <a class="trait" href="https://doc.rust-lang.org/1.91.1/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="struct" href="marker/struct.Python.html" title="struct pyo3::marker::Python">Python</a>&lt;'p&gt;) -&gt; R,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Executes the provided closure with an embedded Python interpreter.</p>
+<p>This function initializes the Python interpreter, executes the provided closure, and then
+finalizes the Python interpreter.</p>
+<p>After execution all Python resources are cleaned up, and no further Python APIs can be called.
+Because many Python modules implemented in C do not support multiple Python interpreters in a
+single process, it is not safe to call this function more than once. (Many such modules will not
+initialize correctly on the second run.)</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<ul>
+<li>If the Python interpreter is already initialized before calling this function.</li>
+</ul>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<ul>
+<li>This function should only ever be called once per process (usually as part of the <code>main</code>
+function). It is also not thread-safe.</li>
+<li>No Python APIs can be used after this function has finished executing.</li>
+<li>The return value of the closure must not contain any Python value, <em>including</em> <code>PyResult</code>.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">unsafe </span>{
+    pyo3::with_embedded_python_interpreter(|py| {
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = py.run_bound(<span class="string">"print('Hello World')"</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) {
+            <span class="comment">// We must make sure to not return a `PyErr`!
+            </span>e.print(py);
+        }
+    });
+}</code></pre></div></div></details></section></div></main></body></html>

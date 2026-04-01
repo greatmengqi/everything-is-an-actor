@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["__pyfunction_bench_rust_actor_tell","__pyfunction_bench_rust_mailbox_throughput","bench_rust_actor_tell","bench_rust_mailbox_throughput","rust_core"],"struct":["Envelope","RustActorInner","RustSystem"],"type":["ActorMap"]};

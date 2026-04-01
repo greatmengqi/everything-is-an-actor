@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuildFlag","PythonImplementation"],"fn":["add_extension_module_link_args","cross_compiling_from_to","find_all_sysconfigdata","get","parse_sysconfigdata","use_pyo3_cfgs"],"struct":["BuildFlags","CrossCompileConfig","InterpreterConfig","PythonVersion","Triple"]};

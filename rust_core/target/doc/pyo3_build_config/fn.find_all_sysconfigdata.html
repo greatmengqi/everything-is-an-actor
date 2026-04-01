@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Finds `_sysconfigdata*.py` files for detected Python interpreters."><title>find_all_sysconfigdata in pyo3_build_config - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pyo3_build_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">find_all_sysconfigdata</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pyo3_build_config/index.html">pyo3_<wbr>build_<wbr>config</a><span class="version">0.22.6</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">pyo3_build_config</a></div><h1>Function <span class="fn">find_<wbr>all_<wbr>sysconfigdata</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/pyo3_build_config/impl_.rs.html#1276-1304">Source</a> </span></div><pre class="rust item-decl"><code>pub fn find_all_sysconfigdata(
+    cross: &amp;<a class="struct" href="struct.CrossCompileConfig.html" title="struct pyo3_build_config::CrossCompileConfig">CrossCompileConfig</a>,
+) -&gt; Result&lt;<a class="struct" href="https://doc.rust-lang.org/1.91.1/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.91.1/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a>&gt;&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Finds <code>_sysconfigdata*.py</code> files for detected Python interpreters.</p>
+<p>From the python source for <code>_sysconfigdata*.py</code> is always going to be located at
+<code>build/lib.{PLATFORM}-{PY_MINOR_VERSION}</code> when built from source. The <a href="https://github.com/python/cpython/blob/3.5/Lib/sysconfig.py#L389">exact line</a> is defined as:</p>
+<div class="example-wrap"><pre class="language-py"><code>pybuilddir = &#39;build/lib.%s-%s&#39; % (get_platform(), sys.version_info[:2])</code></pre></div>
+<p>Where get_platform returns a kebab-case formatted string containing the os, the architecture and
+possibly the os’ kernel version (not the case on linux). However, when installed using a package
+manager, the <code>_sysconfigdata*.py</code> file is installed in the <code>${PREFIX}/lib/python3.Y/</code> directory.
+The <code>_sysconfigdata*.py</code> is generally in a sub-directory of the location of <code>libpython3.Y.so</code>.
+So we must find the file in the following possible locations:</p>
+<div class="example-wrap"><pre class="language-sh"><code># distribution from package manager, (lib_dir may or may not include lib/)
+${INSTALL_PREFIX}/lib/python3.Y/_sysconfigdata*.py
+${INSTALL_PREFIX}/lib/libpython3.Y.so
+${INSTALL_PREFIX}/lib/python3.Y/config-3.Y-${HOST_TRIPLE}/libpython3.Y.so
+
+# Built from source from host
+${CROSS_COMPILED_LOCATION}/build/lib.linux-x86_64-Y/_sysconfigdata*.py
+${CROSS_COMPILED_LOCATION}/libpython3.Y.so
+
+# if cross compiled, kernel release is only present on certain OS targets.
+${CROSS_COMPILED_LOCATION}/build/lib.{OS}(-{OS-KERNEL-RELEASE})?-{ARCH}-Y/_sysconfigdata*.py
+${CROSS_COMPILED_LOCATION}/libpython3.Y.so
+
+# PyPy includes a similar file since v73
+${INSTALL_PREFIX}/lib/pypy3.Y/_sysconfigdata.py
+${INSTALL_PREFIX}/lib_pypy/_sysconfigdata.py</code></pre></div>
+<p>Returns an empty vector when the target Python library directory
+is not set via <code>PYO3_CROSS_LIB_DIR</code>.</p>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implementation of functionality for `PyWeakref`."><title>PyWeakrefMethods in pyo3::prelude - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="pyo3" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">PyWeakrefMethods</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../pyo3/index.html">pyo3</a><span class="version">0.22.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">PyWeakref<wbr>Methods</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.get_object_borrowed" title="get_object_borrowed">get_object_borrowed</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.get_object" title="get_object">get_object</a></li><li><a href="#method.upgrade" title="upgrade">upgrade</a></li><li><a href="#method.upgrade_as" title="upgrade_as">upgrade_as</a></li><li><a href="#method.upgrade_as_exact" title="upgrade_as_exact">upgrade_as_exact</a></li><li><a href="#method.upgrade_as_unchecked" title="upgrade_as_unchecked">upgrade_as_unchecked</a></li><li><a href="#method.upgrade_borrowed" title="upgrade_borrowed">upgrade_borrowed</a></li><li><a href="#method.upgrade_borrowed_as" title="upgrade_borrowed_as">upgrade_borrowed_as</a></li><li><a href="#method.upgrade_borrowed_as_exact" title="upgrade_borrowed_as_exact">upgrade_borrowed_as_exact</a></li><li><a href="#method.upgrade_borrowed_as_unchecked" title="upgrade_borrowed_as_unchecked">upgrade_borrowed_as_unchecked</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In pyo3::<wbr>prelude</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">pyo3</a>::<wbr><a href="index.html">prelude</a></div><h1>Trait <span class="trait">PyWeakref<wbr>Methods</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/pyo3/types/weakref/anyref.rs.html#395-835">Source</a> </span></div><pre class="rust item-decl"><code>pub trait PyWeakrefMethods&lt;'py&gt; {
+    // Required method
+    fn <a href="#tymethod.get_object_borrowed" class="fn">get_object_borrowed</a>(&amp;self) -&gt; <a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'_, 'py, <a class="struct" href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.upgrade_as" class="fn">upgrade_as</a>&lt;T&gt;(&amp;self) -&gt; <a class="type" href="../type.PyResult.html" title="type pyo3::PyResult">PyResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, T&gt;&gt;&gt;
+       <span class="where">where T: <a class="trait" href="../type_object/trait.PyTypeCheck.html" title="trait pyo3::type_object::PyTypeCheck">PyTypeCheck</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.upgrade_borrowed_as" class="fn">upgrade_borrowed_as</a>&lt;'a, T&gt;(
+        &amp;'a self,
+    ) -&gt; <a class="type" href="../type.PyResult.html" title="type pyo3::PyResult">PyResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'a, 'py, T&gt;&gt;&gt;
+       <span class="where">where T: <a class="trait" href="../type_object/trait.PyTypeCheck.html" title="trait pyo3::type_object::PyTypeCheck">PyTypeCheck</a>,
+             'py: 'a</span> { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.upgrade_as_unchecked" class="fn">upgrade_as_unchecked</a>&lt;T&gt;(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, T&gt;&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.upgrade_borrowed_as_unchecked" class="fn">upgrade_borrowed_as_unchecked</a>&lt;'a, T&gt;(
+        &amp;'a self,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'a, 'py, T&gt;&gt;
+       <span class="where">where 'py: 'a</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.upgrade_as_exact" class="fn">upgrade_as_exact</a>&lt;T&gt;(&amp;self) -&gt; <a class="type" href="../type.PyResult.html" title="type pyo3::PyResult">PyResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, T&gt;&gt;&gt;
+       <span class="where">where T: <a class="trait" href="../type_object/trait.PyTypeInfo.html" title="trait pyo3::type_object::PyTypeInfo">PyTypeInfo</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.upgrade_borrowed_as_exact" class="fn">upgrade_borrowed_as_exact</a>&lt;'a, T&gt;(
+        &amp;'a self,
+    ) -&gt; <a class="type" href="../type.PyResult.html" title="type pyo3::PyResult">PyResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'a, 'py, T&gt;&gt;&gt;
+       <span class="where">where T: <a class="trait" href="../type_object/trait.PyTypeInfo.html" title="trait pyo3::type_object::PyTypeInfo">PyTypeInfo</a>,
+             'py: 'a</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.upgrade" class="fn">upgrade</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, <a class="struct" href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>&gt;&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.upgrade_borrowed" class="fn">upgrade_borrowed</a>&lt;'a&gt;(&amp;'a self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'a, 'py, <a class="struct" href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>&gt;&gt;
+       <span class="where">where 'py: 'a</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.get_object" class="fn">get_object</a>(&amp;self) -&gt; <a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, <a class="struct" href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implementation of functionality for <a href="../types/struct.PyWeakref.html" title="struct pyo3::types::PyWeakref"><code>PyWeakref</code></a>.</p>
+<p>These methods are defined for the <code>Bound&lt;'py, PyWeakref&gt;</code> smart pointer, so to use method call
+syntax these methods are separated into a trait, because stable Rust does not yet support
+<code>arbitrary_self_types</code>.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.get_object_borrowed" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#834">Source</a><h4 class="code-header">fn <a href="#tymethod.get_object_borrowed" class="fn">get_object_borrowed</a>(&amp;self) -&gt; <a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'_, 'py, <a class="struct" href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>&gt;</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.22.4: use <code>get_object</code></span></div></span></summary><div class="docblock"><p>Deprecated form of <a href="../types/trait.PyWeakrefMethods.html#method.get_object" title="method pyo3::types::PyWeakrefMethods::get_object"><code>PyWeakrefMethods::get_object</code></a>.</p>
+<p>Since PyO3 0.22.4 this leaks the borrowed reference to ensure the object is not
+deallocated while in use. This is necessary to avoid possible use-after-free bugs.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.upgrade_as" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#462-470">Source</a><h4 class="code-header">fn <a href="#method.upgrade_as" class="fn">upgrade_as</a>&lt;T&gt;(&amp;self) -&gt; <a class="type" href="../type.PyResult.html" title="type pyo3::PyResult">PyResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, T&gt;&gt;&gt;<div class="where">where
+    T: <a class="trait" href="../type_object/trait.PyTypeCheck.html" title="trait pyo3::type_object::PyTypeCheck">PyTypeCheck</a>,</div></h4></section></summary><div class="docblock"><p>Upgrade the weakref to a direct Bound object reference.</p>
+<p>It is named <code>upgrade</code> to be inline with <a href="https://doc.rust-lang.org/1.91.1/alloc/rc/struct.Weak.html#method.upgrade" title="method alloc::rc::Weak::upgrade">rust’s <code>Weak::upgrade</code></a>.
+In Python it would be equivalent to <a href="https://docs.python.org/3/c-api/weakref.html#c.PyWeakref_GetRef"><code>PyWeakref_GetRef</code></a>.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>pyo3::types::PyWeakrefReference;
+
+<span class="attr">#[pyclass(weakref)]
+</span><span class="kw">struct </span>Foo { <span class="comment">/* fields omitted */ </span>}
+
+<span class="attr">#[pymethods]
+</span><span class="kw">impl </span>Foo {
+    <span class="kw">fn </span>get_data(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (<span class="kw-2">&amp;</span>str, u32) {
+        (<span class="string">"Dave"</span>, <span class="number">10</span>)
+    }
+}
+
+<span class="kw">fn </span>parse_data(reference: Borrowed&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, PyWeakrefReference&gt;) -&gt; PyResult&lt;String&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(data_src) = reference.upgrade_as::&lt;Foo&gt;()<span class="question-mark">? </span>{
+        <span class="kw">let </span>data = data_src.borrow();
+        <span class="kw">let </span>(name, score) = data.get_data();
+        <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"Processing '{}': score = {}"</span>, name, score))
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Ok</span>(<span class="string">"The supplied data reference is nolonger relavent."</span>.to_owned())
+    }
+}
+
+Python::with_gil(|py| {
+    <span class="kw">let </span>data = Bound::new(py, Foo{})<span class="question-mark">?</span>;
+    <span class="kw">let </span>reference = PyWeakrefReference::new_bound(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(
+        parse_data(reference.as_borrowed())<span class="question-mark">?</span>,
+        <span class="string">"Processing 'Dave': score = 10"
+    </span>);
+
+    drop(data);
+
+    <span class="macro">assert_eq!</span>(
+        parse_data(reference.as_borrowed())<span class="question-mark">?</span>,
+        <span class="string">"The supplied data reference is nolonger relavent."
+    </span>);
+
+    <span class="prelude-val">Ok</span>(())
+})</code></pre></div><h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This function panics is the current object is invalid.
+If used propperly this is never the case. (NonNull and actually a weakref type)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.upgrade_borrowed_as" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#477-490">Source</a><h4 class="code-header">fn <a href="#method.upgrade_borrowed_as" class="fn">upgrade_borrowed_as</a>&lt;'a, T&gt;(
+    &amp;'a self,
+) -&gt; <a class="type" href="../type.PyResult.html" title="type pyo3::PyResult">PyResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'a, 'py, T&gt;&gt;&gt;<div class="where">where
+    T: <a class="trait" href="../type_object/trait.PyTypeCheck.html" title="trait pyo3::type_object::PyTypeCheck">PyTypeCheck</a>,
+    'py: 'a,</div></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.22.4: use <code>upgrade_as</code></span></div></span></summary><div class="docblock"><p>Deprecated form of <a href="../types/trait.PyWeakrefMethods.html#method.upgrade_as" title="method pyo3::types::PyWeakrefMethods::upgrade_as"><code>PyWeakrefMethods::upgrade_as</code></a>.</p>
+<p>Since PyO3 0.22.4 this leaks the borrowed reference to ensure the object is not
+deallocated while in use. This is necessary to avoid possible use-after-free bugs.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.upgrade_as_unchecked" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#562-564">Source</a><h4 class="code-header">unsafe fn <a href="#method.upgrade_as_unchecked" class="fn">upgrade_as_unchecked</a>&lt;T&gt;(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Upgrade the weakref to a direct Bound object reference unchecked. The type of the recovered object is not checked before downcasting, this could lead to unexpected behavior. Use only when absolutely certain the type can be guaranteed. The <code>weakref</code> may still return <code>None</code>.</p>
+<p>It is named <code>upgrade</code> to be inline with <a href="https://doc.rust-lang.org/1.91.1/alloc/rc/struct.Weak.html#method.upgrade" title="method alloc::rc::Weak::upgrade">rust’s <code>Weak::upgrade</code></a>.
+In Python it would be equivalent to <a href="https://docs.python.org/3/c-api/weakref.html#c.PyWeakref_GetRef"><code>PyWeakref_GetRef</code></a>.</p>
+<h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
+<p>Callers must ensure that the type is valid or risk type confusion.
+The <code>weakref</code> is still allowed to be <code>None</code>, if the referenced object has been cleaned up.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>pyo3::types::PyWeakrefReference;
+
+<span class="attr">#[pyclass(weakref)]
+</span><span class="kw">struct </span>Foo { <span class="comment">/* fields omitted */ </span>}
+
+<span class="attr">#[pymethods]
+</span><span class="kw">impl </span>Foo {
+    <span class="kw">fn </span>get_data(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (<span class="kw-2">&amp;</span>str, u32) {
+        (<span class="string">"Dave"</span>, <span class="number">10</span>)
+    }
+}
+
+<span class="kw">fn </span>parse_data(reference: Borrowed&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, PyWeakrefReference&gt;) -&gt; String {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(data_src) = <span class="kw">unsafe </span>{ reference.upgrade_as_unchecked::&lt;Foo&gt;() } {
+        <span class="kw">let </span>data = data_src.borrow();
+        <span class="kw">let </span>(name, score) = data.get_data();
+        <span class="macro">format!</span>(<span class="string">"Processing '{}': score = {}"</span>, name, score)
+    } <span class="kw">else </span>{
+        <span class="string">"The supplied data reference is nolonger relavent."</span>.to_owned()
+    }
+}
+
+Python::with_gil(|py| {
+    <span class="kw">let </span>data = Bound::new(py, Foo{})<span class="question-mark">?</span>;
+    <span class="kw">let </span>reference = PyWeakrefReference::new_bound(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(
+        parse_data(reference.as_borrowed()),
+        <span class="string">"Processing 'Dave': score = 10"
+    </span>);
+
+    drop(data);
+
+    <span class="macro">assert_eq!</span>(
+        parse_data(reference.as_borrowed()),
+        <span class="string">"The supplied data reference is nolonger relavent."
+    </span>);
+
+    <span class="prelude-val">Ok</span>(())
+})</code></pre></div><h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This function panics is the current object is invalid.
+If used propperly this is never the case. (NonNull and actually a weakref type)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.upgrade_borrowed_as_unchecked" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#575-581">Source</a><h4 class="code-header">unsafe fn <a href="#method.upgrade_borrowed_as_unchecked" class="fn">upgrade_borrowed_as_unchecked</a>&lt;'a, T&gt;(
+    &amp;'a self,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'a, 'py, T&gt;&gt;<div class="where">where
+    'py: 'a,</div></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.22.4: use <code>upgrade_as_uncheked</code></span></div></span></summary><div class="docblock"><p>Deprecated form of <a href="../types/trait.PyWeakrefMethods.html#method.upgrade_as_unchecked" title="method pyo3::types::PyWeakrefMethods::upgrade_as_unchecked"><code>PyWeakrefMethods::upgrade_as_unchecked</code></a>.</p>
+<p>Since PyO3 0.22.4 this leaks the borrowed reference to ensure the object is not
+deallocated while in use. This is necessary to avoid possible use-after-free bugs.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>Callers must ensure that the type is valid or risk type confusion.
+The <code>weakref</code> is still allowed to be <code>None</code>, if the referenced object has been cleaned up.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.upgrade_as_exact" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#649-657">Source</a><h4 class="code-header">fn <a href="#method.upgrade_as_exact" class="fn">upgrade_as_exact</a>&lt;T&gt;(&amp;self) -&gt; <a class="type" href="../type.PyResult.html" title="type pyo3::PyResult">PyResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, T&gt;&gt;&gt;<div class="where">where
+    T: <a class="trait" href="../type_object/trait.PyTypeInfo.html" title="trait pyo3::type_object::PyTypeInfo">PyTypeInfo</a>,</div></h4></section></summary><div class="docblock"><p>Upgrade the weakref to a exact direct Bound object reference.</p>
+<p>It is named <code>upgrade</code> to be inline with <a href="https://doc.rust-lang.org/1.91.1/alloc/rc/struct.Weak.html#method.upgrade" title="method alloc::rc::Weak::upgrade">rust’s <code>Weak::upgrade</code></a>.
+In Python it would be equivalent to <a href="https://docs.python.org/3/c-api/weakref.html#c.PyWeakref_GetRef"><code>PyWeakref_GetRef</code></a>.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>pyo3::types::PyWeakrefReference;
+
+<span class="attr">#[pyclass(weakref)]
+</span><span class="kw">struct </span>Foo { <span class="comment">/* fields omitted */ </span>}
+
+<span class="attr">#[pymethods]
+</span><span class="kw">impl </span>Foo {
+    <span class="kw">fn </span>get_data(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (<span class="kw-2">&amp;</span>str, u32) {
+        (<span class="string">"Dave"</span>, <span class="number">10</span>)
+    }
+}
+
+<span class="kw">fn </span>parse_data(reference: Borrowed&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, PyWeakrefReference&gt;) -&gt; PyResult&lt;String&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(data_src) = reference.upgrade_as_exact::&lt;Foo&gt;()<span class="question-mark">? </span>{
+        <span class="kw">let </span>data = data_src.borrow();
+        <span class="kw">let </span>(name, score) = data.get_data();
+        <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"Processing '{}': score = {}"</span>, name, score))
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Ok</span>(<span class="string">"The supplied data reference is nolonger relavent."</span>.to_owned())
+    }
+}
+
+Python::with_gil(|py| {
+    <span class="kw">let </span>data = Bound::new(py, Foo{})<span class="question-mark">?</span>;
+    <span class="kw">let </span>reference = PyWeakrefReference::new_bound(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(
+        parse_data(reference.as_borrowed())<span class="question-mark">?</span>,
+        <span class="string">"Processing 'Dave': score = 10"
+    </span>);
+
+    drop(data);
+
+    <span class="macro">assert_eq!</span>(
+        parse_data(reference.as_borrowed())<span class="question-mark">?</span>,
+        <span class="string">"The supplied data reference is nolonger relavent."
+    </span>);
+
+    <span class="prelude-val">Ok</span>(())
+})</code></pre></div><h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>This function panics is the current object is invalid.
+If used propperly this is never the case. (NonNull and actually a weakref type)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.upgrade_borrowed_as_exact" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#664-677">Source</a><h4 class="code-header">fn <a href="#method.upgrade_borrowed_as_exact" class="fn">upgrade_borrowed_as_exact</a>&lt;'a, T&gt;(
+    &amp;'a self,
+) -&gt; <a class="type" href="../type.PyResult.html" title="type pyo3::PyResult">PyResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'a, 'py, T&gt;&gt;&gt;<div class="where">where
+    T: <a class="trait" href="../type_object/trait.PyTypeInfo.html" title="trait pyo3::type_object::PyTypeInfo">PyTypeInfo</a>,
+    'py: 'a,</div></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.22.4: use <code>upgrade_as_exact</code></span></div></span></summary><div class="docblock"><p>Deprecated form of <a href="../types/trait.PyWeakrefMethods.html#method.upgrade_as_exact" title="method pyo3::types::PyWeakrefMethods::upgrade_as_exact"><code>PyWeakrefMethods::upgrade_as_exact</code></a>.</p>
+<p>Since PyO3 0.22.4 this leaks the borrowed reference to ensure the object is not
+deallocated while in use. This is necessary to avoid possible use-after-free bugs.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.upgrade" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#739-747">Source</a><h4 class="code-header">fn <a href="#method.upgrade" class="fn">upgrade</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, <a class="struct" href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Upgrade the weakref to a Bound <a href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny"><code>PyAny</code></a> reference to the target object if possible.</p>
+<p>It is named <code>upgrade</code> to be inline with <a href="https://doc.rust-lang.org/1.91.1/alloc/rc/struct.Weak.html#method.upgrade" title="method alloc::rc::Weak::upgrade">rust’s <code>Weak::upgrade</code></a>.
+This function returns <code>Some(Bound&lt;'py, PyAny&gt;)</code> if the reference still exists, otherwise <code>None</code> will be returned.</p>
+<p>This function gets the optional target of this <a href="https://docs.python.org/3/library/weakref.html#weakref.ReferenceType"><code>weakref.ReferenceType</code></a> (result of calling <a href="https://docs.python.org/3/library/weakref.html#weakref.ref"><code>weakref.ref</code></a>).
+It produces similar results to using <a href="https://docs.python.org/3/c-api/weakref.html#c.PyWeakref_GetRef"><code>PyWeakref_GetRef</code></a> in the C api.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>pyo3::types::PyWeakrefReference;
+
+<span class="attr">#[pyclass(weakref)]
+</span><span class="kw">struct </span>Foo { <span class="comment">/* fields omitted */ </span>}
+
+<span class="kw">fn </span>parse_data(reference: Borrowed&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, PyWeakrefReference&gt;) -&gt; PyResult&lt;String&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(object) = reference.upgrade() {
+        <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"The object '{}' refered by this reference still exists."</span>, object.getattr(<span class="string">"__class__"</span>)<span class="question-mark">?</span>.getattr(<span class="string">"__qualname__"</span>)<span class="question-mark">?</span>))
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Ok</span>(<span class="string">"The object, which this reference refered to, no longer exists"</span>.to_owned())
+    }
+}
+
+Python::with_gil(|py| {
+    <span class="kw">let </span>data = Bound::new(py, Foo{})<span class="question-mark">?</span>;
+    <span class="kw">let </span>reference = PyWeakrefReference::new_bound(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(
+        parse_data(reference.as_borrowed())<span class="question-mark">?</span>,
+        <span class="string">"The object 'Foo' refered by this reference still exists."
+    </span>);
+
+    drop(data);
+
+    <span class="macro">assert_eq!</span>(
+        parse_data(reference.as_borrowed())<span class="question-mark">?</span>,
+        <span class="string">"The object, which this reference refered to, no longer exists"
+    </span>);
+
+    <span class="prelude-val">Ok</span>(())
+})</code></pre></div><h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>This function panics is the current object is invalid.
+If used propperly this is never the case. (NonNull and actually a weakref type)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.upgrade_borrowed" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#754-766">Source</a><h4 class="code-header">fn <a href="#method.upgrade_borrowed" class="fn">upgrade_borrowed</a>&lt;'a&gt;(&amp;'a self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.91.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Borrowed.html" title="struct pyo3::Borrowed">Borrowed</a>&lt;'a, 'py, <a class="struct" href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>&gt;&gt;<div class="where">where
+    'py: 'a,</div></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.22.4: use <code>upgrade</code></span></div></span></summary><div class="docblock"><p>Deprecated form of <a href="../types/trait.PyWeakrefMethods.html#method.upgrade" title="method pyo3::types::PyWeakrefMethods::upgrade"><code>PyWeakrefMethods::upgrade</code></a>.</p>
+<p>Since PyO3 0.22.4 this leaks the borrowed reference to ensure the object is not
+deallocated while in use. This is necessary to avoid possible use-after-free bugs.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_object" class="method"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#824-827">Source</a><h4 class="code-header">fn <a href="#method.get_object" class="fn">get_object</a>(&amp;self) -&gt; <a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, <a class="struct" href="../types/struct.PyAny.html" title="struct pyo3::types::PyAny">PyAny</a>&gt;</h4></section></summary><div class="docblock"><p>Retrieve to a Bound object pointed to by the weakref.</p>
+<p>This function returns <code>Bound&lt;'py, PyAny&gt;</code>, which is either the object if it still exists, otherwise it will refer to <a href="../types/struct.PyNone.html" title="struct pyo3::types::PyNone"><code>PyNone</code></a>.</p>
+<p>This function gets the optional target of this <a href="https://docs.python.org/3/library/weakref.html#weakref.ReferenceType"><code>weakref.ReferenceType</code></a> (result of calling <a href="https://docs.python.org/3/library/weakref.html#weakref.ref"><code>weakref.ref</code></a>).
+It produces similar results to using <a href="https://docs.python.org/3/c-api/weakref.html#c.PyWeakref_GetRef"><code>PyWeakref_GetRef</code></a> in the C api.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>pyo3::types::PyWeakrefReference;
+
+<span class="attr">#[pyclass(weakref)]
+</span><span class="kw">struct </span>Foo { <span class="comment">/* fields omitted */ </span>}
+
+<span class="kw">fn </span>get_class(reference: Borrowed&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, PyWeakrefReference&gt;) -&gt; PyResult&lt;String&gt; {
+    reference
+        .get_object()
+        .getattr(<span class="string">"__class__"</span>)<span class="question-mark">?
+        </span>.repr()
+        .map(|repr| repr.to_string())
+}
+
+Python::with_gil(|py| {
+    <span class="kw">let </span>object = Bound::new(py, Foo{})<span class="question-mark">?</span>;
+    <span class="kw">let </span>reference = PyWeakrefReference::new_bound(<span class="kw-2">&amp;</span>object)<span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(
+        get_class(reference.as_borrowed())<span class="question-mark">?</span>,
+        <span class="string">"&lt;class 'builtins.Foo'&gt;"
+    </span>);
+
+    drop(object);
+
+    <span class="macro">assert_eq!</span>(get_class(reference.as_borrowed())<span class="question-mark">?</span>, <span class="string">"&lt;class 'NoneType'&gt;"</span>);
+
+    <span class="prelude-val">Ok</span>(())
+})</code></pre></div><h5 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h5>
+<p>This function panics is the current object is invalid.
+If used propperly this is never the case. (NonNull and actually a weakref type)</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.91.1/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-PyWeakrefMethods%3C'py%3E-for-Bound%3C'py,+PyWeakref%3E" class="impl"><a class="src rightside" href="../../src/pyo3/types/weakref/anyref.rs.html#837-856">Source</a><a href="#impl-PyWeakrefMethods%3C'py%3E-for-Bound%3C'py,+PyWeakref%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'py&gt; <a class="trait" href="../types/trait.PyWeakrefMethods.html" title="trait pyo3::types::PyWeakrefMethods">PyWeakrefMethods</a>&lt;'py&gt; for <a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, <a class="struct" href="../types/struct.PyWeakref.html" title="struct pyo3::types::PyWeakref">PyWeakref</a>&gt;</h3></section><section id="impl-PyWeakrefMethods%3C'py%3E-for-Bound%3C'py,+PyWeakrefProxy%3E" class="impl"><a class="src rightside" href="../../src/pyo3/types/weakref/proxy.rs.html#560-579">Source</a><a href="#impl-PyWeakrefMethods%3C'py%3E-for-Bound%3C'py,+PyWeakrefProxy%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'py&gt; <a class="trait" href="../types/trait.PyWeakrefMethods.html" title="trait pyo3::types::PyWeakrefMethods">PyWeakrefMethods</a>&lt;'py&gt; for <a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, <a class="struct" href="../types/struct.PyWeakrefProxy.html" title="struct pyo3::types::PyWeakrefProxy">PyWeakrefProxy</a>&gt;</h3></section><section id="impl-PyWeakrefMethods%3C'py%3E-for-Bound%3C'py,+PyWeakrefReference%3E" class="impl"><a class="src rightside" href="../../src/pyo3/types/weakref/reference.rs.html#563-582">Source</a><a href="#impl-PyWeakrefMethods%3C'py%3E-for-Bound%3C'py,+PyWeakrefReference%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'py&gt; <a class="trait" href="../types/trait.PyWeakrefMethods.html" title="trait pyo3::types::PyWeakrefMethods">PyWeakrefMethods</a>&lt;'py&gt; for <a class="struct" href="../struct.Bound.html" title="struct pyo3::Bound">Bound</a>&lt;'py, <a class="struct" href="../types/struct.PyWeakrefReference.html" title="struct pyo3::types::PyWeakrefReference">PyWeakrefReference</a>&gt;</h3></section></div><script src="../../trait.impl/pyo3/types/weakref/anyref/trait.PyWeakrefMethods.js" async></script></section></div></main></body></html>

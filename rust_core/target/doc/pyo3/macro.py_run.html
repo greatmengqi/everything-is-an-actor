@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A convenient macro to execute a Python code snippet, with some local variables set."><title>py_run in pyo3 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pyo3" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">py_run</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pyo3/index.html">pyo3</a><span class="version">0.22.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">py_run</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#panics" title="Panics">Panics</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate pyo3</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">pyo3</a></div><h1>Macro <span class="macro">py_run</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/pyo3/macros.rs.html#81-94">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! py_run {
+    ($py:expr, $($val:ident)+, $code:literal) =&gt; { ... };
+    ($py:expr, $($val:ident)+, $code:expr) =&gt; { ... };
+    ($py:expr, *$dict:expr, $code:literal) =&gt; { ... };
+    ($py:expr, *$dict:expr, $code:expr) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A convenient macro to execute a Python code snippet, with some local variables set.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This macro internally calls <a href="marker/struct.Python.html#method.run_bound" title="method pyo3::marker::Python::run_bound"><code>Python::run_bound</code></a> and panics
+if it returns <code>Err</code>, after printing the error to stdout.</p>
+<p>If you need to handle failures, please use <a href="marker/struct.Python.html#method.run_bound" title="method pyo3::marker::Python::run_bound"><code>Python::run_bound</code></a> instead.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::{prelude::<span class="kw-2">*</span>, py_run, types::PyList};
+
+Python::with_gil(|py| {
+    <span class="kw">let </span>list = PyList::new_bound(py, <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
+    <span class="macro">py_run!</span>(py, list, <span class="string">"assert list == [1, 2, 3]"</span>);
+});</code></pre></div>
+<p>You can use this macro to test pyfunctions or pyclasses quickly.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::{prelude::<span class="kw-2">*</span>, py_run};
+
+<span class="attr">#[pyclass]
+#[derive(Debug)]
+</span><span class="kw">struct </span>Time {
+    hour: u32,
+    minute: u32,
+    second: u32,
+}
+
+<span class="attr">#[pymethods]
+</span><span class="kw">impl </span>Time {
+    <span class="kw">fn </span>repl_japanese(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+        <span class="macro">format!</span>(<span class="string">"{}時{}分{}秒"</span>, <span class="self">self</span>.hour, <span class="self">self</span>.minute, <span class="self">self</span>.second)
+    }
+    <span class="attr">#[getter]
+    </span><span class="kw">fn </span>hour(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+        <span class="self">self</span>.hour
+    }
+    <span class="kw">fn </span>as_tuple(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (u32, u32, u32) {
+        (<span class="self">self</span>.hour, <span class="self">self</span>.minute, <span class="self">self</span>.second)
+    }
+}
+
+Python::with_gil(|py| {
+    <span class="kw">let </span>time = Py::new(py, Time {hour: <span class="number">8</span>, minute: <span class="number">43</span>, second: <span class="number">16</span>}).unwrap();
+    <span class="kw">let </span>time_as_tuple = (<span class="number">8</span>, <span class="number">43</span>, <span class="number">16</span>);
+    <span class="macro">py_run!</span>(py, time time_as_tuple, <span class="string">r#"
+        assert time.hour == 8
+        assert time.repl_japanese() == "8時43分16秒"
+        assert time.as_tuple() == time_as_tuple
+    "#</span>);
+});</code></pre></div>
+<p>If you need to prepare the <code>locals</code> dict by yourself, you can pass it as <code>*locals</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pyo3::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>pyo3::types::IntoPyDict;
+
+<span class="attr">#[pyclass]
+</span><span class="kw">struct </span>MyClass;
+
+<span class="attr">#[pymethods]
+</span><span class="kw">impl </span>MyClass {
+    <span class="attr">#[new]
+    </span><span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+        MyClass {}
+    }
+}
+
+Python::with_gil(|py| {
+    <span class="kw">let </span>locals = [(<span class="string">"C"</span>, py.get_type_bound::&lt;MyClass&gt;())].into_py_dict_bound(py);
+    <span class="macro">pyo3::py_run!</span>(py, <span class="kw-2">*</span>locals, <span class="string">"c = C()"</span>);
+});</code></pre></div></div></details></section></div></main></body></html>

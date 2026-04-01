@@ -1,0 +1,1 @@
+{closure@src/lib.rs:202:46: 202:48}: Into<PyClassInitializer<{closure@src/lib.rs:202:46: 202:48}>>
