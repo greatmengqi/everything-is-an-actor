@@ -8,6 +8,10 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from actor_for_agents.actor_f import ActorF
+    from actor_for_agents.frees import Free
+
 from actor_for_agents.actor import Actor, ActorContext, MsgT, RetT, StopMode, AfterMessage, AfterIdle
 from actor_for_agents.mailbox import Empty, Mailbox, MemoryMailbox
 from actor_for_agents.middleware import ActorMailboxContext, Middleware, NextFn, build_middleware_chain
@@ -128,7 +132,6 @@ class ActorSystem:
 
             result = await system.run_free(workflow())
         """
-        from actor_for_agents.actor_f import ActorF
         from actor_for_agents.interpreter import run_free as interpret
 
         return await interpret(self, free)

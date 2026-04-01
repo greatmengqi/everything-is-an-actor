@@ -451,8 +451,8 @@ class Actor(Generic[MsgT, RetT]):
             policy = target().stop_policy()
             if isinstance(policy, StopMode) and policy == StopMode.NEVER:
                 raise TypeError(
-                    f"tell() requires an actor with a non-NEVER stop_policy. "
-                    f"Use StopMode.ONE_TIME, AfterMessage, or AfterIdle instead."
+                    "tell() requires an actor with a non-NEVER stop_policy. "
+                    "Use StopMode.ONE_TIME, AfterMessage, or AfterIdle instead."
                 )
             # Spawn actor (its stop_policy determines auto-stop behavior)
             actor_name = f"temp-{uuid.uuid4().hex[:8]}"

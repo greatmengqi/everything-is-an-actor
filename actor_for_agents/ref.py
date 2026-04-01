@@ -10,6 +10,9 @@ from actor_for_agents.frees import Free, Suspend
 
 if TYPE_CHECKING:
     from .system import _ActorCell
+    from .actor_f import ActorF
+else:
+    ActorF = "ActorF"  # type: ignore[misc,assignment]
 
 MsgT = TypeVar("MsgT")
 RetT = TypeVar("RetT")
