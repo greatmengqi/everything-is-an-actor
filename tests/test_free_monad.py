@@ -5,7 +5,7 @@ import pytest
 from actor_for_agents import Actor, ActorSystem, ActorRef
 from actor_for_agents.actor_f import ask, spawn, stop, tell, tell_direct
 from actor_for_agents.frees import FlatMap, Free, Pure, Suspend
-from actor_for_agents.interpreter import MockInterpreter, MockRef, MockSystem, run_free, run_free_mock
+from actor_for_agents.interpreter import MockInterpreter, MockInterpreterSync, MockRef, MockSystem, run_free, run_free_mock, run_free_mock_sync
 
 
 class EchoActor(Actor):
@@ -102,7 +102,7 @@ def test_run_free_mock_simple():
     ref = system.get_ref("echo")
     ref.set_reply("ping", "pong")
 
-    result = run_free_mock(system, ask(ref, "ping"))
+    result = run_free_mock_sync(system, ask(ref, "ping"))
     assert result == "pong"
 
 
@@ -111,7 +111,7 @@ def test_run_free_mock_tell():
     system = MockSystem()
     ref = system.get_ref("counter")
 
-    run_free_mock(system, tell(ref, "inc"))
+    run_free_mock_sync(system, tell(ref, "inc"))
     assert ref._sent == ["inc"]
 
 

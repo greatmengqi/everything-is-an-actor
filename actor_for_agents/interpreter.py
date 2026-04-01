@@ -181,13 +181,14 @@ class MockSystem:
         return ref
 
 
-class MockInterpreter:
-    """Interprets ActorF Free programs using a MockSystem (no real actors)."""
+class MockInterpreterSync:
+    """Synchronous version of MockInterpreter for use with run_free_mock_sync."""
 
     def __init__(self, system: MockSystem) -> None:
         self._system = system
 
     def __call__(self, op: "ActorF") -> Free[ActorF, Any]:
+        """Interpret a single ActorF operation synchronously."""
         from actor_for_agents.actor_f import AskF as AskOp, SpawnF as SpawnOp
         from actor_for_agents.actor_f import TellF as TellOp, StopF as StopOp, GetRefF as GetRefOp
 
@@ -198,6 +199,7 @@ class MockInterpreter:
             op.ref.tell(op.msg)
             return Pure(None)
         elif isinstance(op, AskOp):
+            # MockRef.ask is synchronous in this interpreter
             result = op.ref.ask(op.msg)
             return Pure(result)
         elif isinstance(op, StopOp):
@@ -209,11 +211,52 @@ class MockInterpreter:
             raise RuntimeError(f"Unknown ActorF operation: {type(op).__name__}")
 
 
-def run_free_mock(
+class MockInterpreter:
+    """Interprets ActorF Free programs using a MockSystem (no real actors).
+
+    Supports both MockRef (sync) and real ActorRef (async) for testing.
+    """
+
+    def __init__(self, system: MockSystem) -> None:
+        self._system = system
+
+    async def __call__(self, op: "ActorF") -> Free[ActorF, Any]:
+        """Interpret a single ActorF operation asynchronously."""
+        from actor_for_agents.actor_f import AskF as AskOp, SpawnF as SpawnOp
+        from actor_for_agents.actor_f import TellF as TellOp, StopF as StopOp, GetRefF as GetRefOp
+
+        if isinstance(op, SpawnOp):
+            ref = self._system.get_ref(op.name)
+            return Pure(ref)
+        elif isinstance(op, TellOp):
+            op.ref.tell(op.msg)
+            return Pure(None)
+        elif isinstance(op, AskOp):
+            # Support both MockRef (sync) and ActorRef (async)
+            result = await op.ref.ask(op.msg)
+            return Pure(result)
+        elif isinstance(op, StopOp):
+            op.ref.stop()
+            return Pure(None)
+        elif isinstance(op, GetRefOp):
+            raise RuntimeError("get_ref() requires a calling ActorContext")
+        else:
+            raise RuntimeError(f"Unknown ActorF operation: {type(op).__name__}")
+
+
+async def run_free_mock(
     system: MockSystem, free: Free[ActorF, A]
 ) -> A:
-    """Run a Free[A] workflow against a MockSystem (synchronous, no async needed)."""
+    """Run a Free[A] workflow against a MockSystem (async)."""
     interpreter = MockInterpreter(system)
+    return await _run_trampoline(free, interpreter)
+
+
+def run_free_mock_sync(
+    system: MockSystem, free: Free[ActorF, A]
+) -> A:
+    """Run a Free[A] workflow against a MockSystem (synchronous version)."""
+    interpreter = MockInterpreterSync(system)
     return _run_trampoline_sync(free, interpreter)
 
 
@@ -256,8 +299,10 @@ def _run_trampoline_sync(free: Free[ActorF, Any], interpreter: MockInterpreter) 
 __all__ = [
     "LiveInterpreter",
     "MockInterpreter",
+    "MockInterpreterSync",
     "MockSystem",
     "MockRef",
     "run_free",
     "run_free_mock",
+    "run_free_mock_sync",
 ]
