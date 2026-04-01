@@ -6,6 +6,14 @@ from actor_for_agents import Actor, ActorSystem
 from actor_for_agents.plugins.retry import IdempotentActorMixin, RetryEnvelope, ask_with_retry
 
 
+class AlwaysSlowActor(Actor):
+    """Never returns within a short timeout — used to verify retry exhaustion."""
+
+    async def on_receive(self, message):
+        await asyncio.sleep(1.0)
+        return "never"
+
+
 class FlakyIdempotentActor(IdempotentActorMixin, Actor):
     async def on_started(self):
         self.calls = 0
@@ -23,22 +31,24 @@ class FlakyIdempotentActor(IdempotentActorMixin, Actor):
 
 @pytest.mark.anyio
 async def test_ask_with_retry_timeout_raises():
+    # Actor always takes 1s; each attempt (timeout=5ms) times out → exhausts retries.
+    # Must NOT use FlakyIdempotentActor here: its idempotency cache would return the
+    # result of attempt-1 (completed after the caller timed out) on attempt-2, so the
+    # retry would succeed instead of timing out.
     system = ActorSystem("retry")
-    ref = await system.spawn(FlakyIdempotentActor, "a")
+    ref = await system.spawn(AlwaysSlowActor, "a")
 
     with pytest.raises(asyncio.TimeoutError):
         await ask_with_retry(
             ref,
-            "flaky",
+            "x",
             timeout=0.005,
             max_attempts=3,
             base_backoff_s=0.001,
             max_backoff_s=0.005,
             jitter_ratio=0.0,
-            idempotency_key="k1",
         )
 
-    # This helper retries timeout, but if each attempt times out it should raise.
     assert ref.is_alive
     await system.shutdown()
 
