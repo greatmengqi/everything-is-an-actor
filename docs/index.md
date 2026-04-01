@@ -64,7 +64,7 @@ asyncio.run(main())
 **Actor core**
 
 - `tell` (fire-and-forget) + `ask` (request-reply) messaging
-- `MemoryMailbox` — 861K msg/s throughput
+- `MemoryMailbox` — 945K msg/s throughput
 - `RedisMailbox` — persistent, survives process restarts
 - `OneForOneStrategy` / `AllForOneStrategy` supervision
 - Middleware pipeline for all lifecycle events
@@ -96,12 +96,25 @@ asyncio.run(main())
 
 ## Benchmarks
 
-Apple M-series, Python 3.12:
+Apple M-series, Python 3.12, asyncio:
+
+**Actor core**
 
 | Metric | Value |
 |--------|-------|
-| `tell` throughput | 861K msg/s |
-| `ask` throughput | 20K msg/s |
-| `ask` latency p50 | 40 µs |
-| Spawn 5000 actors | 32 ms |
-| Middleware overhead | +6.3% |
+| `tell` throughput | 945K msg/s |
+| `ask` throughput | 29K msg/s |
+| `ask` latency p50 | 32 µs |
+| `ask` latency p99 | 46 µs |
+| 1000 actors × 100 msgs | 879K msg/s, 0 loss |
+| Spawn 5000 actors | 27 ms |
+
+**Agent layer**
+
+| Metric | Value |
+|--------|-------|
+| `AgentActor` ask throughput | 27K tasks/s |
+| `AgentActor` ask latency p50 | 36 µs |
+| `sequence(50)` fan-out | 32K child tasks/s |
+| `ask_stream` chunk throughput | 227K chunks/s |
+| `AgentSystem.run()` latency p50 | 0.2 ms |

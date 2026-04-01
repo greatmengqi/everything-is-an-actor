@@ -190,15 +190,30 @@ ref = await system.spawn(
 
 Apple M-series, Python 3.12, asyncio:
 
+**Actor core**
+
 | Metric | Value |
 |--------|-------|
-| `tell` throughput | 861K msg/s |
-| `ask` throughput | 20K msg/s |
-| `ask` latency p50 | 40 µs |
-| `ask` latency p99 | 262 µs |
-| 1000 actors × 100 msgs | 790K msg/s, 0 loss |
-| Middleware overhead | +6.3% (1 middleware) |
-| Spawn 5000 actors | 32 ms |
+| `tell` throughput | 945K msg/s |
+| `ask` throughput | 29K msg/s |
+| `ask` latency p50 | 32 µs |
+| `ask` latency p99 | 46 µs |
+| 100-hop actor chain | 2.0 ms, 20 µs/hop |
+| 1000 actors × 100 msgs | 879K msg/s, 0 loss |
+| Middleware overhead | +0% (~1 middleware) |
+| Spawn 5000 actors | 27 ms |
+
+**Agent layer**
+
+| Metric | Value |
+|--------|-------|
+| `AgentActor` ask throughput | 27K tasks/s |
+| `AgentActor` ask latency p50 | 36 µs |
+| `AgentActor` ask latency p99 | 50 µs |
+| `sequence(50)` fan-out | 32K child tasks/s |
+| `traverse(100)` map | 28K items/s |
+| `ask_stream` chunk throughput | 227K chunks/s |
+| `AgentSystem.run()` latency p50 | 0.2 ms (spawn+run+stream) |
 
 ## License
 
