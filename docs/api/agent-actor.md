@@ -259,35 +259,73 @@ Accidentally overriding this method emits a `UserWarning` at class definition ti
 
 Injected as `self.context` before `on_started`. Available inside all lifecycle hooks and `execute()`.
 
-### `dispatch(target, message, *, timeout, name)`
+All ephemeral actors are automatically stopped and cleaned up after each call.
+
+### `ask(target, message, *, timeout, name)`
 
 Spawn an ephemeral child actor (or send to an existing ref), await the result, stop the child.
 
 ```python
-result = await self.context.dispatch(SearchAgent, Task(input=query))
+result: TaskResult[str] = await self.context.ask(SearchAgent, Task(input=query))
+return result.output
 ```
 
-### `dispatch_parallel(tasks, *, timeout)`
+### `sequence(tasks, *, timeout)`
 
-Fan-out to multiple agents concurrently; results preserve task order. If any task raises, remaining tasks are cancelled and all ephemeral children are cleaned up before the exception propagates.
+Run tasks concurrently, return results in original order. On first failure, cancels remaining siblings immediately.
 
 ```python
-results = await self.context.dispatch_parallel([
+results = await self.context.sequence([
     (AgentA, Task(input="x")),
     (AgentB, Task(input="y")),
+    (AgentC, Task(input="z")),
 ])
+return [r.output for r in results]
 ```
 
-### `dispatch_stream(target, message, *, timeout, name)`
+### `traverse(inputs, target, *, timeout)`
 
-Streaming counterpart of `dispatch`. Yields `StreamItem` objects — events first, then the final `StreamResult`. Ephemeral children are stopped after the stream is exhausted or the caller breaks early.
+Map a list of inputs through the same agent concurrently. Results preserve input order.
+
+```python
+results = await self.context.traverse(["a", "b", "c"], UpperAgent)
+return [r.output for r in results]   # ["A", "B", "C"]
+```
+
+### `race(tasks, *, timeout)`
+
+Run tasks concurrently, return the first to complete. All losers are cancelled.
+
+```python
+r: TaskResult[str] = await self.context.race([
+    (FastAgent, Task(input=query)),
+    (SlowAgent, Task(input=query)),
+])
+return r.output
+```
+
+### `zip(task_a, task_b, *, timeout)`
+
+Run two tasks concurrently, return both results as a typed pair. If either fails, the other is cancelled.
+
+```python
+a, b = await self.context.zip(
+    (SearchAgent, Task(input=query)),
+    (FactCheckAgent, Task(input=query)),
+)
+return (a.output, b.output)
+```
+
+### `stream(target, message, *, timeout, name)`
+
+Spawn an ephemeral child actor (or reuse a ref) and stream its events. Yields `StreamItem` objects — events first, then the final `StreamResult`. Ephemeral children are stopped after the stream is exhausted or the caller breaks early.
 
 Use inside a streaming `execute()` to transparently forward child chunks:
 
 ```python
 class OrchestratorAgent(AgentActor[str, list]):
     async def execute(self, input: str):
-        async for item in self.context.dispatch_stream(LLMAgent, Task(input=input)):
+        async for item in self.context.stream(LLMAgent, Task(input=input)):
             match item:
                 case StreamEvent(event=e) if e.type == "task_chunk":
                     yield e.data          # re-yield → becomes task_chunk for caller
@@ -295,7 +333,7 @@ class OrchestratorAgent(AgentActor[str, list]):
                     pass                  # final result available here
 ```
 
-| | `dispatch` | `dispatch_stream` |
+| | `ask` | `stream` |
 |--|--|--|
 | Child output | Single `TaskResult` | `StreamItem` sequence |
 | Ephemeral actor | Stopped after `await` | Stopped after generator exhausted |
@@ -332,7 +370,7 @@ async def ask_stream(self, message: Task, *, timeout: float = 30.0) -> AsyncIter
 Stream `TaskEvent`s from an already-spawned `AgentActor` ref, then yield the final `TaskResult`.
 
 - The agent is **not** re-spawned. Reuse the same ref across multiple calls.
-- Child agents spawned via `dispatch()` inside `execute()` inherit the event sink automatically.
+- Child agents spawned via `ask()` inside `execute()` inherit the event sink automatically.
 - Raises the agent's exception after the stream is exhausted (if `execute()` raised).
 
 ```python
