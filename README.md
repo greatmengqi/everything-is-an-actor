@@ -1,18 +1,18 @@
-# actor-for-agents
+# everything-is-an-actor
 
 Asyncio-native Actor framework for Python agent systems — supervision trees, event streaming, and pluggable mailbox.
 
 Inspired by Erlang/Akka. Built for AI agent orchestration.
 
-**[Documentation](https://greatmengqi.github.io/actor-for-agents/)** · [Getting Started](https://greatmengqi.github.io/actor-for-agents/getting-started/) · [Agent Layer](https://greatmengqi.github.io/actor-for-agents/agents/) · [API Reference](https://greatmengqi.github.io/actor-for-agents/api/agent-actor/)
+**[Documentation](https://greatmengqi.github.io/everything-is-an-actor/)** · [Getting Started](https://greatmengqi.github.io/everything-is-an-actor/getting-started/) · [Agent Layer](https://greatmengqi.github.io/everything-is-an-actor/agents/) · [API Reference](https://greatmengqi.github.io/everything-is-an-actor/api/agent-actor/)
 
 ## Install
 
 ```bash
-pip install actor-for-agents
+pip install everything-is-an-actor
 
 # With Redis mailbox support
-pip install actor-for-agents[redis]
+pip install everything-is-an-actor[redis]
 ```
 
 ## Agent Quick Start

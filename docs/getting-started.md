@@ -3,13 +3,13 @@
 ## Installation
 
 ```bash
-pip install actor-for-agents
+pip install everything-is-an-actor
 ```
 
 For Redis mailbox support:
 
 ```bash
-pip install actor-for-agents[redis]
+pip install everything-is-an-actor[redis]
 ```
 
 Requirements: Python 3.12+

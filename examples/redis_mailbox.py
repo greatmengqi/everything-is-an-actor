@@ -1,6 +1,6 @@
 """Redis mailbox: durable inbox that survives process restarts.
 
-Requires: pip install actor-for-agents[redis]
+Requires: pip install everything-is-an-actor[redis]
 Requires: Redis running on localhost:6379
 """
 
