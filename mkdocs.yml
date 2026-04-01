@@ -1,8 +1,8 @@
-site_name: actor-for-agents
+site_name: everything-is-an-actor
 site_description: Asyncio-native Actor framework for Python agent systems
-site_url: https://greatmengqi.github.io/actor-for-agents
-repo_url: https://github.com/greatmengqi/actor-for-agents
-repo_name: actor-for-agents
+site_url: https://greatmengqi.github.io/everything-is-an-actor
+repo_url: https://github.com/greatmengqi/everything-is-an-actor
+repo_name: everything-is-an-actor
 
 theme:
   name: material

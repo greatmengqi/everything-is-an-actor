@@ -1,6 +1,6 @@
 # Design
 
-Architecture overview and key design decisions for `actor-for-agents`.
+Architecture overview and key design decisions for `everything-is-an-actor`.
 
 ---
 

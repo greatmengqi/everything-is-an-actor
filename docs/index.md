@@ -1,4 +1,4 @@
-# actor-for-agents
+# everything-is-an-actor
 
 **Asyncio-native Actor framework for Python agent systems.**
 
@@ -6,7 +6,7 @@ Inspired by Erlang/Akka. Built for AI agent orchestration.
 
 ---
 
-## Why actor-for-agents?
+## Why everything-is-an-actor?
 
 Multi-agent AI systems have a concurrency problem. When a lead agent delegates to multiple workers, you need:
 
@@ -15,7 +15,7 @@ Multi-agent AI systems have a concurrency problem. When a lead agent delegates t
 - **Task lifecycle** — every unit of work has a status: pending → running → completed / failed
 - **Event streaming** — consumers subscribe to what agents produce, in real time
 
-The actor model solves all of these. `actor-for-agents` brings it to Python asyncio with two layers:
+The actor model solves all of these. `everything-is-an-actor` brings it to Python asyncio with two layers:
 
 | Layer | What it provides |
 |-------|-----------------|
@@ -27,10 +27,10 @@ The actor model solves all of these. `actor-for-agents` brings it to Python asyn
 ## Install
 
 ```bash
-pip install actor-for-agents
+pip install everything-is-an-actor
 
 # With Redis mailbox support
-pip install actor-for-agents[redis]
+pip install everything-is-an-actor[redis]
 ```
 
 ---

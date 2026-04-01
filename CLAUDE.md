@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Coding principles for `actor-for-agents`. Follow these when writing or reviewing code in this repo.
+Coding principles for `everything-is-an-actor`. Follow these when writing or reviewing code in this repo.
 
 ---
 

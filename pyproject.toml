@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "actor-for-agents"
+name = "everything-is-an-actor"
 version = "0.1.0"
 description = "Asyncio-native Actor framework for Python agent systems"
 readme = "README.md"
