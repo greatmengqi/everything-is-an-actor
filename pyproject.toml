@@ -4,11 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "everything-is-an-actor"
-<<<<<<< HEAD
 version = "0.1.6"
-=======
-version = "0.1.5"
->>>>>>> origin/main
 description = "Asyncio-native Actor framework for Python agent systems"
 readme = "README.md"
 requires-python = ">=3.12"
