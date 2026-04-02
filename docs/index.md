@@ -64,7 +64,7 @@ asyncio.run(main())
 **Actor core**
 
 - `tell` (fire-and-forget) + `ask` (request-reply) messaging
-- `MemoryMailbox` — 945K msg/s throughput
+- `MemoryMailbox` / `FastMailbox` — configurable message queue backend
 - `RedisMailbox` — persistent, survives process restarts
 - `OneForOneStrategy` / `AllForOneStrategy` supervision
 - Middleware pipeline for all lifecycle events

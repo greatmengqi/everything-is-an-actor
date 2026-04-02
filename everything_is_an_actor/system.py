@@ -61,6 +61,8 @@ class ActorSystem:
         max_dead_letters: int = _MAX_DEAD_LETTERS,
         executor_workers: int | None = 4,
         reply_channel: ReplyChannel | None = None,
+        mailbox_cls: type[Mailbox] = MemoryMailbox,
+        threaded: bool = False,
     ) -> None:
         import uuid as _uuid
 
@@ -72,6 +74,8 @@ class ActorSystem:
         self._shutting_down = False
         self._replies = _ReplyRegistry()
         self._reply_channel = reply_channel or ReplyChannel()
+        self._mailbox_cls = mailbox_cls
+        self._threaded = threaded
         # Shared thread pool for actors to run blocking I/O
         from concurrent.futures import ThreadPoolExecutor
 
@@ -93,7 +97,9 @@ class ActorSystem:
         """Spawn a root-level actor.
 
         Args:
-            mailbox: Custom mailbox instance. If None, uses MemoryMailbox(mailbox_size).
+            mailbox_cls: Mailbox class to use. Defaults to MemoryMailbox.
+            mailbox_size: Size hint for the default mailbox.
+            mailbox: Custom mailbox instance. If provided, overrides mailbox_cls.
         """
         if name in self._root_cells:
             raise ValueError(f"Root actor '{name}' already exists")
@@ -102,7 +108,7 @@ class ActorSystem:
             name=name,
             parent=None,
             system=self,
-            mailbox=mailbox or MemoryMailbox(mailbox_size),
+            mailbox=mailbox or self._mailbox_cls(mailbox_size),
             middlewares=middlewares or [],
         )
         self._root_cells[name] = cell
@@ -273,13 +279,42 @@ class _ActorCell:
         self.actor = self.actor_cls()
         self.actor.context = ActorContext(self)
 
-        async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
-            return await self.actor.on_receive(message)  # type: ignore[union-attr]
+        # Check if actor implements sync receive() instead of async on_receive()
+        import inspect
+        # Check if receive is defined directly on this class (not inherited from Actor)
+        has_sync_receive = (
+            'receive' in self.actor_cls.__dict__ and
+            callable(self.actor_cls.__dict__['receive']) and
+            not inspect.iscoroutinefunction(self.actor_cls.__dict__['receive'])
+        )
 
-        if self._middlewares:
-            self._receive_chain = build_middleware_chain(self._middlewares, _inner_handler)
-        else:
+        if has_sync_receive:
+            # Sync actor: use receive() method directly
+            def _sync_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
+                return self.actor.receive(message)  # type: ignore[union-attr]
+
+            async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
+                # Sync handler runs in thread pool via _sync_wrapper
+                loop = asyncio.get_running_loop()
+                future = loop.run_in_executor(
+                    self.system._executor,
+                    _sync_handler,
+                    _ctx,
+                    message,
+                )
+                return await asyncio.wrap_future(future)
+
             self._receive_chain = _inner_handler
+        else:
+            # Async actor: use on_receive() method
+            async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
+                return await self.actor.on_receive(message)  # type: ignore[union-attr]
+
+            if self._middlewares:
+                self._receive_chain = build_middleware_chain(self._middlewares, _inner_handler)
+            else:
+                self._receive_chain = _inner_handler
+
         # Notify middleware of start (with timeout to prevent blocking)
         for mw in self._middlewares:
             try:
@@ -288,6 +323,59 @@ class _ActorCell:
                 logger.warning("Middleware %s.on_started timed out for %s", type(mw).__name__, self.path)
         await self.actor.on_started()
         self.task = asyncio.create_task(self._run(), name=f"actor:{self.path}")
+
+    async def _process_message(self, msg: Any) -> None:
+        """Process a single message. May be called in thread pool or event loop."""
+        import time
+
+        if isinstance(msg, _Stop):
+            self.stopped = True
+            return
+
+        if not isinstance(msg, _Envelope):
+            return
+
+        msg_type = "ask" if msg.correlation_id else "tell"
+        ctx = ActorMailboxContext(self.ref, msg.sender, msg_type)
+
+        # In threaded mode, dispatch to thread pool; otherwise await directly
+        if self.system._threaded and self.system._executor:
+            # Run in thread pool - the executor runs a sync wrapper that awaits
+            loop = asyncio.get_running_loop()
+            # Use a sync wrapper since run_in_executor expects sync functions
+            future = loop.run_in_executor(
+                self.system._executor,
+                self._sync_wrapper,
+                ctx,
+                msg.payload,
+            )
+            result = await asyncio.wrap_future(future)
+        else:
+            result = await self._receive_chain(ctx, msg.payload)
+
+        if msg.correlation_id is not None:
+            reply = _ReplyMessage(msg.correlation_id, result=result)
+            await self.system._reply_channel.send_reply(
+                msg.reply_to or self.system.system_id, reply, self.system._replies
+            )
+
+        self._last_message_time = time.time()
+
+        # Check stop policy after message processed
+        cached_policy = self.actor.stop_policy() if self.actor else None
+        if cached_policy is not None:
+            if isinstance(cached_policy, StopMode) and cached_policy == StopMode.ONE_TIME:
+                self.stopped = True
+            elif isinstance(cached_policy, AfterMessage) and msg.payload == cached_policy.message:
+                self.stopped = True
+
+    def _sync_wrapper(self, ctx: ActorMailboxContext, payload: Any) -> Any:
+        """Sync wrapper for thread pool. Creates event loop to run async handler."""
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(self._receive_chain(ctx, payload))
+        finally:
+            loop.close()
 
     async def enqueue(self, msg: _Envelope | _Stop) -> None:
         # Try non-blocking first (fast path for MemoryMailbox)
@@ -330,7 +418,7 @@ class _ActorCell:
             name=name,
             parent=self,
             system=self.system,
-            mailbox=mailbox or MemoryMailbox(mailbox_size),
+            mailbox=mailbox or self.system._mailbox_cls(mailbox_size),
             middlewares=middlewares or [],
         )
         self.children[name] = child
@@ -347,14 +435,21 @@ class _ActorCell:
         import time
 
         consecutive_failures = 0
+        # Cache stop_policy to avoid repeated method calls per message
+        cached_policy = None
+        policy_is_static = True  # Track if policy changes at runtime
+
         try:
             while not self.stopped:
-                # Calculate idle timeout from policy
+                # Calculate idle timeout from policy (only once per loop iteration)
                 idle_timeout: float | None = None
-                if self.actor is not None:
-                    policy = self.actor.stop_policy()
-                    if isinstance(policy, AfterIdle):
-                        idle_timeout = policy.seconds
+                if cached_policy is None and self.actor is not None:
+                    cached_policy = self.actor.stop_policy()
+                    # Check if it's a static policy we can cache
+                    policy_is_static = isinstance(cached_policy, StopMode) or isinstance(cached_policy, AfterMessage)
+
+                if cached_policy is not None and isinstance(cached_policy, AfterIdle):
+                    idle_timeout = cached_policy.seconds
 
                 try:
                     if idle_timeout is not None:
@@ -372,9 +467,22 @@ class _ActorCell:
                 try:
                     if not isinstance(msg, _Envelope):
                         continue
-                    msg_type = "ask" if msg.correlation_id else "tell"
-                    ctx = ActorMailboxContext(self.ref, msg.sender, msg_type)
-                    result = await self._receive_chain(ctx, msg.payload)  # type: ignore[misc]
+
+                    if self.system._threaded and self.system._executor:
+                        # Threaded mode: dispatch to thread pool
+                        loop = asyncio.get_running_loop()
+                        future = loop.run_in_executor(
+                            self.system._executor,
+                            self._sync_wrapper,
+                            ActorMailboxContext(self.ref, msg.sender, "ask" if msg.correlation_id else "tell"),
+                            msg.payload,
+                        )
+                        result = await asyncio.wrap_future(future)
+                    else:
+                        # Async mode: await directly
+                        ctx = ActorMailboxContext(self.ref, msg.sender, "ask" if msg.correlation_id else "tell")
+                        result = await self._receive_chain(ctx, msg.payload)  # type: ignore[misc]
+
                     if msg.correlation_id is not None:
                         reply = _ReplyMessage(msg.correlation_id, result=result)
                         await self.system._reply_channel.send_reply(
@@ -384,17 +492,16 @@ class _ActorCell:
                     # Update last message time for AfterIdle tracking
                     self._last_message_time = time.time()
                     # Check stop policy
-                    if self.actor is not None:
-                        policy = self.actor.stop_policy()
-                        if isinstance(policy, StopMode):
-                            if policy == StopMode.ONE_TIME:
+                    if cached_policy is not None:
+                        if isinstance(cached_policy, StopMode):
+                            if cached_policy == StopMode.ONE_TIME:
                                 break
-                        elif isinstance(policy, AfterMessage):
-                            if msg.payload == policy.message:
+                        elif isinstance(cached_policy, AfterMessage):
+                            if msg.payload == cached_policy.message:
                                 break
-                        elif isinstance(policy, AfterIdle):
+                        elif isinstance(cached_policy, AfterIdle):
                             # Reset idle timeout after each message
-                            idle_timeout = policy.seconds
+                            idle_timeout = cached_policy.seconds
                 except Exception as exc:
                     if isinstance(msg, _Envelope) and msg.correlation_id is not None:
                         reply = _ReplyMessage(msg.correlation_id, error=str(exc), exception=exc)

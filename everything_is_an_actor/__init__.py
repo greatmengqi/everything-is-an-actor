@@ -33,7 +33,7 @@ from everything_is_an_actor.actor_f import (
     tell_direct,
 )
 from everything_is_an_actor.interpreter import MockInterpreter, MockRef, MockSystem, run_free_mock
-from everything_is_an_actor.mailbox import Mailbox, MemoryMailbox
+from everything_is_an_actor.mailbox import FastMailbox, Mailbox, MemoryMailbox, ThreadedMailbox
 from everything_is_an_actor.middleware import Middleware
 from everything_is_an_actor.ref import ActorRef, MailboxFullError, ReplyChannel
 from everything_is_an_actor.supervision import (
@@ -73,10 +73,12 @@ __all__ = [
     "ask",
     "lift_free",
     "Left",
+    "FastMailbox",
     "Mailbox",
     "MailboxFullError",
     "MemoryMailbox",
     "Middleware",
+    "ThreadedMailbox",
     "MockInterpreter",
     "MockRef",
     "MockSystem",

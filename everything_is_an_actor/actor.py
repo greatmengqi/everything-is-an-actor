@@ -358,17 +358,35 @@ class Actor(Generic[MsgT, RetT]):
                 ...
 
     Unparameterized ``Actor`` accepts and returns ``Any`` (backward-compatible).
+
+    For synchronous (blocking) actors, implement ``receive()`` instead::
+
+        class BlockingActor(Actor[str, str]):
+            def receive(self, message: str) -> str:
+                # Runs in thread pool, won't block other actors
+                result = blocking_io()
+                return result
     """
 
     context: ActorContext
 
     async def on_receive(self, message: MsgT) -> RetT:
-        """Handle an incoming message.
+        """Handle an incoming message (async version).
 
         Return value is sent back as reply for ``ask`` calls.
         For ``tell`` calls, the return value is discarded.
         """
         raise NotImplementedError(f"{type(self).__name__} must implement on_receive()")
+
+    def receive(self, message: MsgT) -> RetT:
+        """Handle an incoming message (sync version).
+
+        Runs in thread pool automatically when used with ThreadedMailbox
+        or threaded=True mode. Won't block other actors.
+
+        Override this instead of on_receive() for blocking operations.
+        """
+        return NotImplemented  # Must be overridden if used
 
     async def on_started(self) -> None:
         """Called after creation, before receiving messages."""
