@@ -33,7 +33,7 @@ from actor_for_agents.actor_f import (
     tell_direct,
 )
 from actor_for_agents.interpreter import MockInterpreter, MockRef, MockSystem, run_free_mock
-from actor_for_agents.mailbox import Mailbox, MemoryMailbox
+from actor_for_agents.mailbox import FastMailbox, Mailbox, MemoryMailbox, ThreadedMailbox
 from actor_for_agents.middleware import Middleware
 from actor_for_agents.ref import ActorRef, MailboxFullError, ReplyChannel
 from actor_for_agents.supervision import (
@@ -73,10 +73,12 @@ __all__ = [
     "ask",
     "lift_free",
     "Left",
+    "FastMailbox",
     "Mailbox",
     "MailboxFullError",
     "MemoryMailbox",
     "Middleware",
+    "ThreadedMailbox",
     "MockInterpreter",
     "MockRef",
     "MockSystem",
