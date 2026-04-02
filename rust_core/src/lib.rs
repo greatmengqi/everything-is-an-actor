@@ -23,6 +23,7 @@ pub struct Envelope {
 
 /// Internal Rust Actor with message processing loop
 pub struct RustActorInner {
+    #[allow(dead_code)]
     path: String,
     sender: CbSender<Envelope>,
     state: Arc<RwLock<bool>>,
@@ -72,7 +73,7 @@ impl RustSystem {
     #[allow(clippy::too_many_arguments)]
     fn spawn(
         &self,
-        py: Python,
+        _py: Python,
         path: String,
         capacity: usize,
         handler: PyObject,
@@ -95,7 +96,7 @@ impl RustSystem {
                 match receiver.recv_timeout(std::time::Duration::from_millis(100)) {
                     Ok(envelope) => {
                         // Call Python handler via PyO3 unsafe API
-                        Python::with_gil(|py| {
+                        Python::with_gil(|_py| {
                             // Get handler as PyAny via pointer cast
                             let handler_ptr = handler_py.as_ptr();
 
@@ -153,7 +154,7 @@ impl RustSystem {
     /// Send a message and wait for reply
     fn ask(
         &self,
-        py: Python,
+        _py: Python,
         path: String,
         message: Py<PyAny>,
         timeout_ms: u64,
