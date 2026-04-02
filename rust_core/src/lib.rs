@@ -3,12 +3,12 @@
 //! Key insight: Rust mailbox is fast (4.5M msg/s) but PyO3 bridge adds overhead.
 //! This module provides the core Rust mailbox for benchmarking.
 
+use crossbeam_channel::{bounded, Receiver as CbReceiver, Sender as CbSender};
+use parking_lot::RwLock;
 use pyo3::prelude::*;
 use std::sync::Arc;
-use parking_lot::RwLock;
-use uuid::Uuid;
-use crossbeam_channel::{bounded, Sender as CbSender, Receiver as CbReceiver};
 use std::thread;
+use uuid::Uuid;
 
 // Type aliases
 type ActorMap = std::collections::HashMap<String, Arc<RustActorInner>>;
@@ -101,14 +101,17 @@ impl RustSystem {
 
                             // Build args tuple using FFI
                             let msg_ptr = envelope.message.as_ptr();
-                            let args_tuple = unsafe {
-                                pyo3::ffi::PyTuple_New(1)
-                            };
+                            let args_tuple = unsafe { pyo3::ffi::PyTuple_New(1) };
                             if !args_tuple.is_null() {
                                 unsafe {
-                                    pyo3::ffi::PyTuple_SET_ITEM(args_tuple, 0, msg_ptr as *mut pyo3::ffi::PyObject);
+                                    pyo3::ffi::PyTuple_SET_ITEM(
+                                        args_tuple,
+                                        0,
+                                        msg_ptr as *mut pyo3::ffi::PyObject,
+                                    );
                                     // Call the handler
-                                    let result = pyo3::ffi::PyObject_CallObject(handler_ptr, args_tuple);
+                                    let result =
+                                        pyo3::ffi::PyObject_CallObject(handler_ptr, args_tuple);
                                     if result.is_null() {
                                         // Error occurred, print it
                                         if !pyo3::ffi::PyErr_Occurred().is_null() {
@@ -182,14 +185,22 @@ impl RustSystem {
     }
 
     fn is_alive(&self, path: String) -> bool {
-        self.actors.read().get(&path).map(|a| a.is_alive()).unwrap_or(false)
+        self.actors
+            .read()
+            .get(&path)
+            .map(|a| a.is_alive())
+            .unwrap_or(false)
     }
 
     fn stop_actor(&self, path: String) -> bool {
-        self.actors.read().get(&path).map(|a| {
-            a.stop();
-            true
-        }).unwrap_or(false)
+        self.actors
+            .read()
+            .get(&path)
+            .map(|a| {
+                a.stop();
+                true
+            })
+            .unwrap_or(false)
     }
 }
 
@@ -213,12 +224,7 @@ fn bench_rust_actor_tell(count: usize) -> f64 {
     // Spawn actor with no-op handler
     Python::with_gil(|py| {
         system
-            .spawn(
-                py,
-                path.to_string(),
-                100000,
-                py.None(),
-            )
+            .spawn(py, path.to_string(), 100000, py.None())
             .unwrap();
     });
 
@@ -226,9 +232,7 @@ fn bench_rust_actor_tell(count: usize) -> f64 {
     for i in 0..count {
         let msg = format!("message {}", i);
         Python::with_gil(|py| {
-            system
-                .tell(path.to_string(), msg.into_py(py))
-                .unwrap();
+            system.tell(path.to_string(), msg.into_py(py)).unwrap();
         });
     }
     drop(system);
@@ -238,7 +242,9 @@ fn bench_rust_actor_tell(count: usize) -> f64 {
 
     println!(
         "Rust actor tell: {} msg in {:.3}s ({:.0} msg/s)",
-        count, elapsed.as_secs_f64(), throughput
+        count,
+        elapsed.as_secs_f64(),
+        throughput
     );
 
     throughput
@@ -250,9 +256,7 @@ fn bench_rust_mailbox_throughput(count: usize) -> f64 {
 
     let (tx, rx) = bounded(100000);
 
-    thread::spawn(move || {
-        while rx.recv().is_ok() {}
-    });
+    thread::spawn(move || while rx.recv().is_ok() {});
 
     let start = Instant::now();
     for i in 0..count {
@@ -266,7 +270,9 @@ fn bench_rust_mailbox_throughput(count: usize) -> f64 {
 
     println!(
         "Rust mailbox: {} msg in {:.3}s ({:.0} msg/s)",
-        count, elapsed.as_secs_f64(), throughput
+        count,
+        elapsed.as_secs_f64(),
+        throughput
     );
 
     throughput
