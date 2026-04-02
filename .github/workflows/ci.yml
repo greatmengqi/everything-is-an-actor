@@ -26,6 +26,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      - name: Build rust_core
+        run: |
+          uv pip install maturin
+          cd rust_core && uv run maturin develop
+
       - name: Run tests
         run: uv run pytest tests/ --ignore=tests/plugins -v
 
@@ -34,3 +39,18 @@ jobs:
 
       - name: Format
         run: uv run ruff format --check actor_for_agents/
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Check Rust format
+        run: |
+          cd rust_core
+          cargo fmt --check
