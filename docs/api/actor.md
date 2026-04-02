@@ -3,7 +3,7 @@
 ## Actor
 
 ```python
-from actor_for_agents import Actor
+from everything_is_an_actor import Actor
 ```
 
 Base class for all actors (Level 5). Use this for infrastructure components that need direct message-passing control. For AI agents, prefer `AgentActor`.
@@ -63,7 +63,7 @@ Override to customize automatic lifecycle management.
 Default: `StopMode.NEVER` (actor never auto-stops).
 
 ```python
-from actor_for_agents import StopMode, AfterMessage, AfterIdle, StopPolicy
+from everything_is_an_actor import StopMode, AfterMessage, AfterIdle, StopPolicy
 
 # Auto-stop after one message
 def stop_policy(self) -> StopPolicy:
@@ -99,7 +99,7 @@ async def on_started(self):
 ## ActorRef
 
 ```python
-from actor_for_agents import ActorRef
+from everything_is_an_actor import ActorRef
 ```
 
 Lightweight handle to a running actor.
@@ -162,7 +162,7 @@ Lift a stop operation into the Free monad for composable workflows.
 ## ActorSystem
 
 ```python
-from actor_for_agents import ActorSystem
+from everything_is_an_actor import ActorSystem
 ```
 
 Top-level container for root-level actors.
@@ -232,7 +232,7 @@ Messages that could not be delivered.
 Restart only the failing child.
 
 ```python
-from actor_for_agents import OneForOneStrategy
+from everything_is_an_actor import OneForOneStrategy
 
 OneForOneStrategy(max_restarts=3, within_seconds=60)
 ```
@@ -242,7 +242,7 @@ OneForOneStrategy(max_restarts=3, within_seconds=60)
 Restart all siblings when any one fails.
 
 ```python
-from actor_for_agents import AllForOneStrategy
+from everything_is_an_actor import AllForOneStrategy
 
 AllForOneStrategy(max_restarts=3, within_seconds=60)
 ```
@@ -250,7 +250,7 @@ AllForOneStrategy(max_restarts=3, within_seconds=60)
 ### Directive
 
 ```python
-from actor_for_agents import Directive
+from everything_is_an_actor import Directive
 
 Directive.restart   # default
 Directive.resume
@@ -265,7 +265,7 @@ Directive.escalate
 ### StopMode
 
 ```python
-from actor_for_agents import StopMode, StopPolicy
+from everything_is_an_actor import StopMode, StopPolicy
 ```
 
 ```python
@@ -277,7 +277,7 @@ class StopMode(Enum):
 ### AfterMessage
 
 ```python
-from actor_for_agents import AfterMessage
+from everything_is_an_actor import AfterMessage
 ```
 
 ```python
@@ -289,7 +289,7 @@ class AfterMessage:
 ### AfterIdle
 
 ```python
-from actor_for_agents import AfterIdle
+from everything_is_an_actor import AfterIdle
 ```
 
 ```python
@@ -301,7 +301,7 @@ class AfterIdle:
 ### StopPolicy
 
 ```python
-from actor_for_agents import StopPolicy
+from everything_is_an_actor import StopPolicy
 ```
 
 Union type: `StopMode | AfterMessage | AfterIdle`

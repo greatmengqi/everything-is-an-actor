@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import asyncio
 
-from actor_for_agents.agents import AgentActor, Task, TaskResult
-from actor_for_agents.agents.system import AgentSystem
+from everything_is_an_actor.agents import AgentActor, Task, TaskResult
+from everything_is_an_actor.agents.system import AgentSystem
 
 
 # ---------------------------------------------------------------------------

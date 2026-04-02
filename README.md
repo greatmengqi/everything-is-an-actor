@@ -19,7 +19,7 @@ pip install everything-is-an-actor[redis]
 
 ```python
 import asyncio
-from actor_for_agents.agents import AgentSystem, AgentActor, Task
+from everything_is_an_actor.agents import AgentSystem, AgentActor, Task
 
 class SummaryAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
@@ -238,7 +238,7 @@ ref = await system.spawn(MyActor, "worker", middlewares=[LogMiddleware()])
 ## Redis Mailbox
 
 ```python
-from actor_for_agents.plugins.redis import RedisMailbox
+from everything_is_an_actor.plugins.redis import RedisMailbox
 
 ref = await system.spawn(
     MyActor, "worker",

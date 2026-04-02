@@ -35,7 +35,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["actor_for_agents"]
+packages = ["everything_is_an_actor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

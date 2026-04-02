@@ -7,14 +7,14 @@ import warnings
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from actor_for_agents.actor import Actor
-from actor_for_agents.agents.task import Task, TaskEvent, TaskResult, TaskStatus
+from everything_is_an_actor.actor import Actor
+from everything_is_an_actor.agents.task import Task, TaskEvent, TaskResult, TaskStatus
 
 InputT = TypeVar("InputT")
 OutputT = TypeVar("OutputT")
 
 if TYPE_CHECKING:
-    from actor_for_agents.ref import ActorRef
+    from everything_is_an_actor.ref import ActorRef
 
 
 class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, OutputT]):
@@ -53,7 +53,7 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
         # Read from ContextVar set by AgentSystem.run() — propagates automatically
         # to all child actors via asyncio task context inheritance.
         # None in plain ActorSystem usage — events are silently dropped.
-        from actor_for_agents.agents.run_stream import _run_event_sink
+        from everything_is_an_actor.agents.run_stream import _run_event_sink
 
         self._event_sink: ActorRef | None = _run_event_sink.get()
 
@@ -111,7 +111,7 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                 "Wrap your input: ref.ask(Task(input=your_data))"
             )
 
-        from actor_for_agents.agents.run_stream import _current_task_id_var, _run_event_sink
+        from everything_is_an_actor.agents.run_stream import _current_task_id_var, _run_event_sink
 
         # Capture parent span before overwriting the ContextVar
         self._current_parent_task_id = _current_task_id_var.get()

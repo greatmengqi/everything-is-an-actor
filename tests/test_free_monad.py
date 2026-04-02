@@ -2,10 +2,10 @@
 
 import pytest
 
-from actor_for_agents import Actor, ActorSystem, ActorRef
-from actor_for_agents.actor_f import ask, spawn, stop, tell, tell_direct
-from actor_for_agents.frees import FlatMap, Free, Pure, Suspend
-from actor_for_agents.interpreter import MockInterpreter, MockInterpreterSync, MockRef, MockSystem, run_free, run_free_mock, run_free_mock_sync
+from everything_is_an_actor import Actor, ActorSystem, ActorRef
+from everything_is_an_actor.actor_f import ask, spawn, stop, tell, tell_direct
+from everything_is_an_actor.frees import FlatMap, Free, Pure, Suspend
+from everything_is_an_actor.interpreter import MockInterpreter, MockInterpreterSync, MockRef, MockSystem, run_free, run_free_mock, run_free_mock_sync
 
 
 class EchoActor(Actor):
@@ -216,7 +216,7 @@ async def test_run_free_stops_actor():
 # ---------------------------------------------------------------------------
 
 
-from actor_for_agents.agents.task import TaskResult, TaskStatus
+from everything_is_an_actor.agents.task import TaskResult, TaskStatus
 
 
 def test_task_result_map_success():
@@ -337,7 +337,7 @@ async def test_ref_free_composition():
 
 def test_ref_free_ask_returns_suspend():
     """ActorRef.free_ask returns a Suspend wrapping AskF."""
-    from actor_for_agents.ref import ActorRef
+    from everything_is_an_actor.ref import ActorRef
 
     class MockCell:
         name = "mock"
@@ -353,7 +353,7 @@ def test_ref_free_ask_returns_suspend():
 
 def test_ref_free_tell_returns_suspend():
     """ActorRef.free_tell returns a Suspend wrapping TellF."""
-    from actor_for_agents.ref import ActorRef
+    from everything_is_an_actor.ref import ActorRef
 
     class MockCell:
         name = "mock"
@@ -369,7 +369,7 @@ def test_ref_free_tell_returns_suspend():
 
 def test_ref_free_stop_returns_suspend():
     """ActorRef.free_stop returns a Suspend wrapping StopF."""
-    from actor_for_agents.ref import ActorRef
+    from everything_is_an_actor.ref import ActorRef
 
     class MockCell:
         name = "mock"

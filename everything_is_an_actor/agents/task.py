@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from actor_for_agents.ref import ActorRef
+    from everything_is_an_actor.ref import ActorRef
 
 InputT = TypeVar("InputT")  # input type
 OutputT = TypeVar("OutputT")  # output type

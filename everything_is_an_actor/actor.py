@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
 
-from actor_for_agents.supervision import OneForOneStrategy, SupervisorStrategy
+from everything_is_an_actor.supervision import OneForOneStrategy, SupervisorStrategy
 
 DEFAULT_MAILBOX_SIZE = 256
 
 if TYPE_CHECKING:
-    from actor_for_agents.ref import ActorRef
+    from everything_is_an_actor.ref import ActorRef
 
 # Message and return type variables — use Actor[MyMsg, MyReturn] for typed actors
 MsgT = TypeVar("MsgT")
@@ -192,7 +192,7 @@ class ActorContext:
             results = await ctx.traverse(["a", "b", "c"], UpperAgent)
             # → ["A", "B", "C"]
         """
-        from actor_for_agents.agents.task import Task
+        from everything_is_an_actor.agents.task import Task
 
         return await self.sequence(
             [(target, Task(input=inp)) for inp in inputs],

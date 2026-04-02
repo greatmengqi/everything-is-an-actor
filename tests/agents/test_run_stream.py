@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from actor_for_agents.agents import AgentActor, Task, TaskEvent, TaskResult
-from actor_for_agents.agents.system import AgentSystem
-from actor_for_agents.agents.task import StreamEvent, StreamResult
+from everything_is_an_actor.agents import AgentActor, Task, TaskEvent, TaskResult
+from everything_is_an_actor.agents.system import AgentSystem
+from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
 pytestmark = pytest.mark.anyio
 
@@ -325,7 +325,7 @@ async def test_span_tree_is_reconstructable():
 
 async def test_agent_system_plain_spawn_still_works():
     """AgentSystem.spawn() works exactly like ActorSystem.spawn()."""
-    from actor_for_agents.actor import Actor
+    from everything_is_an_actor.actor import Actor
 
     class SimpleActor(Actor[str, str]):
         async def on_receive(self, message: str) -> str:
@@ -340,7 +340,7 @@ async def test_agent_system_plain_spawn_still_works():
 
 async def test_agent_system_backend_param_ignored():
     """spawn() accepts backend= without error (reserved for M5)."""
-    from actor_for_agents.actor import Actor
+    from everything_is_an_actor.actor import Actor
 
     class Noop(Actor[Any, None]):
         async def on_receive(self, message: Any) -> None:

@@ -2,7 +2,7 @@
 
 import asyncio
 
-from actor_for_agents import Actor, ActorSystem, OneForOneStrategy
+from everything_is_an_actor import Actor, ActorSystem, OneForOneStrategy
 
 
 class WorkerActor(Actor):

@@ -6,11 +6,11 @@ import asyncio
 import contextvars
 from typing import TYPE_CHECKING
 
-from actor_for_agents.actor import Actor
-from actor_for_agents.agents.task import TaskEvent
+from everything_is_an_actor.actor import Actor
+from everything_is_an_actor.agents.task import TaskEvent
 
 if TYPE_CHECKING:
-    from actor_for_agents.ref import ActorRef
+    from everything_is_an_actor.ref import ActorRef
 
 # ContextVar injected by AgentSystem.run() so every AgentActor spawned
 # within a run automatically routes TaskEvents to the RunStream collector.

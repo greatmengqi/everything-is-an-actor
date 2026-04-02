@@ -3,9 +3,9 @@
 import asyncio
 import time
 
-from actor_for_agents import Actor, ActorSystem
-from actor_for_agents.actor_f import spawn, tell, ask, tell_direct
-from actor_for_agents.interpreter import run_free
+from everything_is_an_actor import Actor, ActorSystem
+from everything_is_an_actor.actor_f import spawn, tell, ask, tell_direct
+from everything_is_an_actor.interpreter import run_free
 
 
 class NoopActor(Actor):
@@ -169,8 +169,8 @@ async def bench_free_composition_throughput(n=20_000):
 
 async def bench_mock_interpreter_throughput(n=100_000):
     """Measure MockInterpreter throughput (no real actors)."""
-    from actor_for_agents.interpreter import MockSystem, run_free_mock
-    from actor_for_agents.actor_f import ask
+    from everything_is_an_actor.interpreter import MockSystem, run_free_mock
+    from everything_is_an_actor.actor_f import ask
 
     system = MockSystem()
     ref = system.get_ref("echo")

@@ -8,8 +8,8 @@ import asyncio
 
 import redis.asyncio as redis
 
-from actor_for_agents import Actor, ActorSystem
-from actor_for_agents.plugins.redis import RedisMailbox
+from everything_is_an_actor import Actor, ActorSystem
+from everything_is_an_actor.plugins.redis import RedisMailbox
 
 
 class EchoActor(Actor):

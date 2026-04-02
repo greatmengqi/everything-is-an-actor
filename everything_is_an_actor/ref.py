@@ -6,7 +6,7 @@ import asyncio
 import uuid
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from actor_for_agents.frees import Free, Suspend
+from everything_is_an_actor.frees import Free, Suspend
 
 if TYPE_CHECKING:
     from .system import _ActorCell
@@ -90,8 +90,8 @@ class ActorRef(Generic[MsgT, RetT]):
                 if event.type == "task_progress":
                     print(event.data)
         """
-        from actor_for_agents.agents.run_stream import RunStream, make_collector_cls
-        from actor_for_agents.agents.task import StreamEvent, StreamResult, Task
+        from everything_is_an_actor.agents.run_stream import RunStream, make_collector_cls
+        from everything_is_an_actor.agents.task import StreamEvent, StreamResult, Task
 
         if self._cell.stopped:
             raise ActorStoppedError(f"Actor {self.path} is stopped")
@@ -187,7 +187,7 @@ class ActorRef(Generic[MsgT, RetT]):
 
             result = await system.run_free(workflow)
         """
-        from actor_for_agents.actor_f import AskF
+        from everything_is_an_actor.actor_f import AskF
 
         return Suspend(AskF(self, msg))  # type: ignore[return-value]
 
@@ -201,7 +201,7 @@ class ActorRef(Generic[MsgT, RetT]):
 
             await system.run_free(workflow)
         """
-        from actor_for_agents.actor_f import TellF
+        from everything_is_an_actor.actor_f import TellF
 
         return Suspend(TellF(self, msg))  # type: ignore[return-value]
 
@@ -215,7 +215,7 @@ class ActorRef(Generic[MsgT, RetT]):
 
             await system.run_free(workflow)
         """
-        from actor_for_agents.actor_f import StopF
+        from everything_is_an_actor.actor_f import StopF
 
         return Suspend(StopF(self))  # type: ignore[return-value]
 

@@ -7,14 +7,14 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from actor_for_agents.actor import Actor, MsgT, RetT
-from actor_for_agents.agents.agent_actor import AgentActor
-from actor_for_agents.agents.run_stream import RunStream, _run_event_sink, make_collector_cls
-from actor_for_agents.agents.task import Task, TaskEvent
-from actor_for_agents.mailbox import Mailbox
-from actor_for_agents.middleware import Middleware
-from actor_for_agents.ref import ActorRef
-from actor_for_agents.system import ActorSystem
+from everything_is_an_actor.actor import Actor, MsgT, RetT
+from everything_is_an_actor.agents.agent_actor import AgentActor
+from everything_is_an_actor.agents.run_stream import RunStream, _run_event_sink, make_collector_cls
+from everything_is_an_actor.agents.task import Task, TaskEvent
+from everything_is_an_actor.mailbox import Mailbox
+from everything_is_an_actor.middleware import Middleware
+from everything_is_an_actor.ref import ActorRef
+from everything_is_an_actor.system import ActorSystem
 
 
 class AgentSystem(ActorSystem):
