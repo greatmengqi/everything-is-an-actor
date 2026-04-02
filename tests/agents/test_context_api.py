@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from actor_for_agents.agents import AgentActor, AgentSystem, Task, TaskResult
-from actor_for_agents.agents.task import StreamEvent, StreamResult
+from everything_is_an_actor.agents import AgentActor, AgentSystem, Task, TaskResult
+from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
 pytestmark = pytest.mark.anyio
 

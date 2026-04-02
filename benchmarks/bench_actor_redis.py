@@ -5,8 +5,8 @@ import time
 
 import redis.asyncio as redis
 
-from actor_for_agents import Actor, ActorSystem
-from actor_for_agents.mailbox_redis import RedisMailbox
+from everything_is_an_actor import Actor, ActorSystem
+from everything_is_an_actor.mailbox_redis import RedisMailbox
 
 
 class EchoActor(Actor):
@@ -221,7 +221,7 @@ async def bench_redis_put_batch(n=50_000, batch_size=100):
     system = ActorSystem("bench-redis-batch")
     ref = await system.spawn(CounterActor, "counter", mailbox=mailbox)
 
-    from actor_for_agents.ref import _Envelope
+    from everything_is_an_actor.ref import _Envelope
 
     batches = [[_Envelope(payload="inc") for _ in range(batch_size)] for _ in range(n // batch_size)]
 

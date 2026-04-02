@@ -9,12 +9,12 @@ Coding principles for `everything-is-an-actor`. Follow these when writing or rev
 The codebase has two independent layers:
 
 ```
-actor_for_agents.agents   ← AI-specific (Task, AgentActor, streaming)
-actor_for_agents          ← generic actor runtime (Actor, ActorRef, ActorSystem)
+everything_is_an_actor.agents   ← AI-specific (Task, AgentActor, streaming)
+everything_is_an_actor          ← generic actor runtime (Actor, ActorRef, ActorSystem)
 ```
 
-- `actor_for_agents` must not import from `actor_for_agents.agents`
-- `actor_for_agents.agents` only uses public APIs from the core layer
+- `everything_is_an_actor` must not import from `everything_is_an_actor.agents`
+- `everything_is_an_actor.agents` only uses public APIs from the core layer
 - Never reach into `_cell`, `_cell.actor`, or other private internals from outside the owning module — use factory patterns or messages instead
 
 ## Actor encapsulation
@@ -79,7 +79,7 @@ actor_for_agents          ← generic actor runtime (Actor, ActorRef, ActorSyste
 - Import `agents/` types inside method bodies when needed:
   ```python
   async def ask_stream(self, ...):
-      from actor_for_agents.agents.run_stream import RunStream, make_collector_cls
+      from everything_is_an_actor.agents.run_stream import RunStream, make_collector_cls
       ...
   ```
 - This is a deliberate pattern — keep it consistent

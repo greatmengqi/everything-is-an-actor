@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-from actor_for_agents import ActorSystem
-from actor_for_agents.agents import AgentActor, Task, TaskResult
+from everything_is_an_actor import ActorSystem
+from everything_is_an_actor.agents import AgentActor, Task, TaskResult
 
 pytestmark = pytest.mark.anyio
 

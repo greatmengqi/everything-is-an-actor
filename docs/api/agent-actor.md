@@ -3,7 +3,7 @@
 ## Task
 
 ```python
-from actor_for_agents.agents import Task
+from everything_is_an_actor.agents import Task
 ```
 
 A unit of work sent to an `AgentActor`.
@@ -29,7 +29,7 @@ task: Task[dict] = Task(input={"query": "actor model", "limit": 5}, id="my-task-
 ## TaskResult
 
 ```python
-from actor_for_agents.agents import TaskResult
+from everything_is_an_actor.agents import TaskResult
 ```
 
 The outcome returned by `AgentActor.on_receive()` after `execute()` completes.
@@ -48,7 +48,7 @@ The outcome returned by `AgentActor.on_receive()` after `execute()` completes.
 ## TaskStatus
 
 ```python
-from actor_for_agents.agents import TaskStatus
+from everything_is_an_actor.agents import TaskStatus
 ```
 
 ```python
@@ -65,7 +65,7 @@ class TaskStatus(Enum):
 ## TaskEvent
 
 ```python
-from actor_for_agents.agents import TaskEvent
+from everything_is_an_actor.agents import TaskEvent
 ```
 
 An event emitted during task execution.
@@ -88,7 +88,7 @@ An event emitted during task execution.
 ## StreamItem
 
 ```python
-from actor_for_agents.agents.task import StreamItem, StreamEvent, StreamResult
+from everything_is_an_actor.agents.task import StreamItem, StreamEvent, StreamResult
 ```
 
 Sealed ADT yielded by `ActorRef.ask_stream()`. Use `match/case` for exhaustive handling.
@@ -125,7 +125,7 @@ async for item in ref.ask_stream(Task(input="...")):
 ## ActorConfig
 
 ```python
-from actor_for_agents.agents import ActorConfig
+from everything_is_an_actor.agents import ActorConfig
 ```
 
 Optional actor-level configuration for Level 1-3 plain agent classes.
@@ -154,7 +154,7 @@ class MyAgent:
 ## AgentActor
 
 ```python
-from actor_for_agents.agents import AgentActor
+from everything_is_an_actor.agents import AgentActor
 ```
 
 Base class for AI agents (Level 4). Inherits from `Actor`. Generic over input type `InputT` and output type `OutputT`.
@@ -346,8 +346,8 @@ class OrchestratorAgent(AgentActor[str, list]):
 `AgentActor` works with the standard `ActorSystem`. Messages must be wrapped in `Task`.
 
 ```python
-from actor_for_agents import ActorSystem
-from actor_for_agents.agents import AgentActor, Task
+from everything_is_an_actor import ActorSystem
+from everything_is_an_actor.agents import AgentActor, Task
 
 system = ActorSystem("app")
 ref = await system.spawn(SummaryAgent, "summarizer")
@@ -374,8 +374,8 @@ Stream `TaskEvent`s from an already-spawned `AgentActor` ref, then yield the fin
 - Raises the agent's exception after the stream is exhausted (if `execute()` raised).
 
 ```python
-from actor_for_agents.agents.system import AgentSystem
-from actor_for_agents.agents.task import StreamEvent, StreamResult
+from everything_is_an_actor.agents.system import AgentSystem
+from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
 system = AgentSystem()
 ref = await system.spawn(SummaryAgent, "summarizer")
@@ -398,7 +398,7 @@ async for item in ref.ask_stream(Task(input="doc 2")):
 ## AgentSystem
 
 ```python
-from actor_for_agents.agents import AgentSystem
+from everything_is_an_actor.agents import AgentSystem
 ```
 
 Drop-in replacement for `ActorSystem` with event-streaming support.

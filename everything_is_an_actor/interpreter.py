@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
-from actor_for_agents.frees import Free, Pure, Suspend, FlatMap
+from everything_is_an_actor.frees import Free, Pure, Suspend, FlatMap
 
 if TYPE_CHECKING:
-    from actor_for_agents.actor_f import ActorF
-    from actor_for_agents.system import ActorSystem
+    from everything_is_an_actor.actor_f import ActorF
+    from everything_is_an_actor.system import ActorSystem
 
 A = TypeVar("A")
 
@@ -30,8 +30,8 @@ class LiveInterpreter:
 
     async def __call__(self, op: "ActorF") -> Free[ActorF, Any]:
         """Interpret a single ActorF operation, returning a Free to be chained."""
-        from actor_for_agents.actor_f import AskF as AskOp, SpawnF as SpawnOp
-        from actor_for_agents.actor_f import TellF as TellOp, StopF as StopOp, GetRefF as GetRefOp
+        from everything_is_an_actor.actor_f import AskF as AskOp, SpawnF as SpawnOp
+        from everything_is_an_actor.actor_f import TellF as TellOp, StopF as StopOp, GetRefF as GetRefOp
 
         if isinstance(op, SpawnOp):
             ref = await self._system.spawn(op.actor_cls, op.name)
@@ -64,8 +64,8 @@ async def run_free(system: "ActorSystem", free: Free[ActorF, A]) -> A:
     # Fast path: simple single operation (common case: tell, ask)
     if isinstance(free, Suspend):
         op = free.thunk
-        from actor_for_agents.actor_f import AskF as AskOp, SpawnF as SpawnOp
-        from actor_for_agents.actor_f import TellF as TellOp, StopF as StopOp
+        from everything_is_an_actor.actor_f import AskF as AskOp, SpawnF as SpawnOp
+        from everything_is_an_actor.actor_f import TellF as TellOp, StopF as StopOp
 
         if isinstance(op, TellOp):
             await op.ref.tell(op.msg)
@@ -189,8 +189,8 @@ class MockInterpreterSync:
 
     def __call__(self, op: "ActorF") -> Free[ActorF, Any]:
         """Interpret a single ActorF operation synchronously."""
-        from actor_for_agents.actor_f import AskF as AskOp, SpawnF as SpawnOp
-        from actor_for_agents.actor_f import TellF as TellOp, StopF as StopOp, GetRefF as GetRefOp
+        from everything_is_an_actor.actor_f import AskF as AskOp, SpawnF as SpawnOp
+        from everything_is_an_actor.actor_f import TellF as TellOp, StopF as StopOp, GetRefF as GetRefOp
 
         if isinstance(op, SpawnOp):
             ref = self._system.get_ref(op.name)
@@ -222,8 +222,8 @@ class MockInterpreter:
 
     async def __call__(self, op: "ActorF") -> Free[ActorF, Any]:
         """Interpret a single ActorF operation asynchronously."""
-        from actor_for_agents.actor_f import AskF as AskOp, SpawnF as SpawnOp
-        from actor_for_agents.actor_f import TellF as TellOp, StopF as StopOp, GetRefF as GetRefOp
+        from everything_is_an_actor.actor_f import AskF as AskOp, SpawnF as SpawnOp
+        from everything_is_an_actor.actor_f import TellF as TellOp, StopF as StopOp, GetRefF as GetRefOp
 
         if isinstance(op, SpawnOp):
             ref = self._system.get_ref(op.name)

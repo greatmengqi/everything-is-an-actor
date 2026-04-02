@@ -2,7 +2,7 @@
 
 import pytest
 
-from actor_for_agents import Actor, ActorSystem, StopMode, AfterMessage, AfterIdle, StopPolicy
+from everything_is_an_actor import Actor, ActorSystem, StopMode, AfterMessage, AfterIdle, StopPolicy
 
 
 class OneTimeActor(Actor):
@@ -115,7 +115,7 @@ async def test_after_idle_actor_stops_after_timeout():
 @pytest.mark.anyio
 async def test_tell_type_error_on_never_policy():
     """tell() raises TypeError when target actor has NEVER stop_policy."""
-    from actor_for_agents import Actor, StopMode, StopPolicy
+    from everything_is_an_actor import Actor, StopMode, StopPolicy
 
     class CallerActor(Actor):
         async def on_receive(self, message):
@@ -139,7 +139,7 @@ async def test_tell_type_error_on_never_policy():
 @pytest.mark.anyio
 async def test_tell_succeeds_on_one_time_actor():
     """tell() succeeds when target actor has ONE_TIME policy."""
-    from actor_for_agents import Actor, StopMode, StopPolicy
+    from everything_is_an_actor import Actor, StopMode, StopPolicy
 
     class CallerActor(Actor):
         async def on_receive(self, message):
@@ -282,7 +282,7 @@ async def test_stop_already_dead_actor():
         assert not ref.is_alive
 
         # Ask dead actor should raise error
-        from actor_for_agents.ref import ActorStoppedError
+        from everything_is_an_actor.ref import ActorStoppedError
         with pytest.raises(ActorStoppedError, match="stopped"):
             await ref.ask("test")
     finally:
@@ -407,6 +407,6 @@ async def test_ask_after_system_shutdown():
     await system.shutdown()
 
     # Actor should be stopped after system shutdown
-    from actor_for_agents.ref import ActorStoppedError
+    from everything_is_an_actor.ref import ActorStoppedError
     with pytest.raises(ActorStoppedError, match="stopped"):
         await ref.ask("late-ask")

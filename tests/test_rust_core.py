@@ -111,3 +111,29 @@ class TestRustSystem:
             system.spawn(path, 100, lambda x: x)
             assert system.is_alive(path) is True
             system.stop_actor(path)
+
+    def test_actor_processes_messages(self):
+        """Test actor actually processes messages via tell."""
+        from rust_core import RustSystem
+
+        results = []
+
+        def handler(msg):
+            results.append(msg)
+
+        system = RustSystem()
+        system.spawn("/test/process", 100, handler)
+
+        # Send messages
+        for i in range(5):
+            system.tell("/test/process", f"msg-{i}")
+
+        # Give time for processing
+        import time
+        time.sleep(0.5)
+
+        # Verify messages were processed
+        assert len(results) == 5
+        assert results == ["msg-0", "msg-1", "msg-2", "msg-3", "msg-4"]
+
+        system.stop_actor("/test/process")

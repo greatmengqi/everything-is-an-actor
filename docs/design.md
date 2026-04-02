@@ -10,10 +10,10 @@ The framework has two independent layers:
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Agent layer  (actor_for_agents.agents)      │
+│  Agent layer  (everything_is_an_actor.agents)      │
 │  Task · AgentActor · AgentSystem · streaming │
 ├─────────────────────────────────────────────┤
-│  Core layer   (actor_for_agents)             │
+│  Core layer   (everything_is_an_actor)             │
 │  Actor · ActorRef · ActorSystem · Mailbox    │
 └─────────────────────────────────────────────┘
 ```
@@ -87,7 +87,7 @@ The policy is checked after each message is processed. `tell()` (spawning tempor
 For composable actor workflows, the framework provides `Free[ActorF, A]` monad:
 
 ```python
-from actor_for_agents import ActorSystem, ActorRef
+from everything_is_an_actor import ActorSystem, ActorRef
 
 # Build a workflow using ref.free_xxx()
 def workflow(ref: ActorRef):

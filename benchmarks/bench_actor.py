@@ -3,7 +3,7 @@
 import asyncio
 import time
 
-from actor_for_agents import Actor, ActorSystem, Middleware
+from everything_is_an_actor import Actor, ActorSystem, Middleware
 
 
 class NoopActor(Actor):

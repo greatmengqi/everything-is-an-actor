@@ -1,6 +1,6 @@
 # Agent Layer
 
-The `actor_for_agents.agents` module provides higher-level abstractions specifically for AI agent systems, built on top of the core actor primitives.
+The `everything_is_an_actor.agents` module provides higher-level abstractions specifically for AI agent systems, built on top of the core actor primitives.
 
 ---
 
@@ -41,7 +41,7 @@ The agent layer has 5 levels. Start at the lowest level you need — upgrading l
     Configure mailbox size and restart limits without inheriting from `AgentActor`.
 
     ```python
-    from actor_for_agents.agents import ActorConfig
+    from everything_is_an_actor.agents import ActorConfig
 
     class SearchAgent:
         __actor__ = ActorConfig(mailbox_size=64, max_restarts=5)
@@ -55,7 +55,7 @@ The agent layer has 5 levels. Start at the lowest level you need — upgrading l
     Full power: strong typing, supervision strategy, `emit_progress()`, access to actor context.
 
     ```python
-    from actor_for_agents.agents import AgentActor
+    from everything_is_an_actor.agents import AgentActor
 
     class SearchAgent(AgentActor[str, str]):
         def supervisor_strategy(self):
@@ -79,7 +79,7 @@ The agent layer has 5 levels. Start at the lowest level you need — upgrading l
     For infrastructure components (routers, caches, rate limiters) that don't follow the Task protocol.
 
     ```python
-    from actor_for_agents import Actor
+    from everything_is_an_actor import Actor
 
     class RateLimiterActor(Actor):
         async def on_receive(self, message):
@@ -94,7 +94,7 @@ The agent layer has 5 levels. Start at the lowest level you need — upgrading l
 Every message to an `AgentActor` is a `Task`. The framework manages the lifecycle automatically.
 
 ```python
-from actor_for_agents.agents import Task, TaskResult, TaskStatus
+from everything_is_an_actor.agents import Task, TaskResult, TaskStatus
 
 task: Task[str] = Task(input="what is the actor model?")
 # task.id is auto-generated (uuid hex)
@@ -308,7 +308,7 @@ class FlakyAgent(AgentActor[str, str]):
         return process(input)
 
 # Use plugins.retry for automatic retries
-from actor_for_agents.plugins.retry import ask_with_retry
+from everything_is_an_actor.plugins.retry import ask_with_retry
 
 result = await ask_with_retry(
     ref, Task(input="data"),
@@ -324,7 +324,7 @@ result = await ask_with_retry(
 `AgentSystem` extends `ActorSystem` with event streaming. It is a drop-in replacement — all existing APIs work unchanged.
 
 ```python
-from actor_for_agents.agents import AgentSystem
+from everything_is_an_actor.agents import AgentSystem
 
 system = AgentSystem("app")
 ```
@@ -374,7 +374,7 @@ async for item in ref.ask_stream(Task(input="long document...")):
 `ask_stream()` yields a sealed `StreamItem` ADT:
 
 ```python
-from actor_for_agents.agents.task import StreamEvent, StreamResult
+from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
 async for item in ref.ask_stream(Task(input="...")):
     match item:

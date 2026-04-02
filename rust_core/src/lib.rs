@@ -95,33 +95,36 @@ impl RustSystem {
                 // Blocking receive with timeout
                 match receiver.recv_timeout(std::time::Duration::from_millis(100)) {
                     Ok(envelope) => {
-                        // Call Python handler via PyO3 unsafe API
-                        Python::with_gil(|_py| {
-                            // Get handler as PyAny via pointer cast
-                            let handler_ptr = handler_py.as_ptr();
+                        // Extract reply_tx before GIL operations
+                        let reply_tx = envelope.reply_tx.clone();
+                        let msg_ptr = envelope.message.as_ptr();
 
-                            // Build args tuple using FFI
-                            let msg_ptr = envelope.message.as_ptr();
+                        // Call Python handler inside GIL
+                        let result_ptr = Python::with_gil(|_py| {
+                            let handler_ptr = handler_py.as_ptr();
                             let args_tuple = unsafe { pyo3::ffi::PyTuple_New(1) };
-                            if !args_tuple.is_null() {
-                                unsafe {
-                                    pyo3::ffi::PyTuple_SET_ITEM(
-                                        args_tuple,
-                                        0,
-                                        msg_ptr as *mut pyo3::ffi::PyObject,
-                                    );
-                                    // Call the handler
-                                    let result =
-                                        pyo3::ffi::PyObject_CallObject(handler_ptr, args_tuple);
-                                    if result.is_null() {
-                                        // Error occurred, print it
-                                        if !pyo3::ffi::PyErr_Occurred().is_null() {
-                                            pyo3::ffi::PyErr_Print();
-                                        }
-                                    }
-                                }
+                            if args_tuple.is_null() {
+                                return std::ptr::null_mut();
+                            }
+                            unsafe {
+                                pyo3::ffi::PyTuple_SET_ITEM(
+                                    args_tuple,
+                                    0,
+                                    msg_ptr as *mut pyo3::ffi::PyObject,
+                                );
+                                pyo3::ffi::PyObject_CallObject(handler_ptr, args_tuple)
                             }
                         });
+
+                        // Send reply if successful and reply channel exists
+                        if !result_ptr.is_null() {
+                            if let Some(ref tx) = reply_tx {
+                                Python::with_gil(|py| {
+                                    let reply = unsafe { Py::from_owned_ptr(py, result_ptr) };
+                                    let _ = tx.send(reply);
+                                });
+                            }
+                        }
                     }
                     Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
                     Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,

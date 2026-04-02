@@ -5,8 +5,8 @@ Requires ``redis[hiredis]`` (``uv add redis[hiredis]``).
 Usage::
 
     import redis.asyncio as redis
-    from actor_for_agents import ActorSystem
-    from actor_for_agents.plugins.redis import RedisMailbox
+    from everything_is_an_actor import ActorSystem
+    from everything_is_an_actor.plugins.redis import RedisMailbox
 
     pool = redis.ConnectionPool.from_url("redis://localhost:6379")
 
@@ -23,8 +23,8 @@ import json
 import logging
 from typing import Any
 
-from actor_for_agents.mailbox import Empty, Mailbox
-from actor_for_agents.ref import _Envelope, _Stop
+from everything_is_an_actor.mailbox import Empty, Mailbox
+from everything_is_an_actor.ref import _Envelope, _Stop
 
 logger = logging.getLogger(__name__)
 

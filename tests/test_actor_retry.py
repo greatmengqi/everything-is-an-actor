@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from actor_for_agents import Actor, ActorSystem
-from actor_for_agents.plugins.retry import IdempotentActorMixin, RetryEnvelope, ask_with_retry
+from everything_is_an_actor import Actor, ActorSystem
+from everything_is_an_actor.plugins.retry import IdempotentActorMixin, RetryEnvelope, ask_with_retry
 
 
 class AlwaysSlowActor(Actor):

@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from actor_for_agents import (
+from everything_is_an_actor import (
     Actor,
     ActorRef,
     ActorSystem,
@@ -13,7 +13,7 @@ from actor_for_agents import (
     Middleware,
     OneForOneStrategy,
 )
-from actor_for_agents.ref import ActorStoppedError
+from everything_is_an_actor.ref import ActorStoppedError
 
 
 # ---------------------------------------------------------------------------

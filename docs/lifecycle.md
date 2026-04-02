@@ -7,7 +7,7 @@ Actors are persistent by default. They run until explicitly stopped. The `stop_p
 ## Stop Policy ADT
 
 ```python
-from actor_for_agents import StopMode, AfterMessage, AfterIdle, StopPolicy
+from everything_is_an_actor import StopMode, AfterMessage, AfterIdle, StopPolicy
 
 class StopMode(Enum):
     NEVER = auto()      # Never auto-stop (default)

@@ -5,8 +5,8 @@ for building actor workflows without executing them.
 
 Example::
 
-    from actor_for_agents.frees import Free
-    from actor_for_agents.actor_f import ActorF, SpawnF, AskF, TellF
+    from everything_is_an_actor.frees import Free
+    from everything_is_an_actor.actor_f import ActorF, SpawnF, AskF, TellF
 
     def workflow(ref: ActorRef) -> Free[ActorF, str]:
         return (
@@ -24,10 +24,10 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
-from actor_for_agents.frees import Free, Suspend
+from everything_is_an_actor.frees import Free, Suspend
 
 if TYPE_CHECKING:
-    from actor_for_agents.ref import ActorRef
+    from everything_is_an_actor.ref import ActorRef
 
 A = TypeVar("A")
 B = TypeVar("B")
