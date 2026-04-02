@@ -19,8 +19,8 @@ The actor model solves all of these. `everything-is-an-actor` brings it to Pytho
 
 | Layer | What it provides |
 |-------|-----------------|
-| **Core** (`actor_for_agents`) | Generic actor primitives: mailbox, supervision, middleware |
-| **Agents** (`actor_for_agents.agents`) | AI-specific abstractions: `Task`, `AgentActor`, streaming events |
+| **Core** (`everything_is_an_actor`) | Generic actor primitives: mailbox, supervision, middleware |
+| **Agents** (`everything_is_an_actor.agents`) | AI-specific abstractions: `Task`, `AgentActor`, streaming events |
 
 ---
 
@@ -39,7 +39,7 @@ pip install everything-is-an-actor[redis]
 
 ```python
 import asyncio
-from actor_for_agents.agents import AgentSystem, AgentActor, Task
+from everything_is_an_actor.agents import AgentSystem, AgentActor, Task
 
 class ResearchAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:

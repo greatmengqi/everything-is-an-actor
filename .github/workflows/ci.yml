@@ -35,10 +35,10 @@ jobs:
         run: uv run pytest tests/ --ignore=tests/plugins -v
 
       - name: Lint
-        run: uv run ruff check actor_for_agents/
+        run: uv run ruff check everything_is_an_actor/
 
       - name: Format
-        run: uv run ruff format --check actor_for_agents/
+        run: uv run ruff format --check everything_is_an_actor/
 
   rust:
     runs-on: ubuntu-latest

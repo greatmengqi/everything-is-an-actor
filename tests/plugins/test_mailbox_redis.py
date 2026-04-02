@@ -2,8 +2,8 @@ import pytest
 
 redis = pytest.importorskip("redis.asyncio")
 
-from actor_for_agents.plugins.redis import RedisMailbox
-from actor_for_agents.ref import _Envelope, _Stop
+from everything_is_an_actor.plugins.redis import RedisMailbox
+from everything_is_an_actor.ref import _Envelope, _Stop
 
 
 pytestmark = pytest.mark.anyio
@@ -61,7 +61,7 @@ async def test_put_nowait_and_get_nowait_contract():
 
 
 async def test_system_enqueue_fallback_with_async_mailbox():
-    from actor_for_agents import Actor, ActorSystem
+    from everything_is_an_actor import Actor, ActorSystem
 
     class EchoActor(Actor):
         async def on_receive(self, message):

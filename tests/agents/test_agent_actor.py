@@ -5,8 +5,8 @@ import warnings
 
 import pytest
 
-from actor_for_agents import Actor, ActorSystem
-from actor_for_agents.agents import AgentActor, Task, TaskEvent, TaskResult, TaskStatus
+from everything_is_an_actor import Actor, ActorSystem
+from everything_is_an_actor.agents import AgentActor, Task, TaskEvent, TaskResult, TaskStatus
 
 
 pytestmark = pytest.mark.anyio
@@ -263,8 +263,8 @@ class BrokenChunkAgent(AgentActor[str, list]):
 
 async def test_streaming_execute_yields_task_chunk_events():
     """execute() as async generator emits task_chunk events for each yield."""
-    from actor_for_agents.agents import AgentSystem
-    from actor_for_agents.agents.task import StreamEvent, StreamResult
+    from everything_is_an_actor.agents import AgentSystem
+    from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
     system = AgentSystem()
     ref = await system.spawn(ChunkAgent, "chunker")
@@ -282,8 +282,8 @@ async def test_streaming_execute_yields_task_chunk_events():
 
 async def test_streaming_execute_result_is_list_of_chunks():
     """TaskResult.output is the list of all yielded chunks."""
-    from actor_for_agents.agents import AgentSystem
-    from actor_for_agents.agents.task import StreamResult
+    from everything_is_an_actor.agents import AgentSystem
+    from everything_is_an_actor.agents.task import StreamResult
 
     system = AgentSystem()
     ref = await system.spawn(ChunkAgent, "chunker2")
@@ -300,7 +300,7 @@ async def test_streaming_execute_result_is_list_of_chunks():
 
 async def test_streaming_execute_plain_ask_returns_list():
     """Plain ref.ask() also works for streaming execute() — returns list."""
-    from actor_for_agents import ActorSystem
+    from everything_is_an_actor import ActorSystem
 
     system = ActorSystem()
     ref = await system.spawn(ChunkAgent, "chunker3")
@@ -311,7 +311,7 @@ async def test_streaming_execute_plain_ask_returns_list():
 
 async def test_streaming_execute_error_propagates():
     """Exception raised inside async generator propagates to caller."""
-    from actor_for_agents.agents import AgentSystem
+    from everything_is_an_actor.agents import AgentSystem
 
     system = AgentSystem()
     ref = await system.spawn(BrokenChunkAgent, "broken-chunker")
@@ -332,7 +332,7 @@ class PassthroughAgent(AgentActor[str, list]):
     """Orchestrator that dispatch_streams a ChunkAgent and transparently re-yields chunks."""
 
     async def execute(self, input: str):
-        from actor_for_agents.agents.task import StreamEvent, StreamResult
+        from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
         async for item in self.context.dispatch_stream(ChunkAgent, Task(input=input)):
             match item:
@@ -344,8 +344,8 @@ class PassthroughAgent(AgentActor[str, list]):
 
 async def test_dispatch_stream_yields_child_chunks():
     """dispatch_stream propagates child task_chunk events to the caller."""
-    from actor_for_agents.agents import AgentSystem
-    from actor_for_agents.agents.task import StreamEvent, StreamResult
+    from everything_is_an_actor.agents import AgentSystem
+    from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
     system = AgentSystem()
     ref = await system.spawn(PassthroughAgent, "passthrough")
@@ -364,8 +364,8 @@ async def test_dispatch_stream_yields_child_chunks():
 
 async def test_dispatch_stream_ephemeral_child_cleaned_up():
     """Ephemeral child actor spawned by dispatch_stream is stopped after stream ends."""
-    from actor_for_agents.agents import AgentSystem
-    from actor_for_agents.actor import ActorContext
+    from everything_is_an_actor.agents import AgentSystem
+    from everything_is_an_actor.actor import ActorContext
 
     system = AgentSystem()
     ref = await system.spawn(PassthroughAgent, "passthrough2")

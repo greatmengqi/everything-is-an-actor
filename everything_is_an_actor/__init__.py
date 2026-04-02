@@ -2,7 +2,7 @@
 
 Usage::
 
-    from actor_for_agents import Actor, ActorSystem
+    from everything_is_an_actor import Actor, ActorSystem
 
     class Greeter(Actor):
         async def on_receive(self, message):
@@ -16,10 +16,10 @@ Usage::
         await system.shutdown()
 """
 
-from actor_for_agents.actor import Actor, ActorContext, AfterIdle, AfterMessage, StopMode, StopPolicy
-from actor_for_agents.agents.system import AgentSystem
-from actor_for_agents.frees import Free, FlatMap, Pure, Suspend, lift_free, run_free
-from actor_for_agents.actor_f import (
+from everything_is_an_actor.actor import Actor, ActorContext, AfterIdle, AfterMessage, StopMode, StopPolicy
+from everything_is_an_actor.agents.system import AgentSystem
+from everything_is_an_actor.frees import Free, FlatMap, Pure, Suspend, lift_free, run_free
+from everything_is_an_actor.actor_f import (
     ActorF,
     AskF,
     SpawnF,
@@ -32,11 +32,11 @@ from actor_for_agents.actor_f import (
     tell,
     tell_direct,
 )
-from actor_for_agents.interpreter import MockInterpreter, MockRef, MockSystem, run_free_mock
-from actor_for_agents.mailbox import Mailbox, MemoryMailbox
-from actor_for_agents.middleware import Middleware
-from actor_for_agents.ref import ActorRef, MailboxFullError, ReplyChannel
-from actor_for_agents.supervision import (
+from everything_is_an_actor.interpreter import MockInterpreter, MockRef, MockSystem, run_free_mock
+from everything_is_an_actor.mailbox import Mailbox, MemoryMailbox
+from everything_is_an_actor.middleware import Middleware
+from everything_is_an_actor.ref import ActorRef, MailboxFullError, ReplyChannel
+from everything_is_an_actor.supervision import (
     AllForOneStrategy,
     Directive,
     DirectiveResult,
@@ -50,7 +50,7 @@ from actor_for_agents.supervision import (
     sequence,
     traverse,
 )
-from actor_for_agents.system import ActorSystem, DeadLetter
+from everything_is_an_actor.system import ActorSystem, DeadLetter
 
 __all__ = [
     "Actor",

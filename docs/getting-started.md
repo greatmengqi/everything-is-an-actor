@@ -23,7 +23,7 @@ Requirements: Python 3.12+
 An actor is an isolated unit of computation with its own mailbox. Actors communicate only through messages — no shared state, no locks.
 
 ```python
-from actor_for_agents import Actor, ActorSystem
+from everything_is_an_actor import Actor, ActorSystem
 
 class CounterActor(Actor):
     def __init__(self):
@@ -69,7 +69,7 @@ async def main():
 When a child actor fails, the parent's supervisor strategy decides what happens.
 
 ```python
-from actor_for_agents import Actor, ActorSystem, OneForOneStrategy
+from everything_is_an_actor import Actor, ActorSystem, OneForOneStrategy
 
 class WorkerActor(Actor):
     async def on_receive(self, message):
@@ -105,7 +105,7 @@ Directives:
 Middleware intercepts every message and lifecycle event.
 
 ```python
-from actor_for_agents import Middleware
+from everything_is_an_actor import Middleware
 
 class LogMiddleware(Middleware):
     async def on_receive(self, ctx, message, next_fn):
@@ -126,8 +126,8 @@ Persist messages across process restarts:
 
 ```python
 import redis.asyncio as redis
-from actor_for_agents import ActorSystem
-from actor_for_agents.plugins.redis import RedisMailbox
+from everything_is_an_actor import ActorSystem
+from everything_is_an_actor.plugins.redis import RedisMailbox
 
 pool = redis.ConnectionPool.from_url("redis://localhost:6379")
 

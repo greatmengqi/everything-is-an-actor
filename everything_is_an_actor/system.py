@@ -9,13 +9,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from actor_for_agents.actor_f import ActorF
-    from actor_for_agents.frees import Free
+    from everything_is_an_actor.actor_f import ActorF
+    from everything_is_an_actor.frees import Free
 
-from actor_for_agents.actor import Actor, ActorContext, MsgT, RetT, StopMode, AfterMessage, AfterIdle
-from actor_for_agents.mailbox import Empty, Mailbox, MemoryMailbox
-from actor_for_agents.middleware import ActorMailboxContext, Middleware, NextFn, build_middleware_chain
-from actor_for_agents.ref import (
+from everything_is_an_actor.actor import Actor, ActorContext, MsgT, RetT, StopMode, AfterMessage, AfterIdle
+from everything_is_an_actor.mailbox import Empty, Mailbox, MemoryMailbox
+from everything_is_an_actor.middleware import ActorMailboxContext, Middleware, NextFn, build_middleware_chain
+from everything_is_an_actor.ref import (
     ActorRef,
     ActorStoppedError,
     MailboxFullError,
@@ -25,7 +25,7 @@ from actor_for_agents.ref import (
     _ReplyRegistry,
     _Stop,
 )
-from actor_for_agents.supervision import Directive, SupervisorStrategy
+from everything_is_an_actor.supervision import Directive, SupervisorStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -121,9 +121,9 @@ class ActorSystem:
 
         Example::
 
-            from actor_for_agents.frees import Free
-            from actor_for_agents.interpreter import run_free
-            from actor_for_agents.actor_f import spawn, tell, ask
+            from everything_is_an_actor.frees import Free
+            from everything_is_an_actor.interpreter import run_free
+            from everything_is_an_actor.actor_f import spawn, tell, ask
 
             async def workflow() -> Free[ActorF, str]:
                 r = await spawn("greeter", GreeterActor)
@@ -132,7 +132,7 @@ class ActorSystem:
 
             result = await system.run_free(workflow())
         """
-        from actor_for_agents.interpreter import run_free as interpret
+        from everything_is_an_actor.interpreter import run_free as interpret
 
         return await interpret(self, free)
 

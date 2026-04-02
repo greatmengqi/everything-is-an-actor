@@ -3,7 +3,7 @@
 import asyncio
 import time
 
-from actor_for_agents.agents import AgentActor, AgentSystem, Task
+from everything_is_an_actor.agents import AgentActor, AgentSystem, Task
 
 
 def fmt(n):
@@ -145,7 +145,7 @@ async def bench_traverse(n=100, trials=10):
 
 async def bench_streaming(chunks=100, trials=20):
     """ask_stream(): throughput of task_chunk events through AgentActor."""
-    from actor_for_agents.agents.task import StreamEvent, StreamResult
+    from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
     system = AgentSystem("bench")
     ref = await system.spawn(ChunkAgent, "chunks")
