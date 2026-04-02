@@ -25,11 +25,11 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
         I — input type  (the type of Task.input and execute()'s argument)
         O — output type (the return type of execute() and TaskResult.output)
 
-    Override ``execute()`` to implement agent logic.
+    Override ``execute()`` for async logic or ``receive()`` for sync (blocking) logic.
     Optionally override ``on_started()``, ``on_stopped()``, ``on_restart()``.
     Do NOT override ``on_receive()`` — it is managed by the framework.
 
-    Example::
+    Example (async)::
 
         class SummaryAgent(AgentActor[str, str]):
             async def execute(self, input: str) -> str:
@@ -43,6 +43,20 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
         ref = await system.spawn(SummaryAgent, "summarizer")
         result: TaskResult[str] = await ref.ask(Task(input="long document..."))
         output: str = result.output
+
+    Example (sync with blocking code)::
+
+        class FileAgent(AgentActor[str, str]):
+            def receive(self, input: str) -> str:
+                # Runs in thread pool automatically, won't block other actors
+                with open(input) as f:
+                    return f.read()
+
+        system = ActorSystem("app")
+        ref = await system.spawn(FileAgent, "reader")
+        result: TaskResult[str] = await ref.ask(Task(input="file.txt"))
+        output: str = result.output
+
     """
 
     def __init__(self) -> None:
@@ -56,13 +70,19 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
         from everything_is_an_actor.agents.run_stream import _run_event_sink
 
         self._event_sink: ActorRef | None = _run_event_sink.get()
+        # Check if subclass implements sync receive() instead of async execute()
+        self._has_sync_receive = (
+            "receive" in self.__class__.__dict__
+            and callable(self.__class__.__dict__["receive"])
+            and not inspect.iscoroutinefunction(self.__class__.__dict__["receive"])
+        )
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if "on_receive" in cls.__dict__:
             warnings.warn(
                 f"{cls.__name__}: do not override on_receive() in AgentActor subclasses. "
-                "Implement execute() instead — the framework manages on_receive().",
+                "Implement execute() or receive() instead — the framework manages on_receive().",
                 UserWarning,
                 stacklevel=2,
             )
