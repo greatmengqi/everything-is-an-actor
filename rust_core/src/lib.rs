@@ -278,6 +278,63 @@ fn bench_rust_mailbox_throughput(count: usize) -> f64 {
     throughput
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_envelope_creation() {
+        let envelope = Envelope {
+            id: "test-id".to_string(),
+            sender: Some("sender".to_string()),
+            message: pyo3::Python::with_gil(|py| py.None().into_py(py)),
+            reply_tx: None,
+        };
+        assert_eq!(envelope.id, "test-id");
+        assert_eq!(envelope.sender, Some("sender".to_string()));
+    }
+
+    #[test]
+    fn test_actor_inner_creation() {
+        let (actor, receiver) = RustActorInner::new("/test/actor".to_string(), 100);
+        assert!(actor.is_alive());
+        assert!(!receiver.is_empty());
+    }
+
+    #[test]
+    fn test_actor_stop() {
+        let (actor, _receiver) = RustActorInner::new("/test/actor".to_string(), 100);
+        assert!(actor.is_alive());
+        actor.stop();
+        assert!(!actor.is_alive());
+    }
+
+    #[test]
+    fn test_sender_clone() {
+        let (actor, _receiver) = RustActorInner::new("/test/actor".to_string(), 100);
+        let _sender1 = actor.get_sender();
+        let _sender2 = actor.get_sender();
+        // Both senders should be valid Arc references
+    }
+}
+
+#[cfg(test)]
+mod benchmark_tests {
+    use super::*;
+
+    #[test]
+    fn test_mailbox_throughput_small() {
+        let (tx, rx) = bounded(1000);
+        thread::spawn(move || while rx.recv().is_ok() {});
+        for i in 0..100 {
+            let msg = format!("message {}", i);
+            let _ = tx.send(msg);
+        }
+        drop(tx);
+        // Test completes without deadlock
+    }
+}
+
 #[pymodule]
 pub fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RustSystem>()?;
