@@ -262,6 +262,72 @@ class TestDispatcherIntegration:
         await dispatcher.shutdown()
 
 
+class TestNamedDispatchers:
+    @pytest.mark.anyio
+    async def test_named_dispatchers_basic(self):
+        class Echo(Actor[str, str]):
+            async def on_receive(self, message):
+                return f"echo:{message}"
+
+        system = ActorSystem("test", dispatchers={
+            "io": PoolDispatcher(pool_size=1),
+        })
+        ref = await system.spawn(Echo, "echo", dispatcher="io")
+        result = await system.ask(ref, "hello")
+        assert result == "echo:hello"
+        await system.shutdown()  # auto-shuts dispatcher
+
+    @pytest.mark.anyio
+    async def test_named_dispatchers_multiple(self):
+        class LoopReporter(Actor[str, str]):
+            async def on_receive(self, message):
+                return str(id(asyncio.get_running_loop()))
+
+        system = ActorSystem("test", dispatchers={
+            "pool-a": PoolDispatcher(pool_size=1),
+            "pool-b": PoolDispatcher(pool_size=1),
+        })
+        ref_a = await system.spawn(LoopReporter, "a", dispatcher="pool-a")
+        ref_b = await system.spawn(LoopReporter, "b", dispatcher="pool-b")
+        ref_c = await system.spawn(LoopReporter, "c")  # no dispatcher, caller loop
+
+        loop_a = await system.ask(ref_a, "x")
+        loop_b = await system.ask(ref_b, "x")
+        loop_c = await system.ask(ref_c, "x")
+        caller = str(id(asyncio.get_running_loop()))
+
+        # All three on different loops
+        assert loop_a != caller
+        assert loop_b != caller
+        assert loop_c == caller
+        assert loop_a != loop_b
+        await system.shutdown()
+
+    @pytest.mark.anyio
+    async def test_unknown_dispatcher_raises(self):
+        system = ActorSystem("test", dispatchers={"io": PoolDispatcher(pool_size=1)})
+        with pytest.raises(ValueError, match="Unknown dispatcher 'gpu'"):
+            await system.spawn(Actor, "x", dispatcher="gpu")
+        await system.shutdown()
+
+    @pytest.mark.anyio
+    async def test_lazy_start(self):
+        """Dispatcher is started lazily on first spawn, not at system init."""
+        d = PoolDispatcher(pool_size=1)
+        system = ActorSystem("test", dispatchers={"io": d})
+        assert not d._started  # not started yet
+
+        class Echo(Actor[str, str]):
+            async def on_receive(self, message):
+                return message
+
+        ref = await system.spawn(Echo, "e", dispatcher="io")
+        assert d._started  # started on first use
+        await system.ask(ref, "hi")
+        await system.shutdown()
+        assert not d._started  # shutdown cleans up
+
+
 class TestDispatcherAgentActor:
     @pytest.mark.anyio
     async def test_agent_actor_on_pool_dispatcher(self):

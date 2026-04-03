@@ -72,6 +72,7 @@ class ActorSystem:
         mailbox_cls: type[Mailbox] = MemoryMailbox,
         threaded: bool = False,
         dispatcher: Any = None,
+        dispatchers: dict[str, Any] | None = None,
     ) -> None:
         import uuid as _uuid
 
@@ -85,7 +86,9 @@ class ActorSystem:
         self._reply_channel = reply_channel or ReplyChannel()
         self._mailbox_cls = mailbox_cls
         self._threaded = threaded
-        self._dispatcher = dispatcher  # Dispatcher | None
+        self._dispatcher = dispatcher  # Dispatcher | None (legacy single dispatcher)
+        self._dispatchers: dict[str, Any] = dispatchers or {}  # Named dispatchers
+        self._dispatchers_started: set[str] = set()  # Track which have been started
         # Shared thread pool for actors to run blocking I/O
         from concurrent.futures import ThreadPoolExecutor
 
@@ -113,13 +116,16 @@ class ActorSystem:
         mailbox_size: int = 256,
         mailbox: Mailbox | None = None,
         middlewares: list[Middleware] | None = None,
+        dispatcher: str | None = None,
     ) -> ActorRef[MsgT, RetT]:
         """Spawn a root-level actor.
 
         Args:
-            mailbox_cls: Mailbox class to use. Defaults to MemoryMailbox.
             mailbox_size: Size hint for the default mailbox.
             mailbox: Custom mailbox instance. If provided, overrides mailbox_cls.
+            dispatcher: Named dispatcher for cross-loop execution.
+                Looks up from ``dispatchers`` dict passed to ActorSystem.
+                Auto-starts the dispatcher on first use.
         """
         # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.validation import validate_agent_actor_compatibility
@@ -128,11 +134,27 @@ class ActorSystem:
         if name in self._root_cells:
             raise ValueError(f"Root actor '{name}' already exists")
 
+        # Resolve dispatcher: named > system-level > None
+        resolved_dispatcher = None
+        if dispatcher is not None:
+            if dispatcher not in self._dispatchers:
+                raise ValueError(
+                    f"Unknown dispatcher '{dispatcher}'. "
+                    f"Available: {list(self._dispatchers.keys())}"
+                )
+            resolved_dispatcher = self._dispatchers[dispatcher]
+            # Lazy start on first use
+            if dispatcher not in self._dispatchers_started:
+                await resolved_dispatcher.start()
+                self._dispatchers_started.add(dispatcher)
+        elif self._dispatcher is not None:
+            resolved_dispatcher = self._dispatcher
+
         # Determine target loop via dispatcher
         target_loop: asyncio.AbstractEventLoop | None = None
         actual_mailbox = mailbox
-        if self._dispatcher is not None:
-            target_loop = self._dispatcher.assign(actor_cls, name)
+        if resolved_dispatcher is not None:
+            target_loop = resolved_dispatcher.assign(actor_cls, name)
             if target_loop is asyncio.get_running_loop():
                 target_loop = None  # Same loop — no cross-loop overhead
             elif actual_mailbox is None:
@@ -198,6 +220,19 @@ class ActorSystem:
         self._root_cells.clear()
         self._replies.reject_all(ActorStoppedError("ActorSystem shutting down"))
         await self._reply_channel.stop_listener()
+        # Shutdown all named dispatchers
+        for disp_name in list(self._dispatchers_started):
+            try:
+                await self._dispatchers[disp_name].shutdown()
+            except Exception:
+                logger.exception("Error shutting down dispatcher '%s'", disp_name)
+        self._dispatchers_started.clear()
+        # Shutdown legacy single dispatcher
+        if self._dispatcher is not None:
+            try:
+                await self._dispatcher.shutdown()
+            except Exception:
+                logger.exception("Error shutting down dispatcher")
         if self._executor is not None:
             self._executor.shutdown(wait=False)
             # Clean up thread-local event loops after executor shutdown
