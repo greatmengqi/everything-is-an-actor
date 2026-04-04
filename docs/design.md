@@ -82,6 +82,58 @@ Actors are persistent by default (`StopMode.NEVER`). The `stop_policy()` method 
 
 The policy is checked after each message is processed. `tell()` (spawning temporary actors) requires a non-NEVER policy to prevent actor leaks.
 
+### Virtual Actor Registry
+
+Virtual actors exist conceptually forever but only consume resources when active. The `VirtualActorRegistry` manages their lifecycle.
+
+Two kinds of actor coexist:
+
+| Type | Lifecycle | Recovery on restart | Use case |
+|------|-----------|-------------------|----------|
+| **Declarative** | Code-defined, lives with the process | Code recreates on startup | Infrastructure (Gateway, Router, RateLimiter) |
+| **Virtual** | On-demand activation, idle deactivation | No recovery — messages trigger reactivation | Business entities (ChatSession, AgentTask) |
+
+```python
+system = ActorSystem("app")
+
+# Declarative: always running
+gateway = await system.spawn(Gateway, "gateway")
+
+# Virtual: only activated when needed
+registry = VirtualActorRegistry(system)
+reply = await registry.ask(ChatAgent, "session_123", "hello")
+```
+
+Key design decisions (Orleans model):
+
+- **Flat structure**: virtual actors have no parent-child relationships. They address each other by ID through the registry, not through `context.spawn()`.
+- **No dynamic topology recovery**: process restart does not rebuild previous actor trees. Virtual actors reactivate on demand; declarative actors are recreated by code.
+- **State is the business's responsibility**: the runtime guarantees `on_started` (activation) and `on_stopped` (deactivation) are called. What gets loaded/saved in those hooks is up to the business.
+- **Supervision is per-activation only**: `on_receive` exception → supervision strategy decides restart/stop. This does not persist across process restarts.
+
+`context.spawn()` is for **ephemeral child actors** (run and discard, no cross-restart recovery). Long-lived actors go through `VirtualActorRegistry`.
+
+**Registry store is pluggable**: default is in-memory. Replace with a persistent backend (Redis, DB) for:
+- Querying "which virtual actors existed before" after restart (`known_ids()`)
+- Push scenarios: scheduled tasks, broadcasts that need to know all actor IDs
+
+```python
+class RedisRegistryStore(RegistryStore):
+    async def put(self, key): await redis.sadd("actors", key)
+    async def delete(self, key): await redis.srem("actors", key)
+    async def list_all(self): return list(await redis.smembers("actors"))
+
+registry = VirtualActorRegistry(system, store=RedisRegistryStore())
+```
+
+### Lifecycle guarantees
+
+The runtime guarantees:
+- **on_started**: always called before the actor processes any message. If it fails, the actor is not created.
+- **on_stopped**: always called when the actor stops (idle timeout, manual deactivation, system shutdown). Protected by `asyncio.shield` — external cancellation cannot skip it. Has a timeout (10s) to prevent deadlocks. On `CancelledError`, retried once.
+
+The only case where `on_stopped` does not run: process killed by OS (kill -9, OOM). This is an OS-level limitation no user-space code can handle. For critical state, business code should save after each message, not rely solely on `on_stopped`.
+
 ### Free Monad API
 
 For composable actor workflows, the framework provides `Free[ActorF, A]` monad:
