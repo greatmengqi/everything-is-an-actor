@@ -52,6 +52,7 @@ from everything_is_an_actor.supervision import (
     traverse,
 )
 from everything_is_an_actor.system import ActorSystem, DeadLetter
+from everything_is_an_actor.virtual import RegistryStore, VirtualActorRegistry
 
 __all__ = [
     "Actor",
@@ -103,6 +104,8 @@ __all__ = [
     "StopF",
     "tell",
     "tell_direct",
+    "RegistryStore",
+    "VirtualActorRegistry",
     "map2",
     "product",
     "sequence",

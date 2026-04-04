@@ -674,6 +674,16 @@ class _ActorCell:
             await self._shutdown()
 
     async def _shutdown(self) -> None:
+        # Shield the entire shutdown sequence from cancellation.
+        # on_started/on_stopped are lifecycle guarantees — they must complete.
+        try:
+            await asyncio.shield(self._shutdown_inner())
+        except asyncio.CancelledError:
+            # shield raises CancelledError on the outer task but _shutdown_inner continues.
+            # Wait for it to actually finish.
+            pass
+
+    async def _shutdown_inner(self) -> None:
         self.stopped = True
         # Parallel child shutdown prevents cascading timeouts.
         child_tasks = []
@@ -710,7 +720,16 @@ class _ActorCell:
                 logger.exception("Error in middleware on_stopped for %s", self.path)
         if self.actor is not None:
             try:
-                await self.actor.on_stopped()
+                await asyncio.wait_for(self.actor.on_stopped(), timeout=_MIDDLEWARE_HOOK_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.error("on_stopped timed out for %s", self.path)
+            except asyncio.CancelledError:
+                # on_stopped must complete even during cancellation — run unshielded retry
+                logger.warning("on_stopped cancelled for %s, retrying once", self.path)
+                try:
+                    await asyncio.wait_for(self.actor.on_stopped(), timeout=_MIDDLEWARE_HOOK_TIMEOUT)
+                except Exception:
+                    logger.exception("on_stopped retry failed for %s", self.path)
             except Exception:
                 logger.exception("Error in on_stopped for %s", self.path)
         # Remove from parent
