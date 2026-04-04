@@ -62,7 +62,7 @@ class LifecycleAgent(AgentActor):
 async def test_execute_returns_task_result():
     system = ActorSystem("t")
     ref = await system.spawn(EchoAgent, "echo")
-    result = await ref.ask(Task(input="hello"))
+    result = await system.ask(ref, Task(input="hello"))
     assert isinstance(result, TaskResult)
     assert result.output == "hello"
     assert result.status == TaskStatus.COMPLETED
@@ -74,7 +74,7 @@ async def test_task_id_preserved_in_result():
     system = ActorSystem("t")
     ref = await system.spawn(EchoAgent, "echo")
     task = Task(input="x", id="my-task-id")
-    result = await ref.ask(task)
+    result = await system.ask(ref, task)
     assert result.task_id == "my-task-id"
     await system.shutdown()
 
@@ -83,7 +83,7 @@ async def test_execute_with_complex_input():
     system = ActorSystem("t")
     ref = await system.spawn(EchoAgent, "echo")
     payload = {"key": [1, 2, 3], "nested": {"a": True}}
-    result = await ref.ask(Task(input=payload))
+    result = await system.ask(ref, Task(input=payload))
     assert result.output == payload
     await system.shutdown()
 
@@ -97,7 +97,7 @@ async def test_execute_exception_propagates_to_caller():
     system = ActorSystem("t")
     ref = await system.spawn(BrokenAgent, "broken")
     with pytest.raises(Exception, match="boom: bad"):
-        await ref.ask(Task(input="bad"))
+        await system.ask(ref, Task(input="bad"))
     await system.shutdown()
 
 
@@ -115,7 +115,7 @@ async def test_task_failed_event_carries_error_context():
     ref._cell.actor._event_sink = sink_ref  # type: ignore[union-attr]
 
     with pytest.raises(Exception, match="boom: bad"):
-        await ref.ask(Task(input="bad"))
+        await system.ask(ref, Task(input="bad"))
 
     await asyncio.sleep(0.05)  # let tell() deliver
     failed_events = [e for e in collected if e.type == "task_failed"]
@@ -141,7 +141,7 @@ async def test_actor_still_alive_after_supervised_failure():
             return "ok"
 
     ref = await system.spawn(ParentAgent, "parent")
-    result = await ref.ask(Task(input="crash"))
+    result = await system.ask(ref, Task(input="crash"))
     assert result.output == "caught"
     await system.shutdown()
 
@@ -155,7 +155,7 @@ async def test_emit_progress_no_op_without_sink():
     """emit_progress with no event sink attached should not raise."""
     system = ActorSystem("t")
     ref = await system.spawn(ProgressAgent, "prog")
-    result = await ref.ask(Task(input="x"))
+    result = await system.ask(ref, Task(input="x"))
     assert result.output == "done:x"
     await system.shutdown()
 
@@ -178,7 +178,7 @@ async def test_on_started_and_on_stopped_called():
     system = ActorSystem("t")
     ref = await system.spawn(LifecycleAgent, "lc")
     actor: LifecycleAgent = ref._cell.actor  # type: ignore[assignment]
-    await ref.ask(Task(input="go"))
+    await system.ask(ref, Task(input="go"))
     assert "started" in actor.events
     assert "execute:go" in actor.events
     await system.shutdown()
@@ -198,7 +198,7 @@ async def test_on_started_called_before_execute():
 
     system = ActorSystem("t")
     ref = await system.spawn(OrderedAgent, "ordered")
-    await ref.ask(Task(input="x"))
+    await system.ask(ref, Task(input="x"))
     assert order.index("started") < order.index("execute")
     await system.shutdown()
 
@@ -212,7 +212,7 @@ async def test_wrong_message_type_raises_type_error():
     system = ActorSystem("t")
     ref = await system.spawn(EchoAgent, "echo")
     with pytest.raises(Exception, match="expects Task"):
-        await ref.ask("raw string, not a Task")
+        await system.ask(ref, "raw string, not a Task")
     await system.shutdown()
 
 
@@ -270,7 +270,7 @@ async def test_streaming_execute_yields_task_chunk_events():
     ref = await system.spawn(ChunkAgent, "chunker")
 
     events: list[TaskEvent] = []
-    async for item in ref.ask_stream(Task(input="x")):
+    async for item in system.ask_stream(ref, Task(input="x")):
         if isinstance(item, StreamEvent):
             events.append(item.event)
 
@@ -289,7 +289,7 @@ async def test_streaming_execute_result_is_list_of_chunks():
     ref = await system.spawn(ChunkAgent, "chunker2")
 
     result = None
-    async for item in ref.ask_stream(Task(input="y")):
+    async for item in system.ask_stream(ref, Task(input="y")):
         if isinstance(item, StreamResult):
             result = item.result
 
@@ -299,12 +299,12 @@ async def test_streaming_execute_result_is_list_of_chunks():
 
 
 async def test_streaming_execute_plain_ask_returns_list():
-    """Plain ref.ask() also works for streaming execute() — returns list."""
+    """Plain system.ask() also works for streaming execute() — returns list."""
     from everything_is_an_actor import ActorSystem
 
     system = ActorSystem()
     ref = await system.spawn(ChunkAgent, "chunker3")
-    result: TaskResult = await ref.ask(Task(input="z"))
+    result: TaskResult = await system.ask(ref, Task(input="z"))
     assert result.output == ["z-0", "z-1", "z-2"]
     await system.shutdown()
 
@@ -317,7 +317,7 @@ async def test_streaming_execute_error_propagates():
     ref = await system.spawn(BrokenChunkAgent, "broken-chunker")
 
     with pytest.raises(ValueError, match="mid-stream failure"):
-        async for _ in ref.ask_stream(Task(input="x")):
+        async for _ in system.ask_stream(ref, Task(input="x")):
             pass
 
     await system.shutdown()
@@ -351,7 +351,7 @@ async def test_dispatch_stream_yields_child_chunks():
     ref = await system.spawn(PassthroughAgent, "passthrough")
 
     chunks = []
-    async for item in ref.ask_stream(Task(input="q")):
+    async for item in system.ask_stream(ref, Task(input="q")):
         match item:
             case StreamEvent(event=e) if e.type == "task_chunk":
                 chunks.append(e.data)
@@ -370,7 +370,7 @@ async def test_dispatch_stream_ephemeral_child_cleaned_up():
     system = AgentSystem()
     ref = await system.spawn(PassthroughAgent, "passthrough2")
 
-    async for _ in ref.ask_stream(Task(input="x")):
+    async for _ in system.ask_stream(ref, Task(input="x")):
         pass
 
     await system.shutdown()

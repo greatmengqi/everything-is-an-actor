@@ -37,10 +37,10 @@ class LiveInterpreter:
             ref = await self._system.spawn(op.actor_cls, op.name)
             return Pure(ref)
         elif isinstance(op, TellOp):
-            await op.ref.tell(op.msg)
+            await op.ref._tell(op.msg)
             return Pure(None)
         elif isinstance(op, AskOp):
-            result = await op.ref.ask(op.msg)
+            result = await op.ref._ask(op.msg)
             return Pure(result)
         elif isinstance(op, StopOp):
             op.ref.stop()
@@ -68,10 +68,10 @@ async def run_free(system: "ActorSystem", free: Free[ActorF, A]) -> A:
         from everything_is_an_actor.actor_f import TellF as TellOp, StopF as StopOp
 
         if isinstance(op, TellOp):
-            await op.ref.tell(op.msg)
+            await op.ref._tell(op.msg)
             return None  # type: ignore[return-value]
         elif isinstance(op, AskOp):
-            return await op.ref.ask(op.msg)
+            return await op.ref._ask(op.msg)
         elif isinstance(op, SpawnOp):
             ref = await system.spawn(op.actor_cls, op.name)
             return ref  # type: ignore[return-value]
@@ -140,10 +140,10 @@ class MockRef:
         self._replies: dict[Any, Any] = {}
         self._stopped = False
 
-    def tell(self, msg: Any) -> None:
+    def _tell(self, msg: Any) -> None:
         self._sent.append(msg)
 
-    def ask(self, msg: Any, *, timeout: float = 5.0) -> Any:
+    def _ask(self, msg: Any, *, timeout: float = 5.0) -> Any:
         """Synchronous ask for MockRef (no real async needed)."""
         self._sent.append(msg)
         if msg in self._replies:
@@ -196,11 +196,11 @@ class MockInterpreterSync:
             ref = self._system.get_ref(op.name)
             return Pure(ref)
         elif isinstance(op, TellOp):
-            op.ref.tell(op.msg)
+            op.ref._tell(op.msg)
             return Pure(None)
         elif isinstance(op, AskOp):
-            # MockRef.ask is synchronous in this interpreter
-            result = op.ref.ask(op.msg)
+            # MockRef._ask is synchronous in this interpreter
+            result = op.ref._ask(op.msg)
             return Pure(result)
         elif isinstance(op, StopOp):
             op.ref.stop()
@@ -229,11 +229,11 @@ class MockInterpreter:
             ref = self._system.get_ref(op.name)
             return Pure(ref)
         elif isinstance(op, TellOp):
-            op.ref.tell(op.msg)
+            op.ref._tell(op.msg)
             return Pure(None)
         elif isinstance(op, AskOp):
             # Support both MockRef (sync) and ActorRef (async)
-            result = await op.ref.ask(op.msg)
+            result = await op.ref._ask(op.msg)
             return Pure(result)
         elif isinstance(op, StopOp):
             op.ref.stop()

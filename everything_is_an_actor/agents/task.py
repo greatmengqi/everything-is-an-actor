@@ -121,7 +121,7 @@ class TaskResult(Generic[OutputT]):
 
     Example::
 
-        result: TaskResult[str] = await ref.ask(Task(input="..."))
+        result: TaskResult[str] = await system.ask(ref, Task(input="..."))
         match result:
             case TaskResult(output=o) if o is not None:
                 print(f"Success: {o}")
@@ -251,7 +251,7 @@ class TaskEvent:
 
 
 class StreamItem(ABC):
-    """Sealed base for items yielded by ``ActorRef.ask_stream()``.
+    """Sealed base for items yielded by ``system.ask_stream()``.
 
     Variants::
 
@@ -260,7 +260,7 @@ class StreamItem(ABC):
 
     Idiomatic consumer::
 
-        async for item in ref.ask_stream(Task(input="...")):
+        async for item in system.ask_stream(ref, Task(input="...")):
             match item:
                 case StreamEvent(event=e):
                     print(e.type, e.data)

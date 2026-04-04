@@ -75,7 +75,7 @@ async def test_system_enqueue_fallback_with_async_mailbox():
     try:
         # This exercises _ActorCell.enqueue fallback path:
         # put_nowait() -> False, then await put() -> True
-        result = await ref.ask("hello", timeout=3.0)
+        result = await system.ask(ref, "hello", timeout=3.0)
         assert result == "hello"
     finally:
         await system.shutdown()

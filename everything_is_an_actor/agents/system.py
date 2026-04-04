@@ -49,6 +49,10 @@ class AgentSystem(ActorSystem):
         ``backend`` is reserved for M5 (distributed actor execution).
         Currently ignored — all actors run in-process.
         """
+        # Validate AgentActor compatibility at spawn-time
+        from everything_is_an_actor.validation import validate_agent_actor_compatibility
+        validate_agent_actor_compatibility(actor_cls, mode="agent")
+
         return await super().spawn(
             actor_cls,
             name,
@@ -114,7 +118,7 @@ class AgentSystem(ActorSystem):
 
         async def _drive() -> None:
             try:
-                await root_ref.ask(Task(input=input), timeout=timeout)
+                await root_ref._ask(Task(input=input), timeout=timeout)
             except Exception as exc:
                 run_exc.append(exc)
             finally:

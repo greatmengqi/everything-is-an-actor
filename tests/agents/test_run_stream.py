@@ -333,7 +333,7 @@ async def test_agent_system_plain_spawn_still_works():
 
     system = AgentSystem()
     ref = await system.spawn(SimpleActor, "simple")
-    result = await ref.ask("hello")
+    result = await system.ask(ref, "hello")
     assert result == "HELLO"
     await system.shutdown()
 
@@ -363,7 +363,7 @@ async def test_ask_stream_yields_started_and_completed():
     ref = await system.spawn(EchoAgent, "echo")
 
     items = []
-    async for item in ref.ask_stream(Task(input="hi")):
+    async for item in system.ask_stream(ref, Task(input="hi")):
         items.append(item)
 
     events = [i.event for i in items if isinstance(i, StreamEvent)]
@@ -383,7 +383,7 @@ async def test_ask_stream_yields_progress_events():
     ref = await system.spawn(ProgressAgent, "prog")
 
     events: list[TaskEvent] = []
-    async for item in ref.ask_stream(Task(input="x")):
+    async for item in system.ask_stream(ref, Task(input="x")):
         match item:
             case StreamEvent(event=e):
                 events.append(e)
@@ -400,7 +400,7 @@ async def test_ask_stream_reraises_agent_error():
     ref = await system.spawn(BrokenAgent, "broken")
 
     with pytest.raises(ValueError, match="boom"):
-        async for _ in ref.ask_stream(Task(input="x")):
+        async for _ in system.ask_stream(ref, Task(input="x")):
             pass
 
     await system.shutdown()
@@ -412,7 +412,7 @@ async def test_ask_stream_child_events_included():
     ref = await system.spawn(OrchestratorAgent, "orch")
 
     events: list[TaskEvent] = []
-    async for item in ref.ask_stream(Task(input="q")):
+    async for item in system.ask_stream(ref, Task(input="q")):
         if isinstance(item, StreamEvent):
             events.append(item.event)
 
@@ -431,7 +431,7 @@ async def test_ask_stream_no_orphaned_collector():
     system = AgentSystem()
     ref = await system.spawn(EchoAgent, "echo2")
 
-    async for _ in ref.ask_stream(Task(input="x")):
+    async for _ in system.ask_stream(ref, Task(input="x")):
         pass
 
     await asyncio.sleep(0.05)
@@ -448,7 +448,7 @@ async def test_ask_stream_reusable_ref():
 
     for expected_input in ("first", "second"):
         items = []
-        async for item in ref.ask_stream(Task(input=expected_input)):
+        async for item in system.ask_stream(ref, Task(input=expected_input)):
             items.append(item)
         result = next(i.result for i in items if isinstance(i, StreamResult))
         assert result.output == f"done:{expected_input}"

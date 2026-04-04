@@ -129,7 +129,7 @@ async def ask_with_retry(
             max_attempts=max_attempts,
         )
         try:
-            return await ref.ask(msg, timeout=timeout)
+            return await ref._ask(msg, timeout=timeout)
         except retry_exceptions as exc:
             last_exc = exc
             if attempt >= max_attempts:

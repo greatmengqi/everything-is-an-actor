@@ -61,8 +61,8 @@ async def test_idempotent_envelope_returns_cached_result():
     m1 = RetryEnvelope.wrap("x", idempotency_key="same-key")
     m2 = RetryEnvelope.wrap("x", idempotency_key="same-key", attempt=2, max_attempts=3)
 
-    r1 = await ref.ask(m1, timeout=1.0)
-    r2 = await ref.ask(m2, timeout=1.0)
+    r1 = await system.ask(ref, m1, timeout=1.0)
+    r2 = await system.ask(ref, m2, timeout=1.0)
 
     assert r1 == "ok:x"
     assert r2 == "ok:x"

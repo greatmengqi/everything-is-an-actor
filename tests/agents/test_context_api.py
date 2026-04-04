@@ -59,7 +59,7 @@ async def test_ask_returns_result():
             return r.output
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    result = await ref.ask(Task(input="hello"))
+    result = await system.ask(ref, Task(input="hello"))
     assert result.output == "hello"
     await system.shutdown()
 
@@ -73,7 +73,7 @@ async def test_ask_ephemeral_child_cleaned_up():
             return r.output
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    await ref.ask(Task(input="x"))
+    await system.ask(ref, Task(input="x"))
     await system.shutdown()  # hangs if child leaked
 
 
@@ -87,7 +87,7 @@ async def test_ask_propagates_exception():
 
     ref = await system.spawn(OrchestratorAgent, "orch")
     with pytest.raises(ValueError, match="fail:boom"):
-        await ref.ask(Task(input="boom"))
+        await system.ask(ref, Task(input="boom"))
     await system.shutdown()
 
 
@@ -109,7 +109,7 @@ async def test_sequence_returns_all_results_in_order():
             return [r.output for r in results]
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    result = await ref.ask(Task(input="x"))
+    result = await system.ask(ref, Task(input="x"))
     assert result.output == ["a", "b", "c"]
     await system.shutdown()
 
@@ -122,7 +122,7 @@ async def test_sequence_empty_returns_empty_list():
             return await self.context.sequence([])
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    result = await ref.ask(Task(input="x"))
+    result = await system.ask(ref, Task(input="x"))
     assert result.output == []
     await system.shutdown()
 
@@ -149,7 +149,7 @@ async def test_sequence_cancels_siblings_on_failure():
 
     ref = await system.spawn(OrchestratorAgent, "orch")
     with pytest.raises(ValueError, match="fail:x"):
-        await ref.ask(Task(input="go"))
+        await system.ask(ref, Task(input="go"))
 
     assert side_effects == []  # sibling was cancelled before completing
     await system.shutdown()
@@ -169,7 +169,7 @@ async def test_traverse_maps_inputs_through_agent():
             return [r.output for r in results]
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    result = await ref.ask(Task(input="x"))
+    result = await system.ask(ref, Task(input="x"))
     assert result.output == ["A", "B", "C"]
     await system.shutdown()
 
@@ -182,7 +182,7 @@ async def test_traverse_empty_returns_empty():
             return await self.context.traverse([], UpperAgent)
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    result = await ref.ask(Task(input="x"))
+    result = await system.ask(ref, Task(input="x"))
     assert result.output == []
     await system.shutdown()
 
@@ -204,7 +204,7 @@ async def test_race_returns_fastest_result():
             return r.output
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    result = await ref.ask(Task(input="go"))
+    result = await system.ask(ref, Task(input="go"))
     assert result.output == "fast"
     await system.shutdown()
 
@@ -231,7 +231,7 @@ async def test_race_cancels_losers():
             return r.output
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    result = await ref.ask(Task(input="go"))
+    result = await system.ask(ref, Task(input="go"))
     assert result.output == "winner"
     assert "loser" not in completed
     await system.shutdown()
@@ -250,7 +250,7 @@ async def test_race_propagates_exception_if_first_fails():
 
     ref = await system.spawn(OrchestratorAgent, "orch")
     with pytest.raises(ValueError, match="fail:bad"):
-        await ref.ask(Task(input="go"))
+        await system.ask(ref, Task(input="go"))
     await system.shutdown()
 
 
@@ -264,7 +264,7 @@ async def test_race_raises_on_empty():
 
     ref = await system.spawn(OrchestratorAgent, "orch")
     with pytest.raises(ValueError, match="race"):
-        await ref.ask(Task(input="go"))
+        await system.ask(ref, Task(input="go"))
     await system.shutdown()
 
 
@@ -285,7 +285,7 @@ async def test_zip_returns_pair():
             return (a.output, b.output)
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    result = await ref.ask(Task(input="x"))
+    result = await system.ask(ref, Task(input="x"))
     assert result.output == ("hello", "WORLD")
     await system.shutdown()
 
@@ -302,7 +302,7 @@ async def test_zip_cancels_on_failure():
 
     ref = await system.spawn(OrchestratorAgent, "orch")
     with pytest.raises(ValueError, match="fail:bad"):
-        await ref.ask(Task(input="x"))
+        await system.ask(ref, Task(input="x"))
     await system.shutdown()
 
 
@@ -326,7 +326,7 @@ async def test_stream_yields_child_chunks():
 
     ref = await system.spawn(OrchestratorAgent, "orch")
     chunks = []
-    async for item in ref.ask_stream(Task(input="q")):
+    async for item in system.ask_stream(ref, Task(input="q")):
         match item:
             case StreamEvent(event=e) if e.type == "task_chunk":
                 chunks.append(e.data)
@@ -351,7 +351,7 @@ async def test_stream_ephemeral_child_cleaned_up():
                         pass
 
     ref = await system.spawn(OrchestratorAgent, "orch")
-    async for _ in ref.ask_stream(Task(input="x")):
+    async for _ in system.ask_stream(ref, Task(input="x")):
         pass
 
     await system.shutdown()  # hangs if child leaked

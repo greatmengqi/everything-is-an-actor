@@ -59,7 +59,7 @@ async def test_dispatch_returns_output():
 
     system = ActorSystem("t")
     ref = await system.spawn(SimpleAgent, "a")
-    result = await ref.ask(Task(input="hello"))
+    result = await system.ask(ref, Task(input="hello"))
     assert result.output == "hello"
     await system.shutdown()
 
@@ -73,7 +73,7 @@ async def test_dispatch_exception_propagates():
     system = ActorSystem("t")
     ref = await system.spawn(BrokenCaller, "a")
     with pytest.raises(Exception, match="boom: bad"):
-        await ref.ask(Task(input="bad"))
+        await system.ask(ref, Task(input="bad"))
     await system.shutdown()
 
 
@@ -90,7 +90,7 @@ async def test_dispatch_multiple_sequential_calls():
 
     system = ActorSystem("t")
     ref = await system.spawn(MultiCaller, "a")
-    result = await ref.ask(Task(input=["a", "b", "c"]))
+    result = await system.ask(ref, Task(input=["a", "b", "c"]))
     assert result.output == ["a", "b", "c"]
     await system.shutdown()
 
@@ -107,7 +107,7 @@ async def test_dispatch_child_stopped_after_completion():
 
     system = ActorSystem("t")
     ref = await system.spawn(EphemeralCaller, "a")
-    result = await ref.ask(Task(input="x"))
+    result = await system.ask(ref, Task(input="x"))
     assert result.output == "x"
     await system.shutdown()
 
@@ -127,7 +127,7 @@ async def test_dispatch_child_stopped_on_exception():
 
     system = ActorSystem("t")
     ref = await system.spawn(CleanupCaller, "a")
-    result = await ref.ask(Task(input="x"))
+    result = await system.ask(ref, Task(input="x"))
     assert result.output == "recovered"
     await system.shutdown()
 
@@ -141,7 +141,7 @@ async def test_dispatch_timeout_raises():
     system = ActorSystem("t")
     ref = await system.spawn(SlowCaller, "a")
     with pytest.raises(asyncio.TimeoutError):
-        await ref.ask(Task(input="x"), timeout=5.0)
+        await system.ask(ref, Task(input="x"), timeout=5.0)
     await system.shutdown()
 
 
@@ -160,7 +160,7 @@ async def test_dispatch_parallel_returns_ordered_results():
 
     system = ActorSystem("t")
     ref = await system.spawn(ParallelCaller, "a")
-    result = await ref.ask(Task(input=["x", "y", "z"]))
+    result = await system.ask(ref, Task(input=["x", "y", "z"]))
     assert result.output == ["x", "y", "z"]
     await system.shutdown()
 
@@ -178,7 +178,7 @@ async def test_dispatch_parallel_different_agent_types():
 
     system = ActorSystem("t")
     ref = await system.spawn(MixedCaller, "a")
-    result = await ref.ask(Task(input="hello"))
+    result = await system.ask(ref, Task(input="hello"))
     assert result.output == ["hello", "HELLO"]
     await system.shutdown()
 
@@ -190,7 +190,7 @@ async def test_dispatch_parallel_empty_list():
 
     system = ActorSystem("t")
     ref = await system.spawn(EmptyCaller, "a")
-    result = await ref.ask(Task(input=None))
+    result = await system.ask(ref, Task(input=None))
     assert result.output == []
     await system.shutdown()
 
@@ -208,7 +208,7 @@ async def test_dispatch_parallel_exception_propagates():
     system = ActorSystem("t")
     ref = await system.spawn(FailingCaller, "a")
     with pytest.raises(Exception, match="boom: bad"):
-        await ref.ask(Task(input="x"))
+        await system.ask(ref, Task(input="x"))
     await system.shutdown()
 
 
@@ -229,7 +229,7 @@ async def test_dispatch_parallel_is_concurrent():
     system = ActorSystem("t")
     ref = await system.spawn(ConcurrentCaller, "a")
     start = time.monotonic()
-    result = await ref.ask(Task(input="x"), timeout=5.0)
+    result = await system.ask(ref, Task(input="x"), timeout=5.0)
     elapsed = time.monotonic() - start
     assert result.output == ["a", "b", "c"]
     assert elapsed < 0.25, f"expected concurrent execution (~0.1s), got {elapsed:.2f}s"
@@ -252,7 +252,7 @@ async def test_dispatch_to_existing_ref():
             return r.output
 
     ref = await system.spawn(ReusingAgent, "reuser")
-    result = await ref.ask(Task(input="hello"))
+    result = await system.ask(ref, Task(input="hello"))
     assert result.output == "hello"
     assert existing.is_alive  # not stopped — caller owns the lifecycle
     await system.shutdown()
@@ -274,7 +274,7 @@ async def test_dispatch_parallel_mix_class_and_ref():
             return [r.output for r in results]
 
     ref = await system.spawn(MixedAgent, "mixer")
-    result = await ref.ask(Task(input="hi"))
+    result = await system.ask(ref, Task(input="hi"))
     assert result.output == ["hi", "HI"]
     await system.shutdown()
 
@@ -303,7 +303,7 @@ async def test_dispatch_parallel_no_child_leak_on_failure():
 
     system = ActorSystem("t")
     ref = await system.spawn(LeakCheckAgent, "lc")
-    result = await ref.ask(Task(input="x"), timeout=5.0)
+    result = await system.ask(ref, Task(input="x"), timeout=5.0)
     assert result.output["children"] == 0, "orphaned children after partial failure"
     await system.shutdown()
 
@@ -318,7 +318,7 @@ async def test_dispatch_deterministic_name():
 
     system = ActorSystem("t")
     ref = await system.spawn(NamedCaller, "caller")
-    result = await ref.ask(Task(input="hello"))
+    result = await system.ask(ref, Task(input="hello"))
     assert result.output == "hello"
     await system.shutdown()
 
@@ -348,6 +348,6 @@ async def test_nested_dispatch():
 
     system = ActorSystem("t")
     ref = await system.spawn(OuterAgent, "outer")
-    result = await ref.ask(Task(input="x"), timeout=5.0)
+    result = await system.ask(ref, Task(input="x"), timeout=5.0)
     assert result.output == ["x-1", "x-2"]
     await system.shutdown()

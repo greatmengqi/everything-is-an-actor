@@ -59,7 +59,7 @@ class RunStream:
 class _EventCollectorActor(Actor[TaskEvent, None]):
     """Internal actor that funnels TaskEvents into a RunStream.
 
-    One instance is spawned per AgentSystem.run() / ActorRef.ask_stream() call.
+    One instance is spawned per AgentSystem.run() / system.ask_stream() call.
     Not part of the public API.
 
     Use ``make_collector_cls(stream)`` to get a concrete subclass bound to a

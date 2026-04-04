@@ -31,10 +31,10 @@ async def test_memory_mailbox_drop_new_policy_drops_tell_to_dead_letters():
 
     # Overfill quickly
     for _ in range(20):
-        await ref.tell("inc")
+        await system.tell(ref, "inc")
 
     await asyncio.sleep(0.4)
-    count = await ref.ask("get", timeout=2.0)
+    count = await system.ask(ref, "get", timeout=2.0)
     await system.shutdown()
 
     # Some messages should be dropped under drop_new
@@ -52,13 +52,13 @@ async def test_memory_mailbox_fail_policy_rejects_ask_when_full():
     )
 
     # Fill queue with tell first
-    await ref.tell("inc")
+    await system.tell(ref, "inc")
 
     # Then ask may be rejected when queue still full
     got_reject = False
     for _ in range(30):
         try:
-            await ref.ask("inc", timeout=0.02)
+            await system.ask(ref, "inc", timeout=0.02)
         except MailboxFullError:
             got_reject = True
             break
@@ -79,10 +79,10 @@ async def test_memory_mailbox_block_policy_eventually_accepts():
     )
 
     for _ in range(10):
-        await ref.tell("inc")
+        await system.tell(ref, "inc")
 
     await asyncio.sleep(0.25)
-    count = await ref.ask("get", timeout=2.0)
+    count = await system.ask(ref, "get", timeout=2.0)
     await system.shutdown()
 
     # Block policy should avoid dropping on tell path

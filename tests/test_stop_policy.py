@@ -51,7 +51,7 @@ async def test_one_time_actor_stops_after_one_message():
         assert ref.is_alive
 
         # Send first message
-        result = await ref.ask("first")
+        result = await system.ask(ref, "first")
         assert result == "processed: first"
 
         # Actor should stop after processing one message
@@ -71,16 +71,16 @@ async def test_after_message_actor_stops_on_specific_message():
         assert ref.is_alive
 
         # Send some messages
-        result1 = await ref.ask("msg1")
+        result1 = await system.ask(ref, "msg1")
         assert result1 == "processed: msg1"
         assert ref.is_alive
 
-        result2 = await ref.ask("msg2")
+        result2 = await system.ask(ref, "msg2")
         assert result2 == "processed: msg2"
         assert ref.is_alive
 
         # Send the stop message
-        result3 = await ref.ask("stop")
+        result3 = await system.ask(ref, "stop")
         assert result3 == "processed: stop"
 
         # Actor should stop
@@ -100,7 +100,7 @@ async def test_after_idle_actor_stops_after_timeout():
         assert ref.is_alive
 
         # Send first message
-        result = await ref.ask("first")
+        result = await system.ask(ref, "first")
         assert result == "processed: first"
         assert ref.is_alive
 
@@ -130,7 +130,7 @@ async def test_tell_type_error_on_never_policy():
     system = ActorSystem()
     try:
         caller = await system.spawn(CallerActor, "caller")
-        result = await caller.ask("test")
+        result = await system.ask(caller, "test")
         assert "non-NEVER stop_policy" in result
     finally:
         await system.shutdown()
@@ -151,7 +151,7 @@ async def test_tell_succeeds_on_one_time_actor():
     system = ActorSystem()
     try:
         caller = await system.spawn(CallerActor, "caller")
-        result = await caller.ask("test")
+        result = await system.ask(caller, "test")
         assert result == "ok"
     finally:
         await system.shutdown()
@@ -167,7 +167,7 @@ async def test_never_stop_actor_runs_forever_until_stopped():
 
         # Send multiple messages
         for i in range(5):
-            result = await ref.ask(f"msg{i}")
+            result = await system.ask(ref, f"msg{i}")
             assert result == f"processed: msg{i}"
             assert ref.is_alive
 
@@ -212,17 +212,17 @@ async def test_after_message_only_stops_on_target_message():
 
         # Send many non-target messages
         for i in range(10):
-            result = await ref.ask(f"msg{i}")
+            result = await system.ask(ref, f"msg{i}")
             assert result == f"processed: msg{i}"
             assert ref.is_alive
 
         # Send a similar but different message - should NOT stop
-        result = await ref.ask("stoppp")
+        result = await system.ask(ref, "stoppp")
         assert result == "processed: stoppp"
         assert ref.is_alive
 
         # Only exact "stop" message stops
-        await ref.ask("stop")
+        await system.ask(ref, "stop")
         import asyncio
         await asyncio.sleep(0.1)
         assert not ref.is_alive
@@ -239,7 +239,7 @@ async def test_after_idle_resets_timer_on_message():
         assert ref.is_alive
 
         # Send first message
-        result = await ref.ask("first")
+        result = await system.ask(ref, "first")
         assert result == "processed: first"
 
         # Wait less than idle timeout
@@ -247,7 +247,7 @@ async def test_after_idle_resets_timer_on_message():
         await asyncio.sleep(0.3)  # less than 0.5s timeout
 
         # Send another message - should reset timer
-        result = await ref.ask("second")
+        result = await system.ask(ref, "second")
         assert result == "processed: second"
         assert ref.is_alive
 
@@ -271,7 +271,7 @@ async def test_stop_already_dead_actor():
         assert ref.is_alive
 
         # Send message to trigger stop
-        await ref.ask("first")
+        await system.ask(ref, "first")
         import asyncio
         await asyncio.sleep(0.1)
         assert not ref.is_alive
@@ -284,7 +284,7 @@ async def test_stop_already_dead_actor():
         # Ask dead actor should raise error
         from everything_is_an_actor.ref import ActorStoppedError
         with pytest.raises(ActorStoppedError, match="stopped"):
-            await ref.ask("test")
+            await system.ask(ref, "test")
     finally:
         await system.shutdown()
 
@@ -308,19 +308,19 @@ async def test_actor_exception_during_message_handling():
         assert ref.is_alive
 
         # Normal message works
-        result = await ref.ask("hello")
+        result = await system.ask(ref, "hello")
         assert result == "processed: hello"
         assert ref.is_alive
 
         # Crash message raises ValueError
         with pytest.raises(ValueError, match="intentional crash"):
-            await ref.ask("crash")
+            await system.ask(ref, "crash")
 
         # Actor is still alive after exception (error is logged, actor survives)
         assert ref.is_alive
 
         # Can still process messages after crash
-        result = await ref.ask("after-crash")
+        result = await system.ask(ref, "after-crash")
         assert result == "processed: after-crash"
         assert ref.is_alive
     finally:
@@ -344,11 +344,11 @@ async def test_tell_to_dead_actor_goes_to_dead_letter():
     system.on_dead_letter(lambda letter: dead_letters.append(letter))
     try:
         ref = await system.spawn(TargetActor, "target")
-        await ref.ask("first")  # triggers stop
+        await system.ask(ref, "first")  # triggers stop
         await asyncio.sleep(0.1)
 
         # Tell to dead actor should go to dead letter handler, not raise
-        await ref.tell("hello")
+        await system.tell(ref, "hello")
         await asyncio.sleep(0.1)
 
         # Verify message went to dead letter
@@ -370,7 +370,7 @@ async def test_multiple_actors_idle_timeout():
         for i in range(3):
             ref = await system.spawn(AfterIdleActor, f"idle-{i}")
             actors.append(ref)
-            await ref.ask(f"init-{i}")
+            await system.ask(ref, f"init-{i}")
 
         # All should be alive
         for ref in actors:
@@ -395,7 +395,7 @@ async def test_spawn_after_system_shutdown():
 
     # After shutdown, spawn still works and actor can process messages
     ref = await system.spawn(NeverStopActor, "late-spawn")
-    result = await ref.ask("test")
+    result = await system.ask(ref, "test")
     assert result == "processed: test"
 
 
@@ -409,4 +409,4 @@ async def test_ask_after_system_shutdown():
     # Actor should be stopped after system shutdown
     from everything_is_an_actor.ref import ActorStoppedError
     with pytest.raises(ActorStoppedError, match="stopped"):
-        await ref.ask("late-ask")
+        await system.ask(ref, "late-ask")

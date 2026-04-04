@@ -77,22 +77,22 @@ def test_mock_ref_set_reply():
     """MockRef can have predefined replies."""
     ref = MockRef("test")
     ref.set_reply("hello", "world")
-    result = ref.ask("hello")
+    result = ref._ask("hello")
     assert result == "world"
 
 
 def test_mock_ref_ask_returns_none_for_unknown():
     """MockRef.ask returns None for unset messages."""
     ref = MockRef("test")
-    result = ref.ask("unknown")
+    result = ref._ask("unknown")
     assert result is None
 
 
 def test_mock_ref_tell_records():
     """MockRef.tell records sent messages."""
     ref = MockRef("test")
-    ref.tell("msg1")
-    ref.tell("msg2")
+    ref._tell("msg1")
+    ref._tell("msg2")
     assert ref._sent == ["msg1", "msg2"]
 
 
@@ -188,7 +188,7 @@ async def test_tell_direct_performance():
             await tell_direct(ref, "inc")
 
         # Verify all were processed
-        result = await ref.ask("get", timeout=10.0)
+        result = await system.ask(ref, "get", timeout=10.0)
         assert result == n
     finally:
         await system.shutdown()

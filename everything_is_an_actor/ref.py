@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
+from everything_is_an_actor.composable_future import ComposableFuture
 from everything_is_an_actor.frees import Free, Suspend
 
 if TYPE_CHECKING:
@@ -24,7 +25,7 @@ class ActorRef(Generic[MsgT, RetT]):
     Type parameters ``MsgT`` and ``RetT`` match the actor's message and return types::
 
         ref: ActorRef[str, str] = await system.spawn(GreetActor, "greeter")
-        result: str = await ref.ask("world")
+        result: str = await system.ask(ref, "world")
 
     Users never construct this directly — it is returned by
     ``ActorSystem.spawn`` or ``ActorContext.spawn``.
@@ -47,48 +48,39 @@ class ActorRef(Generic[MsgT, RetT]):
     def is_alive(self) -> bool:
         return not self._cell.stopped
 
-    async def tell(self, message: MsgT, *, sender: ActorRef[Any, Any] | None = None) -> None:
-        """Fire-and-forget message delivery."""
+    async def _tell(self, message: MsgT, *, sender: ActorRef[Any, Any] | None = None) -> None:
+        """Fire-and-forget message delivery (internal).
+
+        Use ``system.tell(ref, msg)`` or ``actor.tell(target, msg)`` instead.
+        """
         if self._cell.stopped:
             self._cell.system._dead_letter(self, message, sender)
             return
         await self._cell.enqueue(_Envelope(message, sender))
 
-    async def ask(self, message: MsgT, *, timeout: float = 5.0) -> RetT:
-        """Request-response with timeout.
+    def _ask(self, message: MsgT, *, timeout: float = 5.0) -> ComposableFuture[RetT]:
+        """Request-response with timeout (internal). Returns ``ComposableFuture``.
 
-        Uses correlation ID + ReplyRegistry instead of passing a Future
-        through the mailbox. This makes ask work with any Mailbox backend
-        (memory, Redis, RabbitMQ, etc.).
-
-        Raises ``asyncio.TimeoutError`` if the actor doesn't reply in time.
-        Raises the actor's exception if ``on_receive`` fails.
+        Use ``system.ask(ref, msg)`` or ``actor.ask(target, msg)`` instead.
         """
-        if self._cell.stopped:
-            raise ActorStoppedError(f"Actor {self.path} is stopped")
-        corr_id = uuid.uuid4().hex
-        future = self._cell.system._replies.register(corr_id)
-        try:
-            envelope = _Envelope(message, sender=None, correlation_id=corr_id, reply_to=self._cell.system.system_id)
-            await self._cell.enqueue(envelope)
-            return await asyncio.wait_for(future, timeout=timeout)
-        finally:
-            self._cell.system._replies.discard(corr_id)
+        async def _ask() -> RetT:
+            if self._cell.stopped:
+                raise ActorStoppedError(f"Actor {self.path} is stopped")
+            corr_id = uuid.uuid4().hex
+            cf = self._cell.system._replies.register(corr_id)
+            try:
+                envelope = _Envelope(message, sender=None, correlation_id=corr_id, reply_to=self._cell.system.system_id)
+                await self._cell.enqueue(envelope)
+                return await cf.with_timeout(timeout)
+            finally:
+                self._cell.system._replies.discard(corr_id)
 
-    async def ask_stream(self, message: MsgT, *, timeout: float = 30.0):  # type: ignore[return]
-        """Stream TaskEvents from a single ask to an AgentActor.
+        return ComposableFuture(_ask())
 
-        Yields ``TaskEvent`` objects as they are emitted during execution.
-        Child agents spawned via ``dispatch()`` inside ``execute()`` inherit
-        the same event sink automatically.
+    async def _ask_stream(self, message: MsgT, *, timeout: float = 30.0):  # type: ignore[return]
+        """Stream TaskEvents from a single ask to an AgentActor (internal).
 
-        Raises the agent's exception (if any) after the stream is exhausted.
-
-        Example::
-
-            async for event in ref.ask_stream(Task(input="...")):
-                if event.type == "task_progress":
-                    print(event.data)
+        Use ``system.ask_stream(ref, msg)`` or ``actor.context.stream(target, msg)`` instead.
         """
         from everything_is_an_actor.agents.run_stream import RunStream, make_collector_cls
         from everything_is_an_actor.agents.task import StreamEvent, StreamResult, Task
@@ -114,7 +106,7 @@ class ActorRef(Generic[MsgT, RetT]):
 
         async def _drive() -> None:
             try:
-                run_result.append(await self.ask(tagged, timeout=timeout))
+                run_result.append(await self._ask(tagged, timeout=timeout))
             except Exception as exc:
                 run_exc.append(exc)
             finally:
@@ -141,37 +133,42 @@ class ActorRef(Generic[MsgT, RetT]):
     def interrupt(self) -> None:
         """Cancel the actor's asyncio task immediately, interrupting in-progress work.
 
-        Use when an ephemeral actor must stop now — e.g., when the calling task is
-        itself being cancelled. Unlike ``stop()``, this does not wait for the actor
-        to finish its current message; it raises ``CancelledError`` directly in the
-        actor's ``_run`` loop, which then calls ``on_stopped`` and removes the actor
-        from its parent's children.
+        Cross-loop safe: uses ``call_soon_threadsafe`` when the actor
+        runs on a different event loop.
 
         No-op if the actor has already stopped.
         """
         task = self._cell.task
         if task is not None and not task.done():
-            task.cancel()
+            target = self._cell._target_loop
+            if target is not None:
+                target.call_soon_threadsafe(task.cancel)
+            else:
+                task.cancel()
 
     async def join(self) -> None:
         """Wait until the actor has fully stopped (on_stopped completed).
 
-        Pairs with ``stop()`` when callers need a hard lifecycle guarantee::
-
-            ref.stop()
-            await ref.join()  # on_stopped() has returned, children removed
+        Cross-loop safe: when the actor runs on a different loop, waits
+        on a ``concurrent.futures.Future`` via ``asyncio.wrap_future``.
 
         No-op if the actor has already stopped or was never started.
-        On cancellation, the wait is abandoned but the actor continues its
-        own shutdown — use ``system.shutdown()`` to force-stop stuck actors.
         """
+        # Cross-loop: use the concurrent.futures.Future
+        done = self._cell._done
+        if done is not None:
+            if done.done():
+                return
+            await asyncio.wrap_future(done)
+            return
+        # Same-loop: await task directly
         task = self._cell.task
         if task is None or task.done():
             return
         try:
             await asyncio.shield(task)
         except asyncio.CancelledError:
-            pass  # outer join() was cancelled — actor continues shutdown independently
+            pass
 
     # -------------------------------------------------------------------------
     # Free Monad API — describe operations as pure data, execute later
@@ -277,41 +274,45 @@ class _Stop:
 
 
 class _ReplyRegistry:
-    """In-memory registry mapping correlation IDs to Futures.
+    """In-memory registry mapping correlation IDs to ComposableFuture promises.
 
-    Used by ask() to receive replies without putting Futures in the mailbox.
+    Uses ``ComposableFuture.promise()`` so that resolve/reject are
+    **thread-safe** — works correctly even when the resolver (actor loop)
+    and the waiter (ask caller) are on different event loops.
     """
 
     def __init__(self) -> None:
-        self._pending: dict[str, asyncio.Future[Any]] = {}
+        # (future, resolve_fn, reject_fn) per correlation ID
+        self._pending: dict[str, tuple[ComposableFuture[Any], Callable[[Any], None], Callable[[Exception], None]]] = {}
 
-    def register(self, corr_id: str) -> asyncio.Future[Any]:
-        """Create and register a Future for a correlation ID."""
-        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
-        self._pending[corr_id] = future
-        return future
+    def register(self, corr_id: str) -> ComposableFuture[Any]:
+        """Create and register a promise for a correlation ID."""
+        cf, resolve_fn, reject_fn = ComposableFuture.promise()
+        self._pending[corr_id] = (cf, resolve_fn, reject_fn)
+        return cf
 
     def resolve(self, corr_id: str, result: Any) -> None:
-        """Complete a pending ask with a result."""
-        future = self._pending.pop(corr_id, None)
-        if future is not None and not future.done():
-            future.set_result(result)
+        """Complete a pending ask with a result.  Thread-safe."""
+        entry = self._pending.pop(corr_id, None)
+        if entry is not None:
+            _, resolve_fn, _ = entry
+            resolve_fn(result)
 
     def reject(self, corr_id: str, error: Exception) -> None:
-        """Complete a pending ask with an error."""
-        future = self._pending.pop(corr_id, None)
-        if future is not None and not future.done():
-            future.set_exception(error)
+        """Complete a pending ask with an error.  Thread-safe."""
+        entry = self._pending.pop(corr_id, None)
+        if entry is not None:
+            _, _, reject_fn = entry
+            reject_fn(error)
 
     def discard(self, corr_id: str) -> None:
         """Remove a pending entry (e.g. on timeout)."""
         self._pending.pop(corr_id, None)
 
     def reject_all(self, error: Exception) -> None:
-        """Reject all pending asks (e.g. on system shutdown)."""
-        for future in self._pending.values():
-            if not future.done():
-                future.set_exception(error)
+        """Reject all pending asks (e.g. on system shutdown).  Thread-safe."""
+        for _, _, reject_fn in self._pending.values():
+            reject_fn(error)
         self._pending.clear()
 
 

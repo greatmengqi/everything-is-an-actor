@@ -115,7 +115,7 @@ class TestBasicMessaging:
     async def test_tell_and_ask(self):
         system = ActorSystem("test")
         ref = await system.spawn(EchoActor, "echo")
-        result = await ref.ask("hello")
+        result = await system.ask(ref, "hello")
         assert result == "hello"
         await system.shutdown()
 
@@ -128,19 +128,19 @@ class TestBasicMessaging:
         system = ActorSystem("test")
         ref = await system.spawn(SlowActor, "slow")
         with pytest.raises(asyncio.TimeoutError):
-            await ref.ask("hi", timeout=0.1)
+            await system.ask(ref, "hi", timeout=0.1)
         await system.shutdown()
 
     @pytest.mark.anyio
     async def test_tell_fire_and_forget(self):
         system = ActorSystem("test")
         ref = await system.spawn(CounterActor, "counter")
-        await ref.tell("inc")
-        await ref.tell("inc")
-        await ref.tell("inc")
+        await system.tell(ref, "inc")
+        await system.tell(ref, "inc")
+        await system.tell(ref, "inc")
         # Give the actor time to process
         await asyncio.sleep(0.05)
-        count = await ref.ask("get")
+        count = await system.ask(ref, "get")
         assert count == 3
         await system.shutdown()
 
@@ -151,7 +151,7 @@ class TestBasicMessaging:
         ref.stop()
         await asyncio.sleep(0.05)
         with pytest.raises(ActorStoppedError):
-            await ref.ask("hello")
+            await system.ask(ref, "hello")
         await system.shutdown()
 
     @pytest.mark.anyio
@@ -160,7 +160,7 @@ class TestBasicMessaging:
         ref = await system.spawn(EchoActor, "echo")
         ref.stop()
         await asyncio.sleep(0.05)
-        await ref.tell("orphan")
+        await system.tell(ref, "orphan")
         assert len(system.dead_letters) >= 1
         await system.shutdown()
 
@@ -177,7 +177,7 @@ class TestActorPath:
     async def test_child_actor_path(self):
         system = ActorSystem("app")
         parent = await system.spawn(ParentActor, "parent")
-        child: ActorRef = await parent.ask("get_child")
+        child: ActorRef = await system.ask(parent, "get_child")
         assert child.path == "/app/parent/child"
         await system.shutdown()
 
@@ -216,16 +216,16 @@ class TestSupervision:
     async def test_restart_on_crash(self):
         system = ActorSystem("test")
         parent = await system.spawn(ParentActor, "parent")
-        child: ActorRef = await parent.ask("get_child")
+        child: ActorRef = await system.ask(parent, "get_child")
 
         # Crash the child
         with pytest.raises(ValueError, match="boom"):
-            await child.ask("crash")
+            await system.ask(child, "crash")
         await asyncio.sleep(0.1)
 
         # Child should still be alive (restarted)
         assert child.is_alive
-        result = await child.ask("safe")
+        result = await system.ask(child, "safe")
         assert result == "ok"
         await system.shutdown()
 
@@ -233,10 +233,10 @@ class TestSupervision:
     async def test_stop_directive(self):
         system = ActorSystem("test")
         parent = await system.spawn(StopOnCrashParent, "parent")
-        child: ActorRef = await parent.ask("get_child")
+        child: ActorRef = await system.ask(parent, "get_child")
 
         with pytest.raises(ValueError, match="boom"):
-            await child.ask("crash")
+            await system.ask(child, "crash")
         await asyncio.sleep(0.1)
 
         assert not child.is_alive
@@ -257,12 +257,12 @@ class TestSupervision:
                 return self.child_ref
 
         parent = await system.spawn(StrictParent, "parent")
-        child: ActorRef = await parent.ask("any")
+        child: ActorRef = await system.ask(parent, "any")
 
         # Exhaust restart limit
         for _ in range(3):
             try:
-                await child.ask("crash")
+                await system.ask(child, "crash")
             except (ValueError, ActorStoppedError):
                 pass
             await asyncio.sleep(0.05)
@@ -275,23 +275,23 @@ class TestSupervision:
     async def test_all_for_one_restarts_siblings(self):
         system = ActorSystem("test")
         parent = await system.spawn(AllForOneParent, "parent")
-        c1, c2 = await parent.ask("get_children")
+        c1, c2 = await system.ask(parent, "get_children")
 
         # Increment counter on c1
-        await c1.tell("inc")
+        await system.tell(c1, "inc")
         await asyncio.sleep(0.05)
-        count_before = await c1.ask("get")
+        count_before = await system.ask(c1, "get")
         assert count_before == 1
 
         # Crash c2 → AllForOne should restart both
         try:
-            await c2.ask("crash")
+            await system.ask(c2, "crash")
         except ValueError:
             pass
         await asyncio.sleep(0.1)
 
         # c1 was restarted, counter should be 0
-        count_after = await c1.ask("get")
+        count_after = await system.ask(c1, "get")
         assert count_after == 0
         await system.shutdown()
 
@@ -306,7 +306,7 @@ class TestDeadLetters:
         ref = await system.spawn(EchoActor, "echo")
         ref.stop()
         await asyncio.sleep(0.05)
-        await ref.tell("orphan")
+        await system.tell(ref, "orphan")
 
         assert len(received) >= 1
         assert received[-1].message == "orphan"
@@ -368,7 +368,7 @@ class TestExecutor:
 
         system = ActorSystem("test", executor_workers=2)
         ref = await system.spawn(BlockingActor, "blocker")
-        result = await ref.ask("go", timeout=5.0)
+        result = await system.ask(ref, "go", timeout=5.0)
         assert result == "done"
         await system.shutdown()
 
@@ -386,7 +386,7 @@ class TestExecutor:
         refs = [await system.spawn(SlowActor, f"s{i}") for i in range(4)]
 
         start = time.monotonic()
-        results = await asyncio.gather(*[r.ask("go", timeout=5.0) for r in refs])
+        results = await asyncio.gather(*[system.ask(r, "go", timeout=5.0) for r in refs])
         elapsed = time.monotonic() - start
 
         assert all(r == "ok" for r in results)
@@ -401,7 +401,7 @@ class TestMiddleware:
         mw = LogMiddleware()
         system = ActorSystem("test")
         ref = await system.spawn(EchoActor, "echo", middlewares=[mw])
-        result = await ref.ask("hello")
+        result = await system.ask(ref, "hello")
         assert result == "hello"
         assert "before:hello" in mw.log
         assert "after:hello" in mw.log
@@ -426,7 +426,7 @@ class TestMiddleware:
         system = ActorSystem("test")
         # Chain: mw1(mw2(actor)). mw1 logs original, mw2 uppercases, actor echoes
         ref = await system.spawn(EchoActor, "echo", middlewares=[mw1, mw2])
-        result = await ref.ask("hello")
+        result = await system.ask(ref, "hello")
         assert result == "HELLO"  # TransformMiddleware uppercased
         assert "before:hello" in mw1.log  # LogMiddleware saw original
         assert "after:HELLO" in mw1.log  # LogMiddleware saw transformed result
@@ -462,11 +462,11 @@ class TestMiddleware:
 
         system = ActorSystem("test")
         parent = await system.spawn(ChildSpawningParent, "parent")
-        child = await parent.ask("spawn")
+        child = await system.ask(parent, "spawn")
 
         # Crash the child — parent supervisor will restart it
         try:
-            await child.ask("crash")
+            await system.ask(child, "crash")
         except ValueError:
             pass
         await asyncio.sleep(0.1)
@@ -488,7 +488,7 @@ class TestAskErrorPropagation:
         system = ActorSystem("test")
         ref = await system.spawn(BoomActor, "boom")
         with pytest.raises(ValueError, match="intentional crash"):
-            await ref.ask("trigger")
+            await system.ask(ref, "trigger")
         await system.shutdown()
 
     @pytest.mark.anyio
@@ -504,9 +504,9 @@ class TestAskErrorPropagation:
         system = ActorSystem("test")
         ref = await system.spawn(SometimesCrashActor, "sca")
         with pytest.raises(RuntimeError, match="supervised crash"):
-            await ref.ask("crash")
+            await system.ask(ref, "crash")
         # Root actor keeps running after a crash (consecutive_failures, not restart)
-        result = await ref.ask("hello", timeout=2.0)
+        result = await system.ask(ref, "hello", timeout=2.0)
         assert result == "ok"
         await system.shutdown()
 
@@ -523,12 +523,12 @@ class TestAskErrorPropagation:
         ref = await system.spawn(SlowActor, "slow")
 
         with pytest.raises(asyncio.TimeoutError):
-            await ref.ask("go", timeout=0.05)
+            await system.ask(ref, "go", timeout=0.05)
 
         # Wait for actor to finish processing — late reply arrives, should be a no-op
         await asyncio.sleep(0.4)
         # System still functional: no orphaned futures, no leaked state
         assert ref.is_alive
-        result = await ref.ask("go", timeout=2.0)
+        result = await system.ask(ref, "go", timeout=2.0)
         assert result == "late"
         await system.shutdown()

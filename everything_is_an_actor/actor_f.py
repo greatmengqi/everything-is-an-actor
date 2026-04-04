@@ -134,7 +134,7 @@ async def tell_direct(ref: "ActorRef", msg: Any) -> None:
     Use this for high-throughput fire-and-forget messaging where the extra
     Free monad allocation overhead is not acceptable.
     """
-    await ref.tell(msg)
+    await ref._tell(msg)
 
 
 def ask(ref: "ActorRef", msg: MsgT) -> Free[ActorF, RetT]:

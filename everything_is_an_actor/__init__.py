@@ -11,13 +11,14 @@ Usage::
     async def main():
         system = ActorSystem("app")
         ref = await system.spawn(Greeter, "greeter")
-        reply = await ref.ask("World", timeout=5.0)
+        reply = await system.ask(ref, "World", timeout=5.0)
         print(reply)  # Hello, World!
         await system.shutdown()
 """
 
 from everything_is_an_actor.actor import Actor, ActorContext, AfterIdle, AfterMessage, StopMode, StopPolicy
 from everything_is_an_actor.agents.system import AgentSystem
+from everything_is_an_actor.dispatcher import DefaultDispatcher, Dispatcher, PoolDispatcher
 from everything_is_an_actor.frees import Free, FlatMap, Pure, Suspend, lift_free, run_free
 from everything_is_an_actor.actor_f import (
     ActorF,
@@ -33,7 +34,7 @@ from everything_is_an_actor.actor_f import (
     tell_direct,
 )
 from everything_is_an_actor.interpreter import MockInterpreter, MockRef, MockSystem, run_free_mock
-from everything_is_an_actor.mailbox import Mailbox, MemoryMailbox
+from everything_is_an_actor.mailbox import FastMailbox, Mailbox, MemoryMailbox, ThreadedMailbox
 from everything_is_an_actor.middleware import Middleware
 from everything_is_an_actor.ref import ActorRef, MailboxFullError, ReplyChannel
 from everything_is_an_actor.supervision import (
@@ -64,8 +65,10 @@ __all__ = [
     "AllForOneStrategy",
     "AskF",
     "DeadLetter",
+    "DefaultDispatcher",
     "Directive",
     "DirectiveResult",
+    "Dispatcher",
     "Either",
     "FlatMap",
     "Free",
@@ -73,14 +76,17 @@ __all__ = [
     "ask",
     "lift_free",
     "Left",
+    "FastMailbox",
     "Mailbox",
     "MailboxFullError",
     "MemoryMailbox",
     "Middleware",
+    "ThreadedMailbox",
     "MockInterpreter",
     "MockRef",
     "MockSystem",
     "OneForOneStrategy",
+    "PoolDispatcher",
     "Pure",
     "ReplyChannel",
     "Right",

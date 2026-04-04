@@ -40,7 +40,7 @@ async def test_dispatch_parallel_100_concurrent():
     system = ActorSystem("stress", executor_workers=4)
     ref = await system.spawn(FanOutAgent, "fanout")
     start = time.monotonic()
-    result = await ref.ask(Task(input=100), timeout=30.0)
+    result = await system.ask(ref, Task(input=100), timeout=30.0)
     elapsed = time.monotonic() - start
 
     assert len(result.output) == 100
@@ -62,7 +62,7 @@ async def test_dispatch_parallel_500_concurrent():
     system = ActorSystem("stress", executor_workers=4)
     ref = await system.spawn(MassiveFanOut, "fanout")
     start = time.monotonic()
-    result = await ref.ask(Task(input=500), timeout=60.0)
+    result = await system.ask(ref, Task(input=500), timeout=60.0)
     elapsed = time.monotonic() - start
 
     assert result.output == 500
@@ -90,7 +90,7 @@ async def test_dispatch_sequential_1000():
     system = ActorSystem("stress", executor_workers=4)
     ref = await system.spawn(SequentialCaller, "seq")
     start = time.monotonic()
-    result = await ref.ask(Task(input=1000), timeout=60.0)
+    result = await system.ask(ref, Task(input=1000), timeout=60.0)
     elapsed = time.monotonic() - start
 
     assert result.output == 1000
@@ -120,7 +120,7 @@ async def test_dispatch_reuse_ref_1000():
 
     ref = await system.spawn(ReuseCaller, "reuse")
     start = time.monotonic()
-    result = await ref.ask(Task(input=1000), timeout=60.0)
+    result = await system.ask(ref, Task(input=1000), timeout=60.0)
     elapsed = time.monotonic() - start
 
     assert result.output == 1000
@@ -155,7 +155,7 @@ async def test_dispatch_nested_depth_10():
     system = ActorSystem("stress", executor_workers=4)
     ref = await system.spawn(root_cls, "chain-root")
     start = time.monotonic()
-    result = await ref.ask(Task(input="deep"), timeout=30.0)
+    result = await system.ask(ref, Task(input="deep"), timeout=30.0)
     elapsed = time.monotonic() - start
 
     assert result.output == "deep"
@@ -187,7 +187,7 @@ async def test_dispatch_mixed_workload():
     system = ActorSystem("stress", executor_workers=4)
     ref = await system.spawn(MixedOrchestrator, "mixed")
     start = time.monotonic()
-    result = await ref.ask(Task(input=50), timeout=30.0)
+    result = await system.ask(ref, Task(input=50), timeout=30.0)
     elapsed = time.monotonic() - start
 
     assert result.output["parallel"] == 50

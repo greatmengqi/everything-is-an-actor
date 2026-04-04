@@ -14,10 +14,10 @@ async def main():
     system = ActorSystem("demo")
     ref = await system.spawn(GreetActor, "greeter")
 
-    reply = await ref.ask("world")
+    reply = await system.ask(ref, "world")
     print(reply)  # Hello, world!
 
-    await ref.tell("fire-and-forget")
+    await system.tell(ref, "fire-and-forget")
 
     await system.shutdown()
 
