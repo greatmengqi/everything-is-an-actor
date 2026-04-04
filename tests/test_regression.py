@@ -6,6 +6,7 @@ import warnings
 
 import pytest
 
+from everything_is_an_actor import Actor
 from everything_is_an_actor.agents.agent_actor import AgentActor
 from everything_is_an_actor.agents.system import AgentSystem
 from everything_is_an_actor.agents.task import Task
@@ -400,7 +401,7 @@ class TestThreadedSyncActorReplies:
 
         await system.shutdown()
 
-    @pytest.mark.any
+    @pytest.mark.anyio
     async def test_threaded_sync_actor_concurrent_asks(self):
         """Concurrent ask() calls to threaded sync actor should all return correct values."""
 
@@ -555,8 +556,8 @@ class TestThreadedBackgroundTaskPreservation:
         await system.shutdown()
 
     @pytest.mark.anyio
-    async def test_invocation_scoped_tasks_are_cancelled(self):
-        """Tasks created during a single invocation should be cancelled after the message completes."""
+    async def test_invocation_tasks_persist_across_messages(self):
+        """Tasks created during an invocation persist — they are not auto-cancelled."""
 
         class ScopedTaskActor(Actor[str, int]):
             def __init__(self):
@@ -568,18 +569,16 @@ class TestThreadedBackgroundTaskPreservation:
 
                 loop = asyncio.get_event_loop()
 
-                if msg == "create_scoped_task":
-                    # Create a task that should be cancelled after this message
-                    async def scoped_work():
+                if msg == "create_task":
+                    async def work():
                         for i in range(100):
                             await asyncio.sleep(0.01)
-                        return 999  # Should never reach here
+                        return 999
 
-                    self.invocation_task = loop.create_task(scoped_work())
+                    self.invocation_task = loop.create_task(work())
                     return 1
 
                 elif msg == "check_task":
-                    # Check if the scoped task was cancelled
                     if self.invocation_task:
                         return 1 if self.invocation_task.done() else 0
                     return -1
@@ -589,14 +588,12 @@ class TestThreadedBackgroundTaskPreservation:
         system = ActorSystem("test", threaded=True, executor_workers=2)
         ref = await system.spawn(ScopedTaskActor, "scoped-actor")
 
-        # Create a scoped task
-        await system.ask(ref, "create_scoped_task")
+        # Create a task
+        await system.ask(ref, "create_task")
 
-        # Wait a bit for the task to potentially run
+        # Task should still be running (not auto-cancelled)
         await asyncio.sleep(0.05)
-
-        # Check if the task was cancelled (it should be done)
         status = await system.ask(ref, "check_task")
-        assert status == 1, "Scoped task should have been cancelled after message completion"
+        assert status == 0, "Task should still be running, not auto-cancelled"
 
         await system.shutdown()
