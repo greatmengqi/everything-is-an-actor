@@ -744,20 +744,26 @@ class _ActorCell:
         # Cancel pending tasks on the thread-local sync loop (background + leaked)
         if self._sync_loop is not None:
             loop = self._sync_loop
+            _CLEANUP_TIMEOUT = 2.0
             if loop.is_running():
-                # Loop is active on another thread — schedule cleanup via thread-safe call
-                logger.warning(
-                    "Sync loop still running during shutdown for %s, scheduling async cleanup",
-                    self.path,
-                )
+                # Loop is active on another thread — schedule and WAIT for cleanup
                 try:
                     async def _cancel_all() -> None:
-                        for t in asyncio.all_tasks(loop):
-                            if not t.done():
-                                t.cancel()
-                    asyncio.run_coroutine_threadsafe(_cancel_all(), loop)
+                        tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                        for t in tasks:
+                            t.cancel()
+                        if tasks:
+                            await asyncio.gather(*tasks, return_exceptions=True)
+
+                    fut = asyncio.run_coroutine_threadsafe(_cancel_all(), loop)
+                    fut.result(timeout=_CLEANUP_TIMEOUT)
+                except TimeoutError:
+                    logger.warning(
+                        "Sync loop cleanup timed out after %.1fs for %s, tasks may leak",
+                        _CLEANUP_TIMEOUT, self.path,
+                    )
                 except Exception:
-                    logger.warning("Failed to schedule sync loop cleanup for %s", self.path)
+                    logger.warning("Sync loop cleanup failed for %s", self.path, exc_info=True)
             else:
                 pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
                 if pending:

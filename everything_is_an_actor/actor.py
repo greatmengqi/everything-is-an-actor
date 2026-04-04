@@ -101,7 +101,26 @@ class ActorContext:
 
         Unregistered tasks created during a message are cancelled after
         the message completes. Registered tasks live until actor shutdown.
+
+        Raises:
+            TypeError: if ``task`` is not an ``asyncio.Task``.
+            ValueError: if ``task`` belongs to a different event loop.
         """
+        import asyncio
+
+        if not isinstance(task, asyncio.Task):
+            raise TypeError(
+                f"register_background_task() requires an asyncio.Task, got {type(task).__name__}"
+            )
+        # Validate loop ownership when sync loop is known
+        sync_loop = getattr(self._cell, "_sync_loop", None)
+        if sync_loop is not None:
+            task_loop = task.get_loop()
+            if task_loop is not sync_loop:
+                raise ValueError(
+                    f"Task belongs to a different event loop. "
+                    f"Expected the actor's sync loop, got {task_loop!r}"
+                )
         bg = self._cell._background_tasks
         bg.add(task)
         task.add_done_callback(bg.discard)
