@@ -328,6 +328,74 @@ class TestNamedDispatchers:
         assert not d._started  # shutdown cleans up
 
 
+class TestAutoDispatch:
+    @pytest.mark.anyio
+    async def test_sync_actor_auto_routes_to_default_pool(self):
+        """Sync actor (overrides receive()) auto-routes to 'default' dispatcher."""
+        class SyncEcho(Actor[str, str]):
+            def receive(self, message: str) -> str:
+                return f"sync:{message}"
+
+        system = ActorSystem("test", dispatchers={
+            "default": PoolDispatcher(pool_size=1),
+        })
+        ref = await system.spawn(SyncEcho, "echo")
+        result = await system.ask(ref, "hello")
+        assert result == "sync:hello"
+        # Verify it ran on a different loop (pool dispatcher)
+        assert system._dispatchers_started == {"default"}
+        await system.shutdown()
+
+    @pytest.mark.anyio
+    async def test_async_actor_stays_on_caller_loop(self):
+        """Async actor does NOT auto-route, stays on caller loop."""
+        class AsyncEcho(Actor[str, str]):
+            async def on_receive(self, message: str) -> str:
+                return f"async:{message}"
+
+        system = ActorSystem("test", dispatchers={
+            "default": PoolDispatcher(pool_size=1),
+        })
+        ref = await system.spawn(AsyncEcho, "echo")
+        result = await system.ask(ref, "hello")
+        assert result == "async:hello"
+        # default dispatcher NOT started — async actor didn't trigger it
+        assert system._dispatchers_started == set()
+        await system.shutdown()
+
+    @pytest.mark.anyio
+    async def test_explicit_dispatcher_overrides_auto(self):
+        """Explicit dispatcher= param overrides auto-detection."""
+        class SyncActor(Actor[str, str]):
+            def receive(self, message: str) -> str:
+                return f"sync:{message}"
+
+        system = ActorSystem("test", dispatchers={
+            "default": PoolDispatcher(pool_size=1),
+            "special": PoolDispatcher(pool_size=1),
+        })
+        ref = await system.spawn(SyncActor, "s", dispatcher="special")
+        result = await system.ask(ref, "hello")
+        assert result == "sync:hello"
+        # "special" was started, NOT "default"
+        assert "special" in system._dispatchers_started
+        assert "default" not in system._dispatchers_started
+        await system.shutdown()
+
+    @pytest.mark.anyio
+    async def test_no_default_dispatcher_sync_stays_on_caller(self):
+        """Without 'default' dispatcher, sync actor stays on caller loop (backward compatible)."""
+        class SyncEcho(Actor[str, str]):
+            def receive(self, message: str) -> str:
+                return f"sync:{message}"
+
+        system = ActorSystem("test")  # no dispatchers at all
+        ref = await system.spawn(SyncEcho, "echo")
+        result = await system.ask(ref, "hello")
+        assert result == "sync:hello"
+        await system.shutdown()
+
+
 class TestDispatcherAgentActor:
     @pytest.mark.anyio
     async def test_agent_actor_on_pool_dispatcher(self):
