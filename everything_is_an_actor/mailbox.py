@@ -262,11 +262,22 @@ class ThreadedMailbox(Mailbox):
             except queue.Empty:
                 continue
 
+    def _blocking_put(self, msg: Any) -> None:
+        """Blocking put with stop-event awareness. Runs in executor thread."""
+        while not self._stop_event.is_set():
+            try:
+                self._queue.put(msg, timeout=0.1)
+                return
+            except queue.Full:
+                continue
+        raise MailboxClosed("mailbox closed")
+
     async def put(self, msg: Any) -> bool:
         if self._stop_event.is_set():
             raise MailboxClosed("mailbox closed")
         if self._backpressure_policy == BACKPRESSURE_BLOCK:
-            self._queue.put(msg)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._blocking_put, msg)
             return True
         if self._backpressure_policy in (BACKPRESSURE_DROP_NEW, BACKPRESSURE_FAIL):
             if self._maxsize > 0 and self._queue.full():
@@ -283,15 +294,29 @@ class ThreadedMailbox(Mailbox):
         self._queue.put_nowait(msg)
         return True
 
+    def _blocking_get(self) -> Any:
+        """Blocking get with stop-event awareness. Runs in executor thread."""
+        while True:
+            try:
+                return self._queue.get(timeout=0.1)
+            except queue.Empty:
+                if self._stop_event.is_set():
+                    # Drain remaining messages before raising
+                    try:
+                        return self._queue.get_nowait()
+                    except queue.Empty:
+                        raise Empty("mailbox closed")
+
     async def get(self) -> Any:
-        # Use async wrapper with timeout to support idle timeout
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._queue.get)
+        return await loop.run_in_executor(None, self._blocking_get)
 
     def get_nowait(self) -> Any:
         try:
             return self._queue.get_nowait()
         except queue.Empty:
+            if self._stop_event.is_set():
+                raise Empty("mailbox closed")
             raise Empty("mailbox empty")
 
     def empty(self) -> bool:
