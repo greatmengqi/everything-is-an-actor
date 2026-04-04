@@ -139,8 +139,8 @@ class ActorSystem:
         if dispatcher is None:
             # Auto-detect: sync actor (overrides receive()) → route to "default" pool
             from everything_is_an_actor.validation import find_sync_handler
-            if find_sync_handler(actor_cls, "receive") is not None and "default" in self._dispatchers:
-                dispatcher = "default"
+            if find_sync_handler(actor_cls, "receive") is not None and "io" in self._dispatchers:
+                dispatcher = "io"
 
         if dispatcher is not None:
             if dispatcher not in self._dispatchers:

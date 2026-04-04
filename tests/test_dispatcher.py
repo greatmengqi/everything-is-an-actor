@@ -337,13 +337,13 @@ class TestAutoDispatch:
                 return f"sync:{message}"
 
         system = ActorSystem("test", dispatchers={
-            "default": PoolDispatcher(pool_size=1),
+            "io": PoolDispatcher(pool_size=1),
         })
         ref = await system.spawn(SyncEcho, "echo")
         result = await system.ask(ref, "hello")
         assert result == "sync:hello"
         # Verify it ran on a different loop (pool dispatcher)
-        assert system._dispatchers_started == {"default"}
+        assert system._dispatchers_started == {"io"}
         await system.shutdown()
 
     @pytest.mark.anyio
@@ -354,12 +354,12 @@ class TestAutoDispatch:
                 return f"async:{message}"
 
         system = ActorSystem("test", dispatchers={
-            "default": PoolDispatcher(pool_size=1),
+            "io": PoolDispatcher(pool_size=1),
         })
         ref = await system.spawn(AsyncEcho, "echo")
         result = await system.ask(ref, "hello")
         assert result == "async:hello"
-        # default dispatcher NOT started — async actor didn't trigger it
+        # io dispatcher NOT started — async actor didn't trigger it
         assert system._dispatchers_started == set()
         await system.shutdown()
 
@@ -371,15 +371,15 @@ class TestAutoDispatch:
                 return f"sync:{message}"
 
         system = ActorSystem("test", dispatchers={
-            "default": PoolDispatcher(pool_size=1),
+            "io": PoolDispatcher(pool_size=1),
             "special": PoolDispatcher(pool_size=1),
         })
         ref = await system.spawn(SyncActor, "s", dispatcher="special")
         result = await system.ask(ref, "hello")
         assert result == "sync:hello"
-        # "special" was started, NOT "default"
+        # "special" was started, NOT "io"
         assert "special" in system._dispatchers_started
-        assert "default" not in system._dispatchers_started
+        assert "io" not in system._dispatchers_started
         await system.shutdown()
 
     @pytest.mark.anyio
