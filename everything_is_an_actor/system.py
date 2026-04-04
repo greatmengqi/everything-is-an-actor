@@ -394,6 +394,7 @@ class _ActorCell:
         self._last_message_time: float = time.time()  # For AfterIdle tracking
         self._target_loop = target_loop
         self._sync_loop: asyncio.AbstractEventLoop | None = None  # thread-local loop used by _sync_wrapper
+        self._background_tasks: set[asyncio.Task] = set()  # durable tasks registered via context API
         # Cross-loop completion signal (None when same-loop)
         self._done: concurrent.futures.Future | None = (
             concurrent.futures.Future() if target_loop is not None else None
@@ -478,9 +479,10 @@ class _ActorCell:
         captured and propagated so middleware can read trace IDs, auth context, and other
         contextvar-based state even in sync actors.
 
-        Tasks created during an invocation persist across messages — they advance
-        during subsequent ``run_until_complete`` calls and are only cleaned up when
-        the actor stops.
+        Per-invocation cleanup: tasks created during a message are cancelled after
+        the message completes, UNLESS registered as durable via
+        ``context.register_background_task()``. This prevents unbounded task
+        accumulation in long-lived actors.
         """
         import contextvars
 
@@ -493,7 +495,29 @@ class _ActorCell:
         self._sync_loop = loop  # track for shutdown cleanup
         context = contextvars.copy_context()
 
-        return context.run(loop.run_until_complete, self._receive_chain(ctx, payload))  # type: ignore[misc]
+        existing_tasks = set(asyncio.all_tasks(loop))
+
+        try:
+            return context.run(loop.run_until_complete, self._receive_chain(ctx, payload))  # type: ignore[misc]
+        finally:
+            # Cancel non-durable tasks created during this invocation
+            current_tasks = asyncio.all_tasks(loop)
+            leaked = [
+                t for t in current_tasks
+                if t not in existing_tasks
+                and not t.done()
+                and t not in self._background_tasks
+            ]
+            if leaked:
+                for t in leaked:
+                    t.cancel()
+                try:
+                    loop.run_until_complete(asyncio.gather(*leaked, return_exceptions=True))
+                except Exception:
+                    logger.warning(
+                        "Sync wrapper cleanup: %d tasks could not be cancelled for %s",
+                        len(leaked), self.path,
+                    )
 
     async def enqueue(self, msg: _Envelope | _Stop) -> None:
         # Try non-blocking first (fast path for MemoryMailbox)
@@ -717,16 +741,36 @@ class _ActorCell:
         except Exception:
             logger.exception("Error closing mailbox for %s", self.path)
         # Break circular reference: _ActorCell → actor → context → _cell → _ActorCell
-        # Cancel pending tasks on the thread-local sync loop (prevents "Task was destroyed" warnings)
+        # Cancel pending tasks on the thread-local sync loop (background + leaked)
         if self._sync_loop is not None:
-            pending = [t for t in asyncio.all_tasks(self._sync_loop) if not t.done()]
-            for t in pending:
-                t.cancel()
-            if pending:
+            loop = self._sync_loop
+            if loop.is_running():
+                # Loop is active on another thread — schedule cleanup via thread-safe call
+                logger.warning(
+                    "Sync loop still running during shutdown for %s, scheduling async cleanup",
+                    self.path,
+                )
                 try:
-                    self._sync_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    async def _cancel_all() -> None:
+                        for t in asyncio.all_tasks(loop):
+                            if not t.done():
+                                t.cancel()
+                    asyncio.run_coroutine_threadsafe(_cancel_all(), loop)
                 except Exception:
-                    pass
+                    logger.warning("Failed to schedule sync loop cleanup for %s", self.path)
+            else:
+                pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                if pending:
+                    for t in pending:
+                        t.cancel()
+                    try:
+                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    except Exception:
+                        logger.warning(
+                            "Sync loop cleanup: %d tasks could not be drained for %s",
+                            len(pending), self.path,
+                        )
+            self._background_tasks.clear()
             self._sync_loop = None
         self.actor = None
         # Signal cross-loop joiners

@@ -433,7 +433,7 @@ class TestThreadedBackgroundTaskPreservation:
 
     @pytest.mark.anyio
     async def test_background_task_survives_across_sync_messages(self):
-        """Background tasks created in sync actor should survive across multiple message boundaries."""
+        """Registered background tasks survive across multiple message boundaries."""
 
         class BackgroundTaskActor(Actor[str, int]):
             def __init__(self):
@@ -447,17 +447,16 @@ class TestThreadedBackgroundTaskPreservation:
                 loop = asyncio.get_event_loop()
 
                 if msg == "start_background":
-                    # Create a long-lived background task
                     async def background_work():
                         while True:
                             self.background_counter += 1
                             await asyncio.sleep(0.01)
 
                     self.background_task = loop.create_task(background_work())
+                    self.context.register_background_task(self.background_task)
                     return 0
 
                 elif msg == "check_background":
-                    # Check if background task is still running
                     if self.background_task and not self.background_task.done():
                         return self.background_counter
                     return -1
@@ -472,16 +471,13 @@ class TestThreadedBackgroundTaskPreservation:
         system = ActorSystem("test", threaded=True, executor_workers=2)
         ref = await system.spawn(BackgroundTaskActor, "bg-actor")
 
-        # Start background task
         await system.ask(ref, "start_background")
 
-        # Send multiple sync messages - background task should survive
         for _ in range(5):
-            await asyncio.sleep(0.02)  # Let background task run
+            await asyncio.sleep(0.02)
             counter = await system.ask(ref, "check_background")
             assert counter > 0, f"Background task should be running, got counter={counter}"
 
-        # Stop background task
         final_counter = await system.ask(ref, "stop_background")
         assert final_counter > 0, "Background task should have incremented counter"
 
@@ -489,7 +485,7 @@ class TestThreadedBackgroundTaskPreservation:
 
     @pytest.mark.anyio
     async def test_multiple_background_tasks_survive(self):
-        """Multiple background tasks should all survive across message boundaries."""
+        """Multiple registered background tasks survive across message boundaries."""
 
         class MultiBgTaskActor(Actor[str, dict]):
             def __init__(self):
@@ -503,18 +499,18 @@ class TestThreadedBackgroundTaskPreservation:
                 loop = asyncio.get_event_loop()
 
                 if msg == "start_all":
-                    # Create multiple background tasks
                     for i in range(3):
                         async def work(idx=i):
                             while True:
                                 self.counters[idx] += 1
                                 await asyncio.sleep(0.01)
 
-                        self.tasks.append(loop.create_task(work()))
+                        task = loop.create_task(work())
+                        self.context.register_background_task(task)
+                        self.tasks.append(task)
                     return {"status": "started"}
 
                 elif msg == "check_all":
-                    # Check all tasks are still running
                     status = {
                         "task0_alive": not self.tasks[0].done() if len(self.tasks) > 0 else False,
                         "task1_alive": not self.tasks[1].done() if len(self.tasks) > 1 else False,
@@ -533,31 +529,25 @@ class TestThreadedBackgroundTaskPreservation:
         system = ActorSystem("test", threaded=True, executor_workers=2)
         ref = await system.spawn(MultiBgTaskActor, "multi-bg-actor")
 
-        # Start all background tasks
         await system.ask(ref, "start_all")
 
-        # Send multiple sync messages - all background tasks should survive
         for _ in range(5):
             await asyncio.sleep(0.02)
             status = await system.ask(ref, "check_all")
 
-            # All tasks should be alive
             assert status["task0_alive"], "Task 0 should be alive"
             assert status["task1_alive"], "Task 1 should be alive"
             assert status["task2_alive"], "Task 2 should be alive"
-
-            # All counters should be increasing
             assert all(c > 0 for c in status["counters"]), "All counters should be > 0"
 
-        # Stop all tasks
         final_status = await system.ask(ref, "stop_all")
         assert all(c > 0 for c in final_status["counters"]), "Final counters should all be > 0"
 
         await system.shutdown()
 
     @pytest.mark.anyio
-    async def test_invocation_tasks_persist_across_messages(self):
-        """Tasks created during an invocation persist — they are not auto-cancelled."""
+    async def test_unregistered_tasks_are_cancelled(self):
+        """Unregistered tasks created during a message are cancelled after completion."""
 
         class ScopedTaskActor(Actor[str, int]):
             def __init__(self):
@@ -569,13 +559,14 @@ class TestThreadedBackgroundTaskPreservation:
 
                 loop = asyncio.get_event_loop()
 
-                if msg == "create_task":
-                    async def work():
+                if msg == "create_scoped_task":
+                    async def scoped_work():
                         for i in range(100):
                             await asyncio.sleep(0.01)
                         return 999
 
-                    self.invocation_task = loop.create_task(work())
+                    self.invocation_task = loop.create_task(scoped_work())
+                    # NOT registered — should be cancelled after message
                     return 1
 
                 elif msg == "check_task":
@@ -588,12 +579,10 @@ class TestThreadedBackgroundTaskPreservation:
         system = ActorSystem("test", threaded=True, executor_workers=2)
         ref = await system.spawn(ScopedTaskActor, "scoped-actor")
 
-        # Create a task
-        await system.ask(ref, "create_task")
+        await system.ask(ref, "create_scoped_task")
 
-        # Task should still be running (not auto-cancelled)
         await asyncio.sleep(0.05)
         status = await system.ask(ref, "check_task")
-        assert status == 0, "Task should still be running, not auto-cancelled"
+        assert status == 1, "Unregistered task should have been cancelled after message completion"
 
         await system.shutdown()

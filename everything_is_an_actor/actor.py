@@ -90,6 +90,22 @@ class ActorContext:
         """Spawn a child actor supervised by this actor."""
         return await self._cell.spawn_child(actor_cls, name, mailbox_size=mailbox_size, middlewares=middlewares)
 
+    def register_background_task(self, task: Any) -> None:
+        """Register a task as durable — it survives per-message cleanup.
+
+        Use inside sync ``receive()`` for long-lived background work::
+
+            loop = asyncio.get_event_loop()
+            task = loop.create_task(my_background_work())
+            self.context.register_background_task(task)
+
+        Unregistered tasks created during a message are cancelled after
+        the message completes. Registered tasks live until actor shutdown.
+        """
+        bg = self._cell._background_tasks
+        bg.add(task)
+        task.add_done_callback(bg.discard)
+
     async def stop_self(self) -> None:
         """Stop this actor (self) and remove from parent's children.
 
