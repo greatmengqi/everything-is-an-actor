@@ -75,6 +75,10 @@ class Empty(Exception):
     """Raised by ``get_nowait`` when mailbox is empty."""
 
 
+class MailboxClosed(Exception):
+    """Raised when ``put``/``put_nowait`` is called on a closed mailbox."""
+
+
 class MemoryMailbox(Mailbox):
     """In-process mailbox backed by ``asyncio.Queue``."""
 
@@ -259,6 +263,8 @@ class ThreadedMailbox(Mailbox):
                 continue
 
     async def put(self, msg: Any) -> bool:
+        if self._stop_event.is_set():
+            raise MailboxClosed("mailbox closed")
         if self._backpressure_policy == BACKPRESSURE_BLOCK:
             self._queue.put(msg)
             return True
@@ -270,6 +276,8 @@ class ThreadedMailbox(Mailbox):
         return False
 
     def put_nowait(self, msg: Any) -> bool:
+        if self._stop_event.is_set():
+            raise MailboxClosed("mailbox closed")
         if self._maxsize > 0 and self._queue.full():
             return False
         self._queue.put_nowait(msg)
