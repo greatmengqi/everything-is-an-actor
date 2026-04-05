@@ -45,7 +45,6 @@ _MAX_CONSECUTIVE_FAILURES = 10
 _thread_local_loop = threading.local()
 
 
-
 @dataclass
 class DeadLetter:
     """A message that could not be delivered."""
@@ -128,6 +127,7 @@ class ActorSystem:
         """
         # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.validation import validate_agent_actor_compatibility
+
         validate_agent_actor_compatibility(actor_cls, mode="single")
 
         if name in self._root_cells:
@@ -138,15 +138,13 @@ class ActorSystem:
         if dispatcher is None:
             # Auto-detect: sync actor (overrides receive()) → route to "default" pool
             from everything_is_an_actor.validation import find_sync_handler
+
             if find_sync_handler(actor_cls, "receive") is not None and "io" in self._dispatchers:
                 dispatcher = "io"
 
         if dispatcher is not None:
             if dispatcher not in self._dispatchers:
-                raise ValueError(
-                    f"Unknown dispatcher '{dispatcher}'. "
-                    f"Available: {list(self._dispatchers.keys())}"
-                )
+                raise ValueError(f"Unknown dispatcher '{dispatcher}'. Available: {list(self._dispatchers.keys())}")
             resolved_dispatcher = self._dispatchers[dispatcher]
             # Lazy start on first use
             if dispatcher not in self._dispatchers_started:
@@ -165,6 +163,7 @@ class ActorSystem:
             elif actual_mailbox is None:
                 # Cross-loop: use FastMailbox with target_loop for thread-safe signaling
                 from everything_is_an_actor.mailbox import FastMailbox
+
                 actual_mailbox = FastMailbox(mailbox_size, target_loop=target_loop)
 
         cell = _ActorCell(
@@ -332,6 +331,7 @@ class ActorSystem:
         if ref is None:
             raise ValueError(f"Actor not found: {target}")
         import asyncio as _aio
+
         result = ref._tell(message)
         if _aio.iscoroutine(result):
             await result
@@ -396,9 +396,7 @@ class _ActorCell:
         self._sync_loop: asyncio.AbstractEventLoop | None = None  # thread-local loop used by _sync_wrapper
         self._background_tasks: set[asyncio.Task] = set()  # durable tasks registered via context API
         # Cross-loop completion signal (None when same-loop)
-        self._done: concurrent.futures.Future | None = (
-            concurrent.futures.Future() if target_loop is not None else None
-        )
+        self._done: concurrent.futures.Future | None = concurrent.futures.Future() if target_loop is not None else None
         # Cache path (immutable after init — parent never changes)
         parts: list[str] = []
         cell: _ActorCell | None = self
@@ -414,6 +412,7 @@ class _ActorCell:
 
         # Check if actor implements sync receive() (MRO-aware)
         from everything_is_an_actor.validation import find_sync_handler
+
         has_sync_receive = find_sync_handler(self.actor_cls, "receive") is not None
 
         if has_sync_receive:
@@ -503,10 +502,7 @@ class _ActorCell:
             # Cancel non-durable tasks created during this invocation
             current_tasks = asyncio.all_tasks(loop)
             leaked = [
-                t for t in current_tasks
-                if t not in existing_tasks
-                and not t.done()
-                and t not in self._background_tasks
+                t for t in current_tasks if t not in existing_tasks and not t.done() and t not in self._background_tasks
             ]
             if leaked:
                 for t in leaked:
@@ -521,7 +517,8 @@ class _ActorCell:
                 except (asyncio.TimeoutError, Exception):
                     logger.warning(
                         "Sync wrapper cleanup: %d leaked tasks not cancelled in time for %s",
-                        len(leaked), self.path,
+                        len(leaked),
+                        self.path,
                     )
 
     async def enqueue(self, msg: _Envelope | _Stop) -> None:
@@ -560,6 +557,7 @@ class _ActorCell:
     ) -> ActorRef[MsgT, RetT]:
         # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.validation import validate_agent_actor_compatibility
+
         validate_agent_actor_compatibility(actor_cls, mode="single")
 
         if name in self.children:
@@ -750,6 +748,7 @@ class _ActorCell:
             if loop.is_running():
                 # Loop is active on another thread — schedule and WAIT for cleanup
                 try:
+
                     async def _cancel_all() -> None:
                         tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
                         for t in tasks:
@@ -762,7 +761,8 @@ class _ActorCell:
                 except TimeoutError:
                     logger.warning(
                         "Sync loop cleanup timed out after %.1fs for %s, tasks may leak",
-                        _CLEANUP_TIMEOUT, self.path,
+                        _CLEANUP_TIMEOUT,
+                        self.path,
                     )
                 except Exception:
                     logger.warning("Sync loop cleanup failed for %s", self.path, exc_info=True)
@@ -776,7 +776,8 @@ class _ActorCell:
                     except Exception:
                         logger.warning(
                             "Sync loop cleanup: %d tasks could not be drained for %s",
-                            len(pending), self.path,
+                            len(pending),
+                            self.path,
                         )
             self._background_tasks.clear()
             self._sync_loop = None

@@ -109,17 +109,14 @@ class ActorContext:
         import asyncio
 
         if not isinstance(task, asyncio.Task):
-            raise TypeError(
-                f"register_background_task() requires an asyncio.Task, got {type(task).__name__}"
-            )
+            raise TypeError(f"register_background_task() requires an asyncio.Task, got {type(task).__name__}")
         # Validate loop ownership when sync loop is known
         sync_loop = getattr(self._cell, "_sync_loop", None)
         if sync_loop is not None:
             task_loop = task.get_loop()
             if task_loop is not sync_loop:
                 raise ValueError(
-                    f"Task belongs to a different event loop. "
-                    f"Expected the actor's sync loop, got {task_loop!r}"
+                    f"Task belongs to a different event loop. Expected the actor's sync loop, got {task_loop!r}"
                 )
         bg = self._cell._background_tasks
         bg.add(task)
@@ -166,8 +163,10 @@ class ActorContext:
         import uuid
 
         if isinstance(target, type):
+
             async def _ephemeral_ask() -> RetT:
                 import asyncio
+
                 actor_name = name or f"{target.__name__.lower()}-{uuid.uuid4().hex[:8]}"
                 ref = await self.spawn(target, actor_name)
                 try:
@@ -178,6 +177,7 @@ class ActorContext:
                     if current is not None and getattr(current, "cancelling", lambda: 0)() > 0:
                         ref.interrupt()
                     await ref.join()
+
             return ComposableFuture(_ephemeral_ask())
         else:
             return target._ask(message, timeout=timeout)
@@ -197,10 +197,13 @@ class ActorContext:
 
         async def _seq() -> list[Any]:
             import asyncio
+
             if not tasks:
                 return []
+
             async def _run(t: Any, msg: Any) -> Any:
                 return await self.ask(t, msg, timeout=timeout)
+
             spawned = [asyncio.create_task(_run(t, msg)) for t, msg in tasks]
             _, pending = await asyncio.wait(spawned, return_when=asyncio.FIRST_EXCEPTION)
             if pending:
@@ -213,6 +216,7 @@ class ActorContext:
                     if exc is not None:
                         raise exc
             return [t.result() for t in spawned]
+
         return ComposableFuture(_seq())
 
     def traverse(
@@ -241,10 +245,13 @@ class ActorContext:
 
         async def _race() -> Any:
             import asyncio
+
             if not tasks:
                 raise ValueError("race() requires at least one task")
+
             async def _run(t: Any, msg: Any) -> Any:
                 return await self.ask(t, msg, timeout=timeout)
+
             spawned = [asyncio.create_task(_run(t, msg)) for t, msg in tasks]
             try:
                 _, pending = await asyncio.wait(spawned, return_when=asyncio.FIRST_COMPLETED)
@@ -259,6 +266,7 @@ class ActorContext:
                         t.cancel()
                 await asyncio.gather(*spawned, return_exceptions=True)
                 raise
+
         return ComposableFuture(_race())
 
     def zip(
@@ -270,6 +278,7 @@ class ActorContext:
     ) -> ComposableFuture[tuple[Any, Any]]:
         """Run two tasks concurrently, return pair. Returns ComposableFuture."""
         from everything_is_an_actor.composable_future import Fn
+
         return self.sequence([task_a, task_b], timeout=timeout).map(
             Fn[list[Any], tuple[Any, Any]](lambda r: (r[0], r[1]))
         )

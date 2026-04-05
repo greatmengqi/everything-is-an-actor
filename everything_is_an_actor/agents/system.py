@@ -51,6 +51,7 @@ class AgentSystem(ActorSystem):
         """
         # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.validation import validate_agent_actor_compatibility
+
         validate_agent_actor_compatibility(actor_cls, mode="agent")
 
         return await super().spawn(
