@@ -18,7 +18,7 @@ def find_sync_handler(
     for the first sync (non-coroutine) match, or ``None`` if all handlers are
     async or absent.
     """
-    from everything_is_an_actor.actor import Actor as _ActorBase
+    from everything_is_an_actor.core.actor import Actor as _ActorBase
 
     for cls in actor_cls.__mro__:
         if cls is _ActorBase or cls is object:

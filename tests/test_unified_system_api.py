@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-from everything_is_an_actor.actor import Actor
-from everything_is_an_actor.unified_system import ActorSystem, ActorSystemMode
+from everything_is_an_actor.core.actor import Actor
+from everything_is_an_actor.core.unified_system import ActorSystem, ActorSystemMode
 
 
 class EchoActor(Actor):

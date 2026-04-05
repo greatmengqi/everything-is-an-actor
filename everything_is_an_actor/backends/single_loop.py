@@ -11,12 +11,12 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Dict, TypeVar
 
-from everything_is_an_actor.backend import ActorBackend
+from everything_is_an_actor.core.backend import ActorBackend
 
 if TYPE_CHECKING:
-    from everything_is_an_actor.actor import Actor
-    from everything_is_an_actor.ref import ActorRef
-    from everything_is_an_actor.unified_system import ActorSystemConfig
+    from everything_is_an_actor.core.actor import Actor
+    from everything_is_an_actor.core.ref import ActorRef
+    from everything_is_an_actor.core.unified_system import ActorSystemConfig
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class SingleLoopBackend(ActorBackend):
             )
 
         # 使用现有的 ActorSystem 实现（避免命名冲突）
-        from everything_is_an_actor import system as _system_module
+        from everything_is_an_actor.core import system as _system_module
 
         self._system = _system_module.ActorSystem(
             name=name,
@@ -62,7 +62,7 @@ class SingleLoopBackend(ActorBackend):
     ) -> "ActorRef[MsgT, RetT]":
         """创建 Actor"""
         # Validate AgentActor compatibility at spawn-time
-        from everything_is_an_actor.validation import validate_agent_actor_compatibility
+        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
 
         validate_agent_actor_compatibility(actor_cls, mode="single")
 
