@@ -39,6 +39,9 @@ packages = ["everything_is_an_actor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "asyncio: mark test as async (used by pytest-asyncio)",
+]
 
 [tool.ruff]
 line-length = 120
