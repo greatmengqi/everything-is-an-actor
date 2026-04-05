@@ -1,27 +1,31 @@
-"""Mixture of Agents (MOA) — composable multi-agent orchestration pattern.
+"""MOA (Mixture-of-Agents) — pattern library on top of Flow.
+
+Provides convenience functions for the MOA orchestration pattern:
+parallel proposers → quorum validation → aggregator, chained in layers.
 
 Usage::
 
-    from everything_is_an_actor.moa import MoATree, MoANode, MoABuilder
+    from everything_is_an_actor.moa import MoASystem, moa_layer, moa_tree
 
-    tree = MoATree(nodes=[
-        MoANode(proposers=[AgentA, AgentB], aggregator=Agg),
-    ])
-    MoAAgent = MoABuilder().build(tree)
-
-    async for event in system.run(MoAAgent, "query"):
-        print(event)
+    system = MoASystem()
+    result = await system.run(
+        moa_tree([
+            moa_layer(proposers=[Agent1, Agent2], aggregator=Agg, min_success=1),
+        ]),
+        "query",
+    )
+    await system.shutdown()
 """
 
-from everything_is_an_actor.moa.config import MoANode, MoATree
-from everything_is_an_actor.moa.builder import LayerOutput, MoABuilder, ResolvedNode
+from everything_is_an_actor.moa.layer_output import LayerOutput
+from everything_is_an_actor.moa.patterns import moa_layer, moa_tree
+from everything_is_an_actor.moa.system import MoASystem
 from everything_is_an_actor.moa.utils import format_references
 
 __all__ = [
-    "MoATree",
-    "MoANode",
-    "MoABuilder",
     "LayerOutput",
-    "ResolvedNode",
+    "MoASystem",
     "format_references",
+    "moa_layer",
+    "moa_tree",
 ]
