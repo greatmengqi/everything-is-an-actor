@@ -13,8 +13,8 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, TypeVar
 
 if TYPE_CHECKING:
-    from everything_is_an_actor.actor import Actor
-    from everything_is_an_actor.ref import ActorRef
+    from everything_is_an_actor.core.actor import Actor
+    from everything_is_an_actor.core.ref import ActorRef
 
 MsgT = TypeVar("MsgT")
 RetT = TypeVar("RetT")

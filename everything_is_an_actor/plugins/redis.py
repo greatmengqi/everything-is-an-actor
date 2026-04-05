@@ -23,8 +23,8 @@ import json
 import logging
 from typing import Any
 
-from everything_is_an_actor.mailbox import Empty, Mailbox
-from everything_is_an_actor.ref import _Envelope, _Stop
+from everything_is_an_actor.core.mailbox import Empty, Mailbox
+from everything_is_an_actor.core.ref import _Envelope, _Stop
 
 logger = logging.getLogger(__name__)
 

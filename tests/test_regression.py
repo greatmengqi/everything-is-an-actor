@@ -10,8 +10,8 @@ from everything_is_an_actor import Actor
 from everything_is_an_actor.agents.agent_actor import AgentActor
 from everything_is_an_actor.agents.system import AgentSystem
 from everything_is_an_actor.agents.task import Task
-from everything_is_an_actor.mailbox import MailboxClosed, ThreadedMailbox
-from everything_is_an_actor.system import ActorSystem
+from everything_is_an_actor.core.mailbox import MailboxClosed, ThreadedMailbox
+from everything_is_an_actor.core.system import ActorSystem
 
 
 class TestAgentActorBackwardCompatibility:

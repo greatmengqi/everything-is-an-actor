@@ -6,8 +6,8 @@ import asyncio
 import uuid
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
-from everything_is_an_actor.composable_future import ComposableFuture
-from everything_is_an_actor.frees import Free, Suspend
+from everything_is_an_actor.core.composable_future import ComposableFuture
+from everything_is_an_actor.core.frees import Free, Suspend
 
 if TYPE_CHECKING:
     from .system import _ActorCell
@@ -185,7 +185,7 @@ class ActorRef(Generic[MsgT, RetT]):
 
             result = await system.run_free(workflow)
         """
-        from everything_is_an_actor.actor_f import AskF
+        from everything_is_an_actor.core.actor_f import AskF
 
         return Suspend(AskF(self, msg))  # type: ignore[return-value]
 
@@ -199,7 +199,7 @@ class ActorRef(Generic[MsgT, RetT]):
 
             await system.run_free(workflow)
         """
-        from everything_is_an_actor.actor_f import TellF
+        from everything_is_an_actor.core.actor_f import TellF
 
         return Suspend(TellF(self, msg))  # type: ignore[return-value]
 
@@ -213,7 +213,7 @@ class ActorRef(Generic[MsgT, RetT]):
 
             await system.run_free(workflow)
         """
-        from everything_is_an_actor.actor_f import StopF
+        from everything_is_an_actor.core.actor_f import StopF
 
         return Suspend(StopF(self))  # type: ignore[return-value]
 

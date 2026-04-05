@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from everything_is_an_actor import Actor, ActorSystem, MailboxFullError
-from everything_is_an_actor.mailbox import BACKPRESSURE_BLOCK, BACKPRESSURE_DROP_NEW, BACKPRESSURE_FAIL, MemoryMailbox
+from everything_is_an_actor.core.mailbox import BACKPRESSURE_BLOCK, BACKPRESSURE_DROP_NEW, BACKPRESSURE_FAIL, MemoryMailbox
 
 
 class SlowActor(Actor):

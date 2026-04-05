@@ -16,11 +16,11 @@ Usage::
         await system.shutdown()
 """
 
-from everything_is_an_actor.actor import Actor, ActorContext, AfterIdle, AfterMessage, StopMode, StopPolicy
+from everything_is_an_actor.core.actor import Actor, ActorContext, AfterIdle, AfterMessage, StopMode, StopPolicy
 from everything_is_an_actor.agents.system import AgentSystem
-from everything_is_an_actor.dispatcher import DefaultDispatcher, Dispatcher, PoolDispatcher
-from everything_is_an_actor.frees import Free, FlatMap, Pure, Suspend, lift_free, run_free
-from everything_is_an_actor.actor_f import (
+from everything_is_an_actor.core.dispatcher import DefaultDispatcher, Dispatcher, PoolDispatcher
+from everything_is_an_actor.core.frees import Free, FlatMap, Pure, Suspend, lift_free, run_free
+from everything_is_an_actor.core.actor_f import (
     ActorF,
     AskF,
     SpawnF,
@@ -33,11 +33,11 @@ from everything_is_an_actor.actor_f import (
     tell,
     tell_direct,
 )
-from everything_is_an_actor.interpreter import MockInterpreter, MockRef, MockSystem, run_free_mock
-from everything_is_an_actor.mailbox import FastMailbox, Mailbox, MemoryMailbox, ThreadedMailbox
-from everything_is_an_actor.middleware import Middleware
-from everything_is_an_actor.ref import ActorRef, MailboxFullError, ReplyChannel
-from everything_is_an_actor.supervision import (
+from everything_is_an_actor.core.interpreter import MockInterpreter, MockRef, MockSystem, run_free_mock
+from everything_is_an_actor.core.mailbox import FastMailbox, Mailbox, MemoryMailbox, ThreadedMailbox
+from everything_is_an_actor.core.middleware import Middleware
+from everything_is_an_actor.core.ref import ActorRef, MailboxFullError, ReplyChannel
+from everything_is_an_actor.core.supervision import (
     AllForOneStrategy,
     Directive,
     DirectiveResult,
@@ -51,8 +51,8 @@ from everything_is_an_actor.supervision import (
     sequence,
     traverse,
 )
-from everything_is_an_actor.system import ActorSystem, DeadLetter
-from everything_is_an_actor.virtual import RegistryStore, VirtualActorRegistry
+from everything_is_an_actor.core.system import ActorSystem, DeadLetter
+from everything_is_an_actor.core.virtual import RegistryStore, VirtualActorRegistry
 
 __all__ = [
     "Actor",

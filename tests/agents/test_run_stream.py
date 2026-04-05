@@ -325,7 +325,7 @@ async def test_span_tree_is_reconstructable():
 
 async def test_agent_system_plain_spawn_still_works():
     """AgentSystem.spawn() works exactly like ActorSystem.spawn()."""
-    from everything_is_an_actor.actor import Actor
+    from everything_is_an_actor.core.actor import Actor
 
     class SimpleActor(Actor[str, str]):
         async def on_receive(self, message: str) -> str:
@@ -340,7 +340,7 @@ async def test_agent_system_plain_spawn_still_works():
 
 async def test_agent_system_backend_param_ignored():
     """spawn() accepts backend= without error (reserved for M5)."""
-    from everything_is_an_actor.actor import Actor
+    from everything_is_an_actor.core.actor import Actor
 
     class Noop(Actor[Any, None]):
         async def on_receive(self, message: Any) -> None:

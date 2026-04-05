@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from everything_is_an_actor import Actor, ActorSystem, AfterIdle
-from everything_is_an_actor.virtual import VirtualActorRegistry
+from everything_is_an_actor.core.virtual import VirtualActorRegistry
 
 # Shared "database" for persistence tests
 _fake_db: dict[str, list] = {}

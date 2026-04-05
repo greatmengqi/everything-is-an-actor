@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
 
-from everything_is_an_actor.supervision import OneForOneStrategy, SupervisorStrategy
+from everything_is_an_actor.core.supervision import OneForOneStrategy, SupervisorStrategy
 
 DEFAULT_MAILBOX_SIZE = 256
 
 if TYPE_CHECKING:
-    from everything_is_an_actor.ref import ActorRef
+    from everything_is_an_actor.core.ref import ActorRef
 
 # Message and return type variables — use Actor[MyMsg, MyReturn] for typed actors
 MsgT = TypeVar("MsgT")
@@ -159,7 +159,7 @@ class ActorContext:
                   Defaults to ``{classname}-{uuid8}``. Provide a stable name
                   to improve log correlation across retries.
         """
-        from everything_is_an_actor.composable_future import ComposableFuture
+        from everything_is_an_actor.core.composable_future import ComposableFuture
         import uuid
 
         if isinstance(target, type):
@@ -193,7 +193,7 @@ class ActorContext:
         On first failure, remaining siblings are cancelled; ephemeral children
         are cleaned up via ``ask()``'s finally block.
         """
-        from everything_is_an_actor.composable_future import ComposableFuture
+        from everything_is_an_actor.core.composable_future import ComposableFuture
 
         async def _seq() -> list[Any]:
             import asyncio
@@ -241,7 +241,7 @@ class ActorContext:
         timeout: float = 300.0,
     ) -> ComposableFuture[Any]:
         """Return first completed result; cancel the rest. Returns ComposableFuture."""
-        from everything_is_an_actor.composable_future import ComposableFuture
+        from everything_is_an_actor.core.composable_future import ComposableFuture
 
         async def _race() -> Any:
             import asyncio
@@ -277,7 +277,7 @@ class ActorContext:
         timeout: float = 300.0,
     ) -> ComposableFuture[tuple[Any, Any]]:
         """Run two tasks concurrently, return pair. Returns ComposableFuture."""
-        from everything_is_an_actor.composable_future import Fn
+        from everything_is_an_actor.core.composable_future import Fn
 
         return self.sequence([task_a, task_b], timeout=timeout).map(
             Fn[list[Any], tuple[Any, Any]](lambda r: (r[0], r[1]))

@@ -6,7 +6,7 @@ The registry manages their lifecycle: activate on first message, deactivate on i
 Usage::
 
     from everything_is_an_actor import ActorSystem, AfterIdle, Actor
-    from everything_is_an_actor.virtual import VirtualActorRegistry
+    from everything_is_an_actor.core.virtual import VirtualActorRegistry
 
     class ChatAgent(Actor):
         def stop_policy(self):
@@ -38,8 +38,8 @@ import asyncio
 import logging
 from typing import Any, TypeVar
 
-from everything_is_an_actor.actor import Actor
-from everything_is_an_actor.ref import ActorRef
+from everything_is_an_actor.core.actor import Actor
+from everything_is_an_actor.core.ref import ActorRef
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ class VirtualActorRegistry:
         store: RegistryStore | None = None,
         default_idle_seconds: float = 300.0,
     ) -> None:
-        from everything_is_an_actor.system import ActorSystem
+        from everything_is_an_actor.core.system import ActorSystem
 
         self._system: ActorSystem = system
         self._active: dict[str, ActorRef] = {}

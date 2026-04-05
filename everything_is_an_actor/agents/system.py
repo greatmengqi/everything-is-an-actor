@@ -7,14 +7,14 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from everything_is_an_actor.actor import Actor, MsgT, RetT
+from everything_is_an_actor.core.actor import Actor, MsgT, RetT
 from everything_is_an_actor.agents.agent_actor import AgentActor
 from everything_is_an_actor.agents.run_stream import RunStream, _run_event_sink, make_collector_cls
 from everything_is_an_actor.agents.task import Task, TaskEvent
-from everything_is_an_actor.mailbox import Mailbox
-from everything_is_an_actor.middleware import Middleware
-from everything_is_an_actor.ref import ActorRef
-from everything_is_an_actor.system import ActorSystem
+from everything_is_an_actor.core.mailbox import Mailbox
+from everything_is_an_actor.core.middleware import Middleware
+from everything_is_an_actor.core.ref import ActorRef
+from everything_is_an_actor.core.system import ActorSystem
 
 
 class AgentSystem(ActorSystem):
@@ -50,7 +50,7 @@ class AgentSystem(ActorSystem):
         Currently ignored — all actors run in-process.
         """
         # Validate AgentActor compatibility at spawn-time
-        from everything_is_an_actor.validation import validate_agent_actor_compatibility
+        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
 
         validate_agent_actor_compatibility(actor_cls, mode="agent")
 
