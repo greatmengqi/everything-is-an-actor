@@ -1,0 +1,11 @@
+[package]
+name = "actor-runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prost = "0.13"
+bytes = "1"
+
+[build-dependencies]
+prost-build = "0.13"

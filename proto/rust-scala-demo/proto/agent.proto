@@ -1,0 +1,100 @@
+syntax = "proto3";
+package agent.pb;
+
+// ── 副作用指令 ──
+
+message AskOp      { string target = 1; string payload = 2; }
+message TellOp     { string target = 1; string payload = 2; }
+message LoadStateOp { string key = 1; }
+message SaveStateOp { string key = 1; string value = 2; }
+
+message AgentOp {
+  oneof op {
+    AskOp ask             = 1;
+    TellOp tell           = 2;
+    LoadStateOp load_state = 3;
+    SaveStateOp save_state = 4;
+  }
+}
+
+// ── Supervision ──
+
+enum OnExhaust {
+  STOP        = 0;
+  ESCALATE    = 1;  // 集群: 通知上游 supervisor
+  DEAD_LETTER = 2;  // 集群: 发到死信队列
+}
+
+message SupervisionPolicy {
+  int32 max_retries     = 1;
+  int32 window_seconds  = 2;  // 集群扩展: 时间窗口内的重试计数
+  OnExhaust on_exhaust  = 3;
+}
+
+// ── 并行 effect ──
+
+message ParallelOps {
+  repeated AgentOp ops = 1;
+}
+
+// ── 可序列化的 continuation ──
+
+message ContState {
+  string agent_type              = 1;
+  string msg                     = 2;
+  int32 resume_at                = 3;
+  map<int32, string> results     = 4;
+  SupervisionPolicy policy       = 5;  // supervision 策略
+}
+
+// ── 请求 / 响应 ──
+
+message Request {
+  oneof request {
+    ReceiveRequest receive = 1;
+    ResumeRequest resume   = 2;
+  }
+}
+
+message ReceiveRequest {
+  string agent_type = 1;
+  string msg        = 2;
+}
+
+message ResumeRequest {
+  ContState cont   = 1;
+  string response  = 2;
+}
+
+message Response {
+  oneof response {
+    ReadyResponse ready   = 1;
+    EffectResponse effect = 2;
+    DoneResponse done     = 3;
+  }
+}
+
+message ReadyResponse {
+  string version = 1;
+}
+
+message EffectResponse {
+  oneof kind {
+    AgentOp single       = 1;  // 单个 effect
+    ParallelOps parallel = 4;  // 并行 effect
+  }
+  ContState cont           = 2;
+  repeated string emissions = 3;  // 流式输出
+}
+
+message DoneResponse {
+  string result             = 1;
+  repeated string emissions = 2;  // 流式输出
+}
+
+// ── gRPC service (集群模式用) ──
+
+service AgentService {
+  rpc Receive (ReceiveRequest) returns (Response);
+  rpc Resume  (ResumeRequest)  returns (Response);
+}

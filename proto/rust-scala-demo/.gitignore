@@ -1,0 +1,7 @@
+# Rust
+rust-runtime/target/
+
+# Scala
+scala-agent/target/
+scala-agent/project/target/
+scala-agent/project/project/
