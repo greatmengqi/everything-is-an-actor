@@ -277,33 +277,29 @@ fn main() {
 
     // ── 用户 agent 示例 ──
 
-    println!("--- Translator (Level 1: 最简 agent) ---");
-    let r = rt.run("translator", "t1", "你好世界");
+    // ── Actor API 用例 ──
+
+    println!("========================================");
+    println!("--- Actor API Level 1: translator ---");
+    let r = rt.run("translator_ex", "t1", "你好世界");
     println!("  => {}\n", r);
 
-    println!("--- Todo List (Level 2: 带状态) ---");
+    println!("--- Actor API Level 2: todo list ---");
     for cmd in ["add Buy milk", "add Read paper", "list", "done 1", "list"] {
-        let r = rt.run("todo", "td1", cmd);
+        let r = rt.run("todo_ex", "td1", cmd);
         println!("  => {}\n", r);
     }
 
-    println!("--- Code Reviewer (Level 3: streaming) ---");
-    let r = rt.run("code_reviewer", "cr1", "def foo(): return bar + 1");
+    println!("--- Actor API Level 3: code reviewer (streaming) ---");
+    let r = rt.run("code_reviewer_ex", "cr1", "def foo(): return bar + 1");
     println!("  => {}\n", r);
 
-    println!("--- Recruiter (Level 6: 组合) ---");
-    let r = rt.run("recruiter", "rec1", "Senior Rust Engineer");
+    println!("--- Actor API Level 6: recruiter (parallel+streaming+supervision) ---");
+    let r = rt.run("recruiter_ex", "rec1", "Senior Rust Engineer");
     println!("  => {}\n", r);
 
-    // ── Actor API 示例 ──
-
-    println!("========================================");
     println!("--- Actor API: chat_actor ---");
     let r = rt.run("chat_actor", "chat1", "Hi there!");
-    println!("  => {}\n", r);
-
-    println!("--- Actor API: researcher_actor ---");
-    let r = rt.run("researcher_actor", "res1", "AI safety");
     println!("  => {}\n", r);
 
     println!("=== Done ===");
