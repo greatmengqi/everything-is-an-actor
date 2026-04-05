@@ -9,7 +9,10 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from everything_is_an_actor.flow.flow import Flow
 
 from everything_is_an_actor.core.actor import Actor, MsgT, RetT
 from everything_is_an_actor.agents.agent_actor import AgentActor
@@ -87,6 +90,24 @@ class AgentSystem:
     async def shutdown(self, *, timeout: float = 10.0) -> None:
         """Shut down the underlying actor system."""
         await self._actor_system.shutdown(timeout=timeout)
+
+    # ── Flow execution ────────────────────────────────
+
+    async def run_flow(self, flow: Flow, input: object) -> object:
+        """Execute a Flow program, returning the final result.
+
+        Internally creates an Interpreter — callers need not import it.
+        """
+        from everything_is_an_actor.flow.interpreter import Interpreter
+
+        return await Interpreter(self).run(flow, input)
+
+    async def run_flow_stream(self, flow: Flow, input: object):  # type: ignore[return]
+        """Execute a Flow program, yielding TaskEvent streams."""
+        from everything_is_an_actor.flow.interpreter import Interpreter
+
+        async for event in Interpreter(self).run_stream(flow, input):
+            yield event
 
     # ── Delegated ActorSystem methods ───────────────────────
 

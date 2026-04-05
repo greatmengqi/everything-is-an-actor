@@ -55,3 +55,6 @@ def loop(body: Flow[I, Union[Continue[I], Done[O]]], *, max_iter: int = 10) -> F
 def loop_with_state(body: Flow, *, init_state: Any = None, max_iter: int = 10) -> Flow:
     """Trace — loop with explicit feedback state S."""
     return _LoopWithState(body=body, init_state=init_state, max_iter=max_iter)
+
+
+from everything_is_an_actor.flow.quorum import at_least  # noqa: E402, F401

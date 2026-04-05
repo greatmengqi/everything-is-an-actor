@@ -14,7 +14,8 @@ Usage::
 """
 
 from everything_is_an_actor.flow.flow import Continue, Done, Flow, FlowFilterError
-from everything_is_an_actor.flow.combinators import agent, loop, loop_with_state, pure, race, zip_all
+from everything_is_an_actor.flow.combinators import agent, at_least, loop, loop_with_state, pure, race, zip_all
+from everything_is_an_actor.flow.quorum import QuorumResult
 from everything_is_an_actor.flow.interpreter import Interpreter
 from everything_is_an_actor.flow.serialize import from_dict, to_dict
 from everything_is_an_actor.flow.system import FlowSystem
@@ -36,4 +37,6 @@ __all__ = [
     "from_dict",
     "to_mermaid",
     "zip_all",
+    "at_least",
+    "QuorumResult",
 ]
