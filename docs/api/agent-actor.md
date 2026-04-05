@@ -377,7 +377,7 @@ Stream `TaskEvent`s from an already-spawned `AgentActor` ref, then yield the fin
 from everything_is_an_actor.agents.system import AgentSystem
 from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
-system = AgentSystem()
+system = AgentSystem(ActorSystem())
 ref = await system.spawn(SummaryAgent, "summarizer")
 
 # First call

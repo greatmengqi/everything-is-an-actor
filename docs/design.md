@@ -6,19 +6,34 @@ Architecture overview and key design decisions for `everything-is-an-actor`.
 
 ## Architecture
 
-The framework has two independent layers:
+The framework has five layers with a strict downward dependency direction:
 
 ```
-┌─────────────────────────────────────────────┐
-│  Agent layer  (everything_is_an_actor.agents)      │
-│  Task · AgentActor · AgentSystem · streaming │
-├─────────────────────────────────────────────┤
-│  Core layer   (everything_is_an_actor)             │
-│  Actor · ActorRef · ActorSystem · Mailbox    │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  Integrations  (everything_is_an_actor.integrations)       │
+│  LangChain adapter                                   │
+├───────────────��───────────────────────────────���─────┤
+│  MOA pattern  (everything_is_an_actor.moa)                 │
+│  moa_layer · moa_tree · MoASystem · LayerOutput      │
+├─────────────────────────────────────────────────────┤
+│  Flow ADT     (everything_is_an_actor.flow)                │
+│  Flow · combinators · interpreter · serialize · viz  │
+├─────────────────────────────────────────────────────┤
+│  Agent layer  (everything_is_an_actor.agents)              │
+│  Task · AgentActor · AgentSystem · streaming         │
+├─────────────────────────────────────────────────────┤
+│  Core layer   (everything_is_an_actor.core)                │
+│  Actor · ActorRef · ActorSystem · Mailbox            │
+└─────────────────────────────────────────────────────┘
 ```
 
-The core layer is a general-purpose actor runtime. The agent layer is a set of AI-specific abstractions built on top of it — no new primitives, no forking. Either layer can be used independently.
+Dependency direction: `integrations/ → flow/ → agents/ → core/` (and `moa/ → flow/ → agents/ → core/`).
+
+- **Core** — general-purpose actor runtime, usable independently
+- **Agents** — AI-specific abstractions (Task protocol, streaming events) built on core
+- **Flow** — composable orchestration ADT with categorical combinators, interpreted over agents
+- **MOA** — Mixture-of-Agents pattern library built on Flow primitives
+- **Integrations** — adapters for external frameworks (LangChain)
 
 ---
 

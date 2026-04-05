@@ -211,6 +211,56 @@ An operad is a collection of operations with inputs of varying arity, closed und
 
 ---
 
+## 11. Flow ADT as Free Symmetric Monoidal Category
+
+The Flow API is the most explicitly categorical layer in the framework. `Flow[I, O]` forms a **free symmetric monoidal category**:
+
+```
+Objects:    Types (I, O, ...)
+Morphisms:  Flow[I, O]
+Identity:   pure(id)
+Compose:    flat_map (Kleisli composition)
+Tensor:     zip (parallel product)
+```
+
+**Categorical structure verified:**
+
+| Structure | Flow Implementation | Category Theory |
+|-----------|-------------------|-----------------|
+| Monad | `flat_map` | Kleisli composition in `Kl(Flow)` |
+| Functor | `map` | Endofunctor on the output type |
+| Tensor product | `zip` | Symmetric monoidal structure `⊗` |
+| N-ary tensor | `zip_all` | Iterated tensor product |
+| Coproduct | `branch` | Tagged union dispatch |
+| Trace | `loop` / `loop_with_state` | `tailRecM` / traced monoidal category |
+| Error handling | `recover` / `fallback_to` | MonadError |
+| Side-channel | `divert_to` | Akka-style supervision morphism |
+| Quorum | `at_least` | Validated applicative (not fail-fast) |
+
+**Key insight:** Flow is **data, not execution**. The ADT nodes are the free category — they describe morphisms without committing to interpretation. The `Interpreter` is the functor from the free category to `Async IO`:
+
+```
+F: Free[Flow] → AsyncIO
+```
+
+This separation enables:
+- `to_dict` / `from_dict` — the ADT is serializable because it's pure structure
+- `to_mermaid` — visualization is a different functor from the same free category
+- `MockInterpreter` — testing functor that inspects structure without execution
+
+### `at_least` as Validated Applicative
+
+The quorum combinator `at_least(n, *flows)` uses **Validated** semantics (accumulate errors) rather than **Either** semantics (fail-fast). This is the `Applicative` instance for `Validated[NonEmptyList[E], A]`:
+
+```python
+at_least(2, agent(A), agent(B), agent(C))
+# → QuorumResult(succeeded=(...), failed=(...))
+```
+
+All flows run; failures are collected, not short-circuited. This is the correct choice for proposer-aggregator patterns where partial results are still useful.
+
+---
+
 ## Design Evaluation
 
 ### Strengths
