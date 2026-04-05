@@ -15,6 +15,9 @@ Usage::
 
 from everything_is_an_actor.flow.flow import Continue, Done, Flow, FlowFilterError
 from everything_is_an_actor.flow.combinators import agent, loop, loop_with_state, pure, race
+from everything_is_an_actor.flow.interpreter import interpret
+from everything_is_an_actor.flow.serialize import from_dict, to_dict
+from everything_is_an_actor.flow.visualize import to_mermaid
 
 __all__ = [
     "Flow",
@@ -26,4 +29,8 @@ __all__ = [
     "race",
     "loop",
     "loop_with_state",
+    "interpret",
+    "to_dict",
+    "from_dict",
+    "to_mermaid",
 ]
