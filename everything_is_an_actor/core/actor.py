@@ -169,12 +169,19 @@ class ActorContext:
 
                 actor_name = name or f"{target.__name__.lower()}-{uuid.uuid4().hex[:8]}"
                 ref = await self.spawn(target, actor_name)
+                _timed_out = False
                 try:
                     return await ref._ask(message, timeout=timeout)
+                except asyncio.TimeoutError:
+                    _timed_out = True
+                    raise
                 finally:
                     ref.stop()
                     current = asyncio.current_task()
-                    if current is not None and getattr(current, "cancelling", lambda: 0)() > 0:
+                    should_interrupt = _timed_out or (
+                        current is not None and getattr(current, "cancelling", lambda: 0)() > 0
+                    )
+                    if should_interrupt:
                         ref.interrupt()
                     await ref.join()
 

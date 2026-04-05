@@ -23,6 +23,7 @@ class ResolvedNode:
     proposers: list[type[AgentActor]]
     aggregator: type[AgentActor]
     min_success: int
+    proposer_timeout: float
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ class MoABuilder:
 
                     # 2. Parallel proposers (Validated semantics)
                     results = await self._run_proposers(
-                        proposer_tasks, node.min_success
+                        proposer_tasks, node.min_success, node.proposer_timeout
                     )
 
                     # 3. Aggregator
@@ -88,10 +89,11 @@ class MoABuilder:
                 self,
                 tasks: list[tuple[type[AgentActor], Task]],
                 min_success: int,
+                proposer_timeout: float = 30.0,
             ) -> list[TaskResult]:
                 """Run proposers in parallel with Validated semantics."""
                 futures = [
-                    self.context.ask(target, msg).recover(
+                    self.context.ask(target, msg, timeout=proposer_timeout).recover(
                         lambda e, tid=msg.id: TaskResult(
                             task_id=tid,
                             error=str(e),
@@ -127,4 +129,5 @@ class MoABuilder:
             proposers=resolved_proposers,
             aggregator=node.aggregator,
             min_success=node.min_success,
+            proposer_timeout=node.proposer_timeout,
         )

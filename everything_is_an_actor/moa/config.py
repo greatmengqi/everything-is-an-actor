@@ -31,6 +31,7 @@ class MoANode:
     proposers: list[ProposerSpec]
     aggregator: type[AgentActor]
     min_success: int = 1
+    proposer_timeout: float = 30.0
 
     def __post_init__(self):
         if self.min_success < 1:

@@ -40,14 +40,14 @@ class TestResolvedNode:
     def test_construction(self):
         from everything_is_an_actor.moa.builder import ResolvedNode
 
-        rn = ResolvedNode(proposers=[StubAgent], aggregator=StubAgg, min_success=1)
+        rn = ResolvedNode(proposers=[StubAgent], aggregator=StubAgg, min_success=1, proposer_timeout=30.0)
         assert rn.proposers == [StubAgent]
         assert rn.aggregator is StubAgg
 
     def test_frozen(self):
         from everything_is_an_actor.moa.builder import ResolvedNode
 
-        rn = ResolvedNode(proposers=[StubAgent], aggregator=StubAgg, min_success=1)
+        rn = ResolvedNode(proposers=[StubAgent], aggregator=StubAgg, min_success=1, proposer_timeout=30.0)
         with pytest.raises(AttributeError):
             rn.min_success = 2
 
