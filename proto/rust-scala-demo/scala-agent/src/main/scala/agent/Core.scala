@@ -115,12 +115,19 @@ object Interpreter:
                   policyOverride: Option[SupervisionPolicy]): Response =
     val ctx = Ctx(resumeAt, results)
     try
+      import agent.examples.UserGuide
       val result = agentType match
-        case "assistant"  => Agents.assistant(ctx, msg)
-        case "counter"    => Agents.counter(ctx, msg)
-        case "flaky"      => Agents.flaky(ctx, msg)
-        case "researcher" => Agents.researcher(ctx, msg)
-        case other        => s"error:unknown_type:$other"
+        case "assistant"     => Agents.assistant(ctx, msg)
+        case "counter"       => Agents.counter(ctx, msg)
+        case "flaky"         => Agents.flaky(ctx, msg)
+        case "researcher"    => Agents.researcher(ctx, msg)
+        case "translator"    => UserGuide.translator(ctx, msg)
+        case "todo"          => UserGuide.todoList(ctx, msg)
+        case "code_reviewer" => UserGuide.codeReviewer(ctx, msg)
+        case "price_compare" => UserGuide.priceCompare(ctx, msg)
+        case "payment"       => UserGuide.payment(ctx, msg)
+        case "recruiter"     => UserGuide.recruiter(ctx, msg)
+        case other           => s"error:unknown_type:$other"
       Response(Response.Response.Done(DoneResponse(result, ctx.emissions)))
     catch
       case e: Suspend =>
