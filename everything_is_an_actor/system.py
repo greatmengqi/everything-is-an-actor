@@ -512,10 +512,15 @@ class _ActorCell:
                 for t in leaked:
                     t.cancel()
                 try:
-                    loop.run_until_complete(asyncio.gather(*leaked, return_exceptions=True))
-                except Exception:
+                    loop.run_until_complete(
+                        asyncio.wait_for(
+                            asyncio.gather(*leaked, return_exceptions=True),
+                            timeout=1.0,
+                        )
+                    )
+                except (asyncio.TimeoutError, Exception):
                     logger.warning(
-                        "Sync wrapper cleanup: %d tasks could not be cancelled for %s",
+                        "Sync wrapper cleanup: %d leaked tasks not cancelled in time for %s",
                         len(leaked), self.path,
                     )
 
