@@ -47,13 +47,24 @@ await system.shutdown()
 
 ## Architecture
 
-```
-everything_is_an_actor/
-  moa/
-    patterns.py    moa_layer(), moa_tree()
-    layer_output.py  LayerOutput directive carrier
-    system.py      MoASystem (high-level entry point)
-    utils.py       format_references()
+```mermaid
+graph LR
+    moa["moa/"]
+    p["patterns.py<br/><i>moa_layer(), moa_tree()</i>"]
+    l["layer_output.py<br/><i>LayerOutput directive carrier</i>"]
+    s["system.py<br/><i>MoASystem entry point</i>"]
+    u["utils.py<br/><i>format_references()</i>"]
+
+    moa --- p
+    moa --- l
+    moa --- s
+    moa --- u
+
+    style moa fill:#c4b8d9,stroke:#9b7ab5,color:#2c3e50
+    style p fill:#d9d4b8,stroke:#b5b07a,color:#2c3e50
+    style l fill:#d9d4b8,stroke:#b5b07a,color:#2c3e50
+    style s fill:#d9d4b8,stroke:#b5b07a,color:#2c3e50
+    style u fill:#d9d4b8,stroke:#b5b07a,color:#2c3e50
 ```
 
 MOA is purely compositional — it uses existing Flow primitives (`at_least`, `agent`, `pure`, `flat_map`) without modifying core or agents.

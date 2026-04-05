@@ -1,10 +1,10 @@
 # everything-is-an-actor
 
-Asyncio-native Actor framework for Python agent systems — supervision trees, event streaming, and pluggable mailbox.
+Asyncio-native Actor framework for Python agent systems — supervision trees, event streaming, composable orchestration, and pluggable mailbox.
 
 Inspired by Erlang/Akka. Built for AI agent orchestration.
 
-**[Documentation](https://greatmengqi.github.io/everything-is-an-actor/)** · [Getting Started](https://greatmengqi.github.io/everything-is-an-actor/getting-started/) · [Agent Layer](https://greatmengqi.github.io/everything-is-an-actor/agents/) · [API Reference](https://greatmengqi.github.io/everything-is-an-actor/api/agent-actor/)
+**[Documentation](https://greatmengqi.github.io/everything-is-an-actor/)** · [Getting Started](https://greatmengqi.github.io/everything-is-an-actor/getting-started/) · [Agent Layer](https://greatmengqi.github.io/everything-is-an-actor/agents/) · [Flow API](https://greatmengqi.github.io/everything-is-an-actor/flow/) · [MOA](https://greatmengqi.github.io/everything-is-an-actor/moa/) · [API Reference](https://greatmengqi.github.io/everything-is-an-actor/api/agent-actor/)
 
 ## Install
 
@@ -19,6 +19,7 @@ pip install everything-is-an-actor[redis]
 
 ```python
 import asyncio
+from everything_is_an_actor import ActorSystem
 from everything_is_an_actor.agents import AgentSystem, AgentActor, Task
 
 class SummaryAgent(AgentActor[str, str]):
@@ -27,7 +28,7 @@ class SummaryAgent(AgentActor[str, str]):
         return f"Summary: {input[:80]}..."
 
 async def main():
-    system = AgentSystem("app")
+    system = AgentSystem(ActorSystem("app"))
 
     # Stream every event from the entire agent tree
     async for event in system.run(SummaryAgent, "Long document..."):
@@ -113,7 +114,7 @@ class OrchestratorAgent(AgentActor[str, Any]):
 ### Event streaming
 
 ```python
-system = AgentSystem("app")
+system = AgentSystem(ActorSystem("app"))
 
 # Stream all events from a fresh agent run
 async for event in system.run(OrchestratorAgent, user_query):
@@ -136,55 +137,91 @@ Every `TaskEvent` carries `parent_task_id` and `parent_agent_path` — reconstru
 
 ---
 
-## Mixture of Agents (MOA)
+## Flow API
 
-Layer-by-layer pipeline: each layer runs multiple proposers in parallel, then an aggregator synthesizes their outputs. Supports nested trees, partial-failure tolerance, and per-proposer timeouts.
+Composable agent orchestration as data. `Flow[I, O]` is an ADT — build workflows with categorical combinators, execute against the actor runtime.
 
 ```python
-import asyncio
-from everything_is_an_actor.agents import AgentSystem, AgentActor, Task, TaskResult
-from everything_is_an_actor.moa import MoATree, MoANode, MoABuilder
+from everything_is_an_actor.flow import agent, pure, race, at_least
 
-class SearchAgent(AgentActor[str, str]):
+# Declarative pipeline — data, not execution
+pipeline = (
+    agent(Researcher)
+    .zip(agent(Analyst))
+    .map(merge)
+    .flat_map(agent(Writer))
+    .recover_with(agent(Fallback))
+)
+
+# Execute
+system = AgentSystem(ActorSystem())
+result = await system.run_flow(pipeline, "quantum computing")
+```
+
+**Combinators:** `map`, `flat_map`, `zip`, `zip_all`, `race`, `branch`, `branch_on`, `recover`, `recover_with`, `fallback_to`, `divert_to`, `loop`, `loop_with_state`, `filter`, `and_then`
+
+**Quorum parallelism:**
+
+```python
+from everything_is_an_actor.flow import at_least
+
+# Run 3 agents, succeed if at least 2 return
+quorum = at_least(2, agent(A), agent(B), agent(C))
+# → QuorumResult(succeeded=(...), failed=(...))
+```
+
+**Serialization & visualization:**
+
+```python
+from everything_is_an_actor.flow import to_dict, from_dict, to_mermaid
+
+data = to_dict(pipeline)          # JSON-compatible dict
+restored = from_dict(data, registry)  # round-trip
+print(to_mermaid(pipeline))       # Mermaid diagram
+```
+
+---
+
+## Mixture of Agents (MOA)
+
+Layer-by-layer pipeline built on Flow: parallel proposers → quorum validation → aggregation, with inter-layer directive passing.
+
+```python
+from everything_is_an_actor.agents import AgentActor
+from everything_is_an_actor.moa import MoASystem, moa_layer, moa_tree
+from everything_is_an_actor.flow.quorum import QuorumResult
+
+class Researcher(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
-        return f"[Search] {input}"
+        return f"Research: {input}"
 
-class AnalysisAgent(AgentActor[str, str]):
+class Critic(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
-        return f"[Analysis] {input}"
+        return f"Critique: {input}"
 
-class SynthesisAgg(AgentActor[list, str]):
-    async def execute(self, input: list[TaskResult]) -> str:
-        outputs = [r.get_or_raise() for r in input if r.is_success()]
-        return " + ".join(outputs)
+class Synthesizer(AgentActor[QuorumResult[str], str]):
+    async def execute(self, results: QuorumResult[str]) -> str:
+        return "\n".join(results.succeeded)
 
-# Declare the pipeline
-tree = MoATree(nodes=[
-    MoANode(
-        proposers=[SearchAgent, AnalysisAgent],
-        aggregator=SynthesisAgg,
-        min_success=1,          # tolerate partial failures
-        proposer_timeout=10.0,  # per-proposer timeout
-    ),
-])
-
-# Build and run — MoAAgent is a standard AgentActor
-MoAAgent = MoABuilder().build(tree)
-
-async def main():
-    system = AgentSystem("moa-demo")
-    async for event in system.run(MoAAgent, "quantum computing"):
-        if event.type == "task_completed":
-            print(event.data)
-    await system.shutdown()
-
-asyncio.run(main())
+system = MoASystem()
+result = await system.run(
+    moa_tree([
+        moa_layer(
+            proposers=[Researcher, Critic],
+            aggregator=Synthesizer,
+            min_success=1,
+            timeout=10.0,
+        ),
+    ]),
+    input="quantum computing",
+)
+await system.shutdown()
 ```
 
 **Features:**
-- **Recursive nesting** — a proposer can itself be a `MoATree`
-- **Validated semantics** — failed proposers are recovered, not fail-fast; `min_success` controls the threshold
-- **Layer directives** — aggregator can return `LayerOutput(result, directive)` to steer next layer behavior
+- **Validated fault-tolerance** — failed proposers are recovered into `QuorumResult.failed`, not fail-fast
+- **Layer directives** — aggregator can return `LayerOutput(result, directive)` to steer next layer
+- **Three API levels** — `MoASystem` (zero-config) → `AgentSystem.run_flow` (Flow composition) → raw `ActorSystem` (full control)
 - **Full observability** — every proposer/aggregator emits `TaskEvent` via the existing event stream
 
 ---
@@ -195,7 +232,7 @@ Virtual actors activate on demand and deactivate when idle — no manual lifecyc
 
 ```python
 from everything_is_an_actor import Actor, ActorSystem, AfterIdle
-from everything_is_an_actor.virtual import VirtualActorRegistry
+from everything_is_an_actor import VirtualActorRegistry
 
 class ChatAgent(Actor):
     def stop_policy(self):
@@ -230,7 +267,7 @@ async def main():
 Default is in-memory. For persistence across restarts, supply a custom backend:
 
 ```python
-from everything_is_an_actor.virtual import RegistryStore
+from everything_is_an_actor import RegistryStore
 
 class RedisRegistryStore(RegistryStore):
     async def put(self, key):   await redis.sadd("actors", key)
@@ -249,10 +286,10 @@ registry = VirtualActorRegistry(system, store=RedisRegistryStore())
 | `Actor` | Base class. Override `on_receive`, `on_started`, `on_stopped`, `on_restart`, `stop_policy` |
 | `ActorRef` | Lightweight handle. `tell(msg)` / `ask(msg)` / `ask_stream(task)` / `free_ask(msg)` / `free_tell(msg)` / `free_stop()` |
 | `ActorSystem` | Container. `spawn(cls, name)` / `get_actor(path)` / `ask(path, msg)` / `shutdown()` |
-| `AgentSystem` | Drop-in replacement with event streaming. `run(cls, input)` / `abort(run_id)` |
-| `VirtualActorRegistry` | On-demand activation / idle deactivation. `ask(cls, id, msg)` / `tell(cls, id, msg)` / `ask_stream(cls, id, msg)` / `deactivate(cls, id)` / `deactivate_all()` / `is_active(cls, id)` / `known_ids()` |
-| `RegistryStore` | Pluggable backend for virtual actor registry (`put(key)` / `delete(key)` / `list_all()`). Default in-memory, extensible to Redis/DB |
-| `Mailbox` | Interface. `MemoryMailbox` (default) or `RedisMailbox` |
+| `AgentSystem` | Agent facade over ActorSystem. `run(cls, input)` / `run_flow(flow, input)` / `abort(run_id)` |
+| `VirtualActorRegistry` | On-demand activation / idle deactivation. `ask` / `tell` / `ask_stream` / `deactivate` / `deactivate_all` / `is_active` / `known_ids` |
+| `RegistryStore` | Pluggable backend for virtual actor registry. Default in-memory, extensible to Redis/DB |
+| `Mailbox` | Interface. `MemoryMailbox` (default), `FastMailbox`, `ThreadedMailbox`, or `RedisMailbox` |
 | `Middleware` | Interceptor chain for all lifecycle events |
 | `OneForOneStrategy` | Restart only the failing child |
 | `AllForOneStrategy` | Restart all siblings when one fails |
@@ -335,9 +372,9 @@ Directives: `resume` | `restart` | `stop` | `escalate`
 ```python
 class LogMiddleware(Middleware):
     async def on_receive(self, ctx, message, next_fn):
-        print(f"[{ctx.recipient.path}] ← {message}")
+        print(f"[{ctx.actor_ref.path}] <- {message}")
         result = await next_fn(ctx, message)
-        print(f"[{ctx.recipient.path}] → {result}")
+        print(f"[{ctx.actor_ref.path}] -> {result}")
         return result
 
 ref = await system.spawn(MyActor, "worker", middlewares=[LogMiddleware()])
@@ -364,10 +401,10 @@ Apple M-series, Python 3.12, asyncio:
 |--------|-------|
 | `tell` throughput | 945K msg/s |
 | `ask` throughput | 29K msg/s |
-| `ask` latency p50 | 32 µs |
-| `ask` latency p99 | 46 µs |
-| 100-hop actor chain | 2.0 ms, 20 µs/hop |
-| 1000 actors × 100 msgs | 879K msg/s, 0 loss |
+| `ask` latency p50 | 32 us |
+| `ask` latency p99 | 46 us |
+| 100-hop actor chain | 2.0 ms, 20 us/hop |
+| 1000 actors x 100 msgs | 879K msg/s, 0 loss |
 | Middleware overhead | +0% (~1 middleware) |
 | Spawn 5000 actors | 27 ms |
 
@@ -376,8 +413,8 @@ Apple M-series, Python 3.12, asyncio:
 | Metric | Value |
 |--------|-------|
 | `AgentActor` ask throughput | 27K tasks/s |
-| `AgentActor` ask latency p50 | 36 µs |
-| `AgentActor` ask latency p99 | 50 µs |
+| `AgentActor` ask latency p50 | 36 us |
+| `AgentActor` ask latency p99 | 50 us |
 | `sequence(50)` fan-out | 32K child tasks/s |
 | `traverse(100)` map | 28K items/s |
 | `ask_stream` chunk throughput | 227K chunks/s |

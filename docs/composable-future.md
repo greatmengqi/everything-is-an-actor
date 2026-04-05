@@ -119,18 +119,24 @@ result = await cf.on(target_loop)  # 延迟绑定
 
 取消是双向的：
 
-```
-caller 取消 task
-    ↓
-proxy Future 被取消
-    ↓ (backward callback)
-source Future 在 source_loop 上被取消
+```mermaid
+graph TB
+    subgraph Backward["Backward cancellation"]
+        direction TB
+        C1["caller cancels task"] --> P1["proxy Future cancelled"]
+        P1 -->|backward callback| S1["source Future cancelled<br/>on source_loop"]
+    end
 
-source Future 被取消
-    ↓ (forward callback)
-proxy Future 在 caller_loop 上被取消
-    ↓
-caller 收到 CancelledError
+    subgraph Forward["Forward cancellation"]
+        direction TB
+        S2["source Future cancelled"] -->|forward callback| P2["proxy Future cancelled<br/>on caller_loop"]
+        P2 --> C2["caller receives CancelledError"]
+    end
+
+    style C1 fill:#d9a3a3,stroke:#b57a7a,color:#2c3e50
+    style S1 fill:#d9a3a3,stroke:#b57a7a,color:#2c3e50
+    style S2 fill:#d9a3a3,stroke:#b57a7a,color:#2c3e50
+    style C2 fill:#d9a3a3,stroke:#b57a7a,color:#2c3e50
 ```
 
 `first_completed` 默认 `cancel_pending=True`：赢家返回后，输家被取消并等待 settle，防止隐藏副作用。传 `cancel_pending=False` 用于只读/幂等分支。
