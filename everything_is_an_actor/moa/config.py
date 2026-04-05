@@ -56,9 +56,13 @@ class MoATree:
         nodes: Ordered list of MoANodes forming the pipeline.
     """
 
-    nodes: list[MoANode]
+    nodes: tuple[MoANode, ...]
+
+    def __post_init__(self):
+        if not isinstance(self.nodes, tuple):
+            object.__setattr__(self, "nodes", tuple(self.nodes))
 
     @classmethod
     def repeated(cls, node: MoANode, num_layers: int) -> MoATree:
         """Create a tree by repeating the same node configuration N times."""
-        return cls(nodes=[node] * num_layers)
+        return cls(nodes=(node,) * num_layers)

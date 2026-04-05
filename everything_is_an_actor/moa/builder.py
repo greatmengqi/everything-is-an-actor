@@ -15,6 +15,11 @@ from everything_is_an_actor.moa.config import MoANode, MoATree
 
 O = TypeVar("O")
 
+# System-level exceptions that should NOT be recovered.
+# recover() catches Exception; these are the Exception subclasses
+# that indicate infrastructure failure rather than domain errors.
+_SYSTEM_ERRORS = (MemoryError, SystemExit)
+
 
 @dataclass(frozen=True)
 class ResolvedNode:
@@ -54,7 +59,6 @@ class MoABuilder:
                 directive = None
 
                 for node in self._moa_nodes:
-                    # 1. Build proposer tasks
                     proposer_tasks: list[tuple[type[AgentActor], Task]] = []
                     for cls in node.proposers:
                         task_input = (
@@ -64,19 +68,16 @@ class MoABuilder:
                         )
                         proposer_tasks.append((cls, Task(input=task_input)))
 
-                    # 2. Parallel proposers (Validated semantics)
                     results = await self._run_proposers(
                         proposer_tasks, node.min_success, node.proposer_timeout
                     )
 
-                    # 3. Aggregator
                     agg_output = (
                         await self.context.ask(
                             node.aggregator, Task(input=results)
                         )
                     ).get_or_raise()
 
-                    # 4. Parse directive
                     match agg_output:
                         case LayerOutput(result=r, directive=d):
                             current, directive = r, d
@@ -84,14 +85,6 @@ class MoABuilder:
                             current, directive = agg_output, None
 
                 return current
-
-            # System-level exceptions that should NOT be recovered.
-            # These indicate infrastructure failure, not proposer-domain errors.
-            _SYSTEM_ERRORS = (
-                MemoryError,
-                SystemExit,
-                KeyboardInterrupt,
-            )
 
             async def _run_proposers(
                 self,
@@ -101,13 +94,12 @@ class MoABuilder:
             ) -> list[TaskResult]:
                 """Run proposers in parallel with Validated semantics.
 
-                Domain errors (ValueError, TimeoutError, etc.) are recovered
-                into failed TaskResults. System errors (MemoryError, etc.)
-                propagate immediately.
+                Domain errors are recovered into failed TaskResults.
+                System errors (MemoryError, etc.) propagate immediately.
                 """
 
                 def _recover_handler(e: Exception, tid: str) -> TaskResult:
-                    if isinstance(e, self._SYSTEM_ERRORS):
+                    if isinstance(e, _SYSTEM_ERRORS):
                         raise e
                     return TaskResult(
                         task_id=tid,
