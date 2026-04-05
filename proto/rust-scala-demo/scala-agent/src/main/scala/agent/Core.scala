@@ -116,18 +116,23 @@ object Interpreter:
     val ctx = Ctx(resumeAt, results)
     try
       import agent.examples.UserGuide
-      val result = agentType match
-        case "assistant"     => Agents.assistant(ctx, msg)
-        case "counter"       => Agents.counter(ctx, msg)
-        case "flaky"         => Agents.flaky(ctx, msg)
-        case "researcher"    => Agents.researcher(ctx, msg)
-        case "translator"    => UserGuide.translator(ctx, msg)
-        case "todo"          => UserGuide.todoList(ctx, msg)
-        case "code_reviewer" => UserGuide.codeReviewer(ctx, msg)
-        case "price_compare" => UserGuide.priceCompare(ctx, msg)
-        case "payment"       => UserGuide.payment(ctx, msg)
-        case "recruiter"     => UserGuide.recruiter(ctx, msg)
-        case other           => s"error:unknown_type:$other"
+      import agent.actor.ActorSystem
+
+      // 优先查 ActorSystem 注册表，找不到再走硬编码分支
+      val result = ActorSystem.run(agentType, ctx, msg).getOrElse {
+        agentType match
+          case "assistant"     => Agents.assistant(ctx, msg)
+          case "counter"       => Agents.counter(ctx, msg)
+          case "flaky"         => Agents.flaky(ctx, msg)
+          case "researcher"    => Agents.researcher(ctx, msg)
+          case "translator"    => UserGuide.translator(ctx, msg)
+          case "todo"          => UserGuide.todoList(ctx, msg)
+          case "code_reviewer" => UserGuide.codeReviewer(ctx, msg)
+          case "price_compare" => UserGuide.priceCompare(ctx, msg)
+          case "payment"       => UserGuide.payment(ctx, msg)
+          case "recruiter"     => UserGuide.recruiter(ctx, msg)
+          case other           => s"error:unknown_type:$other"
+      }
       Response(Response.Response.Done(DoneResponse(result, ctx.emissions)))
     catch
       case e: Suspend =>
@@ -167,10 +172,13 @@ object Interpreter:
 
 object Main:
   def main(args: Array[String]): Unit =
+    // 注册 Actor API 定义的 actors
+    agent.actor.ActorRegistry.registerAll()
+
     val in  = new DataInputStream(System.in)
     val out = new DataOutputStream(System.out)
 
-    writeFrame(out, Response(Response.Response.Ready(ReadyResponse("0.2.0"))))
+    writeFrame(out, Response(Response.Response.Ready(ReadyResponse("0.3.0"))))
 
     var running = true
     while running do

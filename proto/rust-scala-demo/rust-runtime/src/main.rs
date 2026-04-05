@@ -295,5 +295,16 @@ fn main() {
     let r = rt.run("recruiter", "rec1", "Senior Rust Engineer");
     println!("  => {}\n", r);
 
+    // ── Actor API 示例 ──
+
+    println!("========================================");
+    println!("--- Actor API: chat_actor ---");
+    let r = rt.run("chat_actor", "chat1", "Hi there!");
+    println!("  => {}\n", r);
+
+    println!("--- Actor API: researcher_actor ---");
+    let r = rt.run("researcher_actor", "res1", "AI safety");
+    println!("  => {}\n", r);
+
     println!("=== Done ===");
 }
