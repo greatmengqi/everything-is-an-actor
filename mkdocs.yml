@@ -32,7 +32,15 @@ nav:
   - Getting Started: getting-started.md
   - Guides:
     - Agent Layer: agents.md
+    - Flow API: flow.md
+    - Mixture of Agents (MOA): moa.md
+    - Actor Lifecycle: lifecycle.md
+    - Mailbox Architecture: mailbox.md
+    - ComposableFuture: composable-future.md
+    - Best Practices: best-practices.md
+  - Architecture:
     - Design: design.md
+    - Categorical Analysis: categorical-analysis.md
   - API Reference:
     - AgentActor: api/agent-actor.md
     - Core Actor: api/actor.md

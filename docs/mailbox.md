@@ -96,7 +96,7 @@ system = ActorSystem('app')  # Uses MemoryMailbox by default
 - Lower overhead (pure Python, no locks)
 
 ```python
-from actor_for_agents import ActorSystem, FastMailbox
+from everything_is_an_actor import ActorSystem, FastMailbox
 
 system = ActorSystem('app', mailbox_cls=FastMailbox)
 ```
@@ -153,7 +153,7 @@ Example: Redis-backed mailbox for distributed actors.
 Both Mailbox implementations support backpressure:
 
 ```python
-from actor_for_agents.mailbox import BACKPRESSURE_BLOCK, BACKPRESSURE_DROP_NEW, BACKPRESSURE_FAIL
+from everything_is_an_actor.core.mailbox import BACKPRESSURE_BLOCK, BACKPRESSURE_DROP_NEW, BACKPRESSURE_FAIL
 
 mailbox = MemoryMailbox(
     maxsize=100,

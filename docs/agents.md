@@ -324,9 +324,10 @@ result = await ask_with_retry(
 `AgentSystem` extends `ActorSystem` with event streaming. It is a drop-in replacement — all existing APIs work unchanged.
 
 ```python
+from everything_is_an_actor import ActorSystem
 from everything_is_an_actor.agents import AgentSystem
 
-system = AgentSystem("app")
+system = AgentSystem(ActorSystem("app"))
 ```
 
 ### `run()` — spawn and stream

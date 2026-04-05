@@ -15,12 +15,15 @@ Multi-agent AI systems have a concurrency problem. When a lead agent delegates t
 - **Task lifecycle** — every unit of work has a status: pending → running → completed / failed
 - **Event streaming** — consumers subscribe to what agents produce, in real time
 
-The actor model solves all of these. `everything-is-an-actor` brings it to Python asyncio with two layers:
+The actor model solves all of these. `everything-is-an-actor` brings it to Python asyncio with five layers:
 
 | Layer | What it provides |
 |-------|-----------------|
-| **Core** (`everything_is_an_actor`) | Generic actor primitives: mailbox, supervision, middleware |
+| **Core** (`everything_is_an_actor.core`) | Generic actor primitives: mailbox, supervision, middleware |
 | **Agents** (`everything_is_an_actor.agents`) | AI-specific abstractions: `Task`, `AgentActor`, streaming events |
+| **Flow** (`everything_is_an_actor.flow`) | Composable orchestration ADT: categorical combinators, serialization, visualization |
+| **MOA** (`everything_is_an_actor.moa`) | Mixture-of-Agents pattern: parallel proposers → quorum → aggregation |
+| **Integrations** (`everything_is_an_actor.integrations`) | External framework adapters (LangChain) |
 
 ---
 
@@ -39,6 +42,7 @@ pip install everything-is-an-actor[redis]
 
 ```python
 import asyncio
+from everything_is_an_actor import ActorSystem
 from everything_is_an_actor.agents import AgentSystem, AgentActor, Task
 
 class ResearchAgent(AgentActor[str, str]):
@@ -48,7 +52,7 @@ class ResearchAgent(AgentActor[str, str]):
         return r.output
 
 async def main():
-    system = AgentSystem("app")
+    system = AgentSystem(ActorSystem("app"))
 
     # Stream every event from the entire agent tree
     async for event in system.run(ResearchAgent, "actor model"):
@@ -89,6 +93,22 @@ asyncio.run(main())
 - `race([(A, msg), (B, msg)])` — first-wins, cancel the rest
 - `zip((A, msg), (B, msg))` — two tasks, typed pair
 - `stream(AgentCls, message)` — streaming counterpart; forward child chunks upstream
+
+**Flow API** — composable agent orchestration
+
+- `Flow[I, O]` ADT — syntax tree for workflows, data not execution
+- Categorical combinators: `map`, `flat_map`, `zip`, `race`, `branch`, `recover`, `fallback_to`, `divert_to`, `loop`
+- `at_least(k, *flows)` — quorum parallelism ("N-way, at least K succeed")
+- `to_dict` / `from_dict` — Flow serialization for persistence and transfer
+- `to_mermaid` — automatic Mermaid diagram generation
+- `FlowSystem` / `AgentSystem.run_flow()` — interpreter execution
+
+**MOA** — Mixture-of-Agents pattern
+
+- `moa_layer(proposers, aggregator, min_success)` — single MOA layer
+- `moa_tree([layers])` — multi-layer pipeline with directive passing
+- `MoASystem` — high-level entry point, zero boilerplate
+- `LayerOutput` — inter-layer directive communication
 
 **Event streaming**
 

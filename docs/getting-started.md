@@ -109,9 +109,9 @@ from everything_is_an_actor import Middleware
 
 class LogMiddleware(Middleware):
     async def on_receive(self, ctx, message, next_fn):
-        print(f"[{ctx.recipient.path}] ← {message}")
+        print(f"[{ctx.actor_ref.path}] ← {message}")
         result = await next_fn(ctx, message)
-        print(f"[{ctx.recipient.path}] → {result}")
+        print(f"[{ctx.actor_ref.path}] → {result}")
         return result
 
 system = ActorSystem("app")
