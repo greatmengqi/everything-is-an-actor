@@ -20,7 +20,7 @@ O = TypeVar("O")
 class ResolvedNode:
     """A fully resolved layer — all subtrees compiled to AgentActor classes."""
 
-    proposers: list[type[AgentActor]]
+    proposers: tuple[type[AgentActor], ...]
     aggregator: type[AgentActor]
     min_success: int
     proposer_timeout: float
@@ -126,7 +126,7 @@ class MoABuilder:
                 case MoATree() as subtree:
                     resolved_proposers.append(self.build(subtree))
         return ResolvedNode(
-            proposers=resolved_proposers,
+            proposers=tuple(resolved_proposers),
             aggregator=node.aggregator,
             min_success=node.min_success,
             proposer_timeout=node.proposer_timeout,

@@ -28,12 +28,15 @@ class MoANode:
         min_success: Minimum proposers that must succeed (Validated semantics).
     """
 
-    proposers: list[ProposerSpec]
+    proposers: tuple[ProposerSpec, ...]
     aggregator: type[AgentActor]
     min_success: int = 1
     proposer_timeout: float = 30.0
 
     def __post_init__(self):
+        # Defensive copy: ensure deep immutability
+        if not isinstance(self.proposers, tuple):
+            object.__setattr__(self, "proposers", tuple(self.proposers))
         if self.min_success < 1:
             raise ValueError("min_success must be >= 1")
         if self.min_success > len(self.proposers):

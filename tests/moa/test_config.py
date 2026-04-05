@@ -40,6 +40,21 @@ class TestMoANode:
         with pytest.raises(AttributeError):
             node.min_success = 5
 
+    def test_proposers_is_tuple(self):
+        from everything_is_an_actor.moa.config import MoANode
+
+        node = MoANode(proposers=[StubAgent, StubAgg], aggregator=StubAgg)
+        assert isinstance(node.proposers, tuple)
+
+    def test_proposers_defensive_copy(self):
+        """Mutating original list after construction does not affect node."""
+        from everything_is_an_actor.moa.config import MoANode
+
+        original = [StubAgent]
+        node = MoANode(proposers=original, aggregator=StubAgg)
+        original.append(StubAgg)
+        assert len(node.proposers) == 1
+
 
 class TestMoATree:
     def test_basic_construction(self):
