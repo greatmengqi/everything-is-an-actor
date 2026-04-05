@@ -85,20 +85,39 @@ class MoABuilder:
 
                 return current
 
+            # System-level exceptions that should NOT be recovered.
+            # These indicate infrastructure failure, not proposer-domain errors.
+            _SYSTEM_ERRORS = (
+                MemoryError,
+                SystemExit,
+                KeyboardInterrupt,
+            )
+
             async def _run_proposers(
                 self,
                 tasks: list[tuple[type[AgentActor], Task]],
                 min_success: int,
                 proposer_timeout: float = 30.0,
             ) -> list[TaskResult]:
-                """Run proposers in parallel with Validated semantics."""
+                """Run proposers in parallel with Validated semantics.
+
+                Domain errors (ValueError, TimeoutError, etc.) are recovered
+                into failed TaskResults. System errors (MemoryError, etc.)
+                propagate immediately.
+                """
+
+                def _recover_handler(e: Exception, tid: str) -> TaskResult:
+                    if isinstance(e, self._SYSTEM_ERRORS):
+                        raise e
+                    return TaskResult(
+                        task_id=tid,
+                        error=e,
+                        status=TaskStatus.FAILED,
+                    )
+
                 futures = [
                     self.context.ask(target, msg, timeout=proposer_timeout).recover(
-                        lambda e, tid=msg.id: TaskResult(
-                            task_id=tid,
-                            error=str(e),
-                            status=TaskStatus.FAILED,
-                        )
+                        lambda e, tid=msg.id: _recover_handler(e, tid)
                     )
                     for target, msg in tasks
                 ]
