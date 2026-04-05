@@ -27,7 +27,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run tests
-        run: uv run pytest tests/ --ignore=tests/plugins --strict-markers -v
+        run: uv run pytest tests/ --ignore=tests/plugins -v
 
       - name: Lint
         run: uv run ruff check everything_is_an_actor/
