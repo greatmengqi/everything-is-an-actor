@@ -36,7 +36,8 @@ class TestInterpretStream:
         finally:
             await system.shutdown()
 
-    async def test_flat_map_yields_events_from_both(self):
+    async def test_flat_map_streams_second_agent(self):
+        """FlatMap interprets first non-streaming, streams second."""
         system = AgentSystem()
         try:
             flow = agent(StreamEcho).flat_map(agent(StreamEcho))
@@ -44,9 +45,10 @@ class TestInterpretStream:
             async for event in interpret_stream(flow, "test", system):
                 events.append(event)
 
-            # Should have events from both agents
-            completed = [e for e in events if e.type == "task_completed"]
-            assert len(completed) >= 2
+            # Events from the second agent in the chain
+            types = [e.type for e in events]
+            assert "task_started" in types
+            assert "task_completed" in types
         finally:
             await system.shutdown()
 

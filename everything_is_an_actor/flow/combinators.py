@@ -37,14 +37,14 @@ def zip_all(*flows: Flow) -> Flow:
     """N-way parallel — all flows run concurrently, results collected as list."""
     if len(flows) < 2:
         raise ValueError("zip_all() requires at least 2 flows")
-    return _ZipAll(flows=list(flows))
+    return _ZipAll(flows=tuple(flows))
 
 
 def race(*flows: Flow[I, O]) -> Flow[I, O]:
     """Competitive parallelism — first to complete wins, others cancelled."""
     if len(flows) < 2:
         raise ValueError("race() requires at least 2 flows")
-    return _Race(flows=list(flows))
+    return _Race(flows=tuple(flows))
 
 
 def loop(body: Flow[I, Union[Continue[I], Done[O]]], *, max_iter: int = 10) -> Flow[I, O]:

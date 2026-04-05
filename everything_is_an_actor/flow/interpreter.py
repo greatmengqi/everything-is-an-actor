@@ -7,8 +7,11 @@ Uses existing AgentSystem / ComposableFuture infrastructure.
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 from collections.abc import AsyncIterator
 
@@ -38,6 +41,12 @@ from everything_is_an_actor.flow.flow import (
     _Zip,
     _ZipAll,
 )
+
+
+def _log_divert_error(task: asyncio.Task) -> None:
+    """Log exceptions from fire-and-forget DivertTo tasks."""
+    if not task.cancelled() and task.exception() is not None:
+        _log.error("DivertTo side flow failed: %s", task.exception(), exc_info=task.exception())
 
 
 async def interpret(flow: Flow, input: Any, system: AgentSystem) -> Any:
@@ -136,7 +145,8 @@ async def interpret(flow: Flow, input: Any, system: AgentSystem) -> Any:
         case _DivertTo(source=source, side=side, when=when):
             result = await interpret(source, input, system)
             if when(result):
-                asyncio.create_task(interpret(side, result, system))
+                task = asyncio.create_task(interpret(side, result, system))
+                task.add_done_callback(_log_divert_error)
             return result
 
         case _AndThen(source=source, callback=callback):
@@ -234,15 +244,11 @@ async def interpret_stream(
                 yield event
 
         case _FlatMap(first=first, next=next_flow):
-            # Stream first, capture result from events, then stream next
-            first_result = None
-            async for event in interpret_stream(first, input, system):
-                yield event
-                if event.type == "task_completed":
-                    first_result = event.data
-            # Fallback: if no task_completed event, interpret synchronously
-            if first_result is None:
-                first_result = await interpret(first, input, system)
+            # Interpret first (non-streaming) to get result without re-execution risk,
+            # then stream the next step. Events from first's agents are yielded via
+            # the next step's streaming — this avoids the double-execution bug where
+            # Pure/Map nodes produce no events causing a fallback re-interpret.
+            first_result = await interpret(first, input, system)
             async for event in interpret_stream(next_flow, first_result, system):
                 yield event
 

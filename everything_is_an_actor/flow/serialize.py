@@ -12,27 +12,33 @@ from typing import Any
 from everything_is_an_actor.flow.flow import (
     Flow,
     _Agent,
+    _AndThen,
     _Branch,
+    _BranchOn,
+    _DivertTo,
     _FallbackTo,
+    _Filter,
     _FlatMap,
     _Loop,
     _LoopWithState,
+    _Map,
+    _Pure,
     _Race,
+    _Recover,
     _RecoverWith,
     _Zip,
 )
 
-_NOT_SERIALIZABLE = {
-    "_Pure", "_Map", "_Filter", "_AndThen", "_Recover", "_DivertTo", "_BranchOn",
-}
+_NOT_SERIALIZABLE: tuple[type, ...] = (
+    _Pure, _Map, _Filter, _AndThen, _Recover, _DivertTo, _BranchOn,
+)
 
 
 def to_dict(flow: Flow) -> dict[str, Any]:
     """Serialize a Flow ADT to a JSON-compatible dict."""
-    variant_name = type(flow).__name__
-    if variant_name in _NOT_SERIALIZABLE:
+    if isinstance(flow, _NOT_SERIALIZABLE):
         raise TypeError(
-            f"Flow variant {variant_name.lstrip('_')} contains a callable and is not serializable. "
+            f"Flow variant {type(flow).__name__.lstrip('_')} contains a callable and is not serializable. "
             "Keep it in Python code."
         )
 

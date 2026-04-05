@@ -32,10 +32,23 @@ class LangChainAgent(AgentActor[I, O], Generic[I, O]):
     """
 
     model: ClassVar[Any] = None               # BaseChatModel
-    tools: ClassVar[list] = []                 # list[BaseTool]
+    tools: ClassVar[tuple] = ()                # tuple[BaseTool, ...]
     system_prompt: ClassVar[str] = ""
     output_parser: ClassVar[Any] = None        # BaseOutputParser | None
     max_tool_rounds: ClassVar[int] = _MAX_TOOL_ROUNDS
+
+    # Cached per-class (built once in __init_subclass__)
+    _bound_model: ClassVar[Any] = None
+    _tools_by_name: ClassVar[dict] = {}
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if cls.model is not None and cls.tools:
+            cls._bound_model = cls.model.bind_tools(cls.tools)
+            cls._tools_by_name = {t.name: t for t in cls.tools}
+        else:
+            cls._bound_model = cls.model
+            cls._tools_by_name = {}
 
     async def execute(self, input: I) -> O:
         """Invoke model, handle tool calls in a loop, parse output."""
@@ -52,10 +65,8 @@ class LangChainAgent(AgentActor[I, O], Generic[I, O]):
 
         messages.append({"role": "user", "content": str(input)})
 
-        bound_model = self.model.bind_tools(self.tools) if self.tools else self.model
-
-        # Tool-calling loop: invoke → execute tool calls → feed results back → repeat
-        tools_by_name = {t.name: t for t in self.tools} if self.tools else {}
+        bound_model = self._bound_model or self.model
+        tools_by_name = self._tools_by_name
 
         for _ in range(self.max_tool_rounds):
             response = await bound_model.ainvoke(messages)

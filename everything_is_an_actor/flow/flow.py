@@ -17,6 +17,7 @@ Concurrency primitives (categorical):
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar, Union
 
 if TYPE_CHECKING:
@@ -169,7 +170,11 @@ class _Branch(Flow[I, O]):
     """Coproduct dispatch — route by isinstance on output type."""
 
     source: Flow  # Flow[I, T] where T is the union
-    mapping: dict[type, Flow]  # {SubType: Flow[SubType, O]}
+    mapping: MappingProxyType  # {SubType: Flow[SubType, O]}
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mapping, MappingProxyType):
+            object.__setattr__(self, "mapping", MappingProxyType(dict(self.mapping)))
 
 
 @dataclass(frozen=True)
@@ -186,14 +191,22 @@ class _BranchOn(Flow[I, O]):
 class _ZipAll(Flow):
     """N-way parallel composition — all flows run concurrently."""
 
-    flows: list[Flow]
+    flows: tuple[Flow, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.flows, tuple):
+            object.__setattr__(self, "flows", tuple(self.flows))
 
 
 @dataclass(frozen=True)
 class _Race(Flow[I, O]):
     """Competitive parallelism — first to complete wins."""
 
-    flows: list[Flow[I, O]]
+    flows: tuple[Flow[I, O], ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.flows, tuple):
+            object.__setattr__(self, "flows", tuple(self.flows))
 
 
 @dataclass(frozen=True)
