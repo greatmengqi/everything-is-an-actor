@@ -23,6 +23,7 @@ dependencies = []
 
 [project.optional-dependencies]
 redis = ["redis[hiredis]>=7.4.0"]
+langchain = ["langchain-core>=0.3.0"]
 docs = [
     "mkdocs-material>=9.0",
     "mkdocstrings[python]>=0.24",

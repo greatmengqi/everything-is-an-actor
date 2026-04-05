@@ -6,18 +6,21 @@ Coding principles for `everything-is-an-actor`. Follow these when writing or rev
 
 ## Layer separation
 
-The codebase has three layers:
+The codebase has five layers:
 
 ```
-everything_is_an_actor.moa      ← MOA orchestration pattern (MoATree, MoABuilder)
-everything_is_an_actor.agents   ← AI-specific (Task, AgentActor, streaming)
-everything_is_an_actor.core     ← generic actor runtime (Actor, ActorRef, ActorSystem)
+everything_is_an_actor.integrations  ← LLM adapters (LangChain, OpenAI, Anthropic)
+everything_is_an_actor.flow          ← Flow ADT + categorical combinators + actor interpreter
+everything_is_an_actor.moa           ← MOA orchestration pattern (MoATree, MoABuilder)
+everything_is_an_actor.agents        ← AI-specific (Task, AgentActor, streaming)
+everything_is_an_actor.core          ← generic actor runtime (Actor, ActorRef, ActorSystem)
 ```
 
-Dependency direction: `moa/ → agents/ → core/` only.
+Dependency direction: `integrations/ → flow/ → agents/ → core/` (and `moa/ → agents/ → core/`).
 
-- `core/` must not import from `agents/` or `moa/`
-- `agents/` must not import from `moa/`
+- `core/` must not import from `agents/`, `moa/`, `flow/`, or `integrations/`
+- `agents/` must not import from `moa/`, `flow/`, or `integrations/`
+- `flow/` must not import from `moa/` or `integrations/`
 - `moa/` only uses public APIs from `agents/` and `core/`
 - Never reach into `_cell`, `_cell.actor`, or other private internals from outside the owning module — use factory patterns or messages instead
 
@@ -125,6 +128,8 @@ Design constraints:
 - Do not assert internal state (e.g., `_active_runs` dict contents) unless testing the specific invariant
 - Concurrency and cleanup tests must use real `asyncio` — no mocking of `asyncio.wait`, `asyncio.gather`, or task scheduling
 - A passing test that relies on mocked internals is worse than no test
+- Every async test file **must** have `pytestmark = pytest.mark.anyio` at module level — without it, async tests silently fail with "async def functions are not natively supported"
+- Do not use `pytest.mark.asyncio` — the project uses `anyio` as the async backend
 
 ## Progressive API
 

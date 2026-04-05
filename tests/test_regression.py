@@ -73,7 +73,7 @@ class TestAgentActorBackwardCompatibility:
         # Spawning should not emit any warnings
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            system = AgentSystem("test")
+            system = AgentSystem(ActorSystem("test"))
             ref = await system.spawn(ModernAgent, "modern")
             result = await system.ask(ref, Task(input="test"))
             ref.stop()

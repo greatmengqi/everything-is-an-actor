@@ -6,6 +6,7 @@ import warnings
 import pytest
 
 from everything_is_an_actor import Actor, ActorSystem
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, Task, TaskEvent, TaskResult, TaskStatus
 
 
@@ -266,7 +267,7 @@ async def test_streaming_execute_yields_task_chunk_events():
     from everything_is_an_actor.agents import AgentSystem
     from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(ChunkAgent, "chunker")
 
     events: list[TaskEvent] = []
@@ -285,7 +286,7 @@ async def test_streaming_execute_result_is_list_of_chunks():
     from everything_is_an_actor.agents import AgentSystem
     from everything_is_an_actor.agents.task import StreamResult
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(ChunkAgent, "chunker2")
 
     result = None
@@ -313,7 +314,7 @@ async def test_streaming_execute_error_propagates():
     """Exception raised inside async generator propagates to caller."""
     from everything_is_an_actor.agents import AgentSystem
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(BrokenChunkAgent, "broken-chunker")
 
     with pytest.raises(ValueError, match="mid-stream failure"):
@@ -347,7 +348,7 @@ async def test_dispatch_stream_yields_child_chunks():
     from everything_is_an_actor.agents import AgentSystem
     from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(PassthroughAgent, "passthrough")
 
     chunks = []
@@ -367,7 +368,7 @@ async def test_dispatch_stream_ephemeral_child_cleaned_up():
     from everything_is_an_actor.agents import AgentSystem
     from everything_is_an_actor.core.actor import ActorContext
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(PassthroughAgent, "passthrough2")
 
     async for _ in system.ask_stream(ref, Task(input="x")):

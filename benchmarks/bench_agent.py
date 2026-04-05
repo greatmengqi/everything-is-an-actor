@@ -3,6 +3,7 @@
 import asyncio
 import time
 
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, AgentSystem, Task
 
 
@@ -45,7 +46,7 @@ class ChunkAgent(AgentActor[str, list]):
 
 async def bench_agent_ask_throughput(n=5_000):
     """Task round-trip throughput through AgentActor."""
-    system = AgentSystem("bench")
+    system = AgentSystem(ActorSystem("bench"))
     ref = await system.spawn(EchoAgent, "echo")
 
     # warmup
@@ -64,7 +65,7 @@ async def bench_agent_ask_throughput(n=5_000):
 
 async def bench_agent_ask_latency(n=2_000):
     """Task round-trip latency percentiles."""
-    system = AgentSystem("bench")
+    system = AgentSystem(ActorSystem("bench"))
     ref = await system.spawn(EchoAgent, "echo")
 
     for _ in range(50):
@@ -85,7 +86,7 @@ async def bench_agent_ask_latency(n=2_000):
 
 async def bench_sequence(num_tasks=50, trials=20):
     """sequence() fan-out: N concurrent ephemeral agents per call."""
-    system = AgentSystem("bench")
+    system = AgentSystem(ActorSystem("bench"))
 
     class OrchestratorAgent(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
@@ -117,7 +118,7 @@ async def bench_sequence(num_tasks=50, trials=20):
 
 async def bench_traverse(n=100, trials=10):
     """traverse(): map N inputs through one agent."""
-    system = AgentSystem("bench")
+    system = AgentSystem(ActorSystem("bench"))
 
     class OrchestratorAgent(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
@@ -147,7 +148,7 @@ async def bench_streaming(chunks=100, trials=20):
     """ask_stream(): throughput of task_chunk events through AgentActor."""
     from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
-    system = AgentSystem("bench")
+    system = AgentSystem(ActorSystem("bench"))
     ref = await system.spawn(ChunkAgent, "chunks")
 
     # warmup
@@ -175,7 +176,7 @@ async def bench_streaming(chunks=100, trials=20):
 
 async def bench_system_run(n=20):
     """AgentSystem.run(): end-to-end event streaming overhead."""
-    system = AgentSystem("bench")
+    system = AgentSystem(ActorSystem("bench"))
 
     latencies = []
     for _ in range(n):

@@ -4,6 +4,7 @@ import asyncio
 import pytest
 from typing import Any
 
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, AgentSystem, Task, TaskResult, TaskStatus
 
 pytestmark = pytest.mark.anyio
@@ -43,7 +44,7 @@ class TestProposerTimeout:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async with asyncio.timeout(5):  # safety net — should finish in ~1s
@@ -72,7 +73,7 @@ class TestProposerTimeout:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             async with asyncio.timeout(5):
                 with pytest.raises(RuntimeError, match="MOA:"):

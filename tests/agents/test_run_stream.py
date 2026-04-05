@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, Task, TaskEvent, TaskResult
 from everything_is_an_actor.agents.system import AgentSystem
 from everything_is_an_actor.agents.task import StreamEvent, StreamResult
@@ -61,7 +62,7 @@ class OrchestratorAgent(AgentActor[str, str]):
 
 
 async def test_run_yields_started_and_completed_events():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(EchoAgent, "hello"):
         events.append(event)
@@ -73,7 +74,7 @@ async def test_run_yields_started_and_completed_events():
 
 
 async def test_run_events_carry_correct_task_id():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(EchoAgent, "x", run_id="my-run"):
         events.append(event)
@@ -85,7 +86,7 @@ async def test_run_events_carry_correct_task_id():
 
 
 async def test_run_yields_progress_events():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(ProgressAgent, "test"):
         events.append(event)
@@ -99,7 +100,7 @@ async def test_run_yields_progress_events():
 
 async def test_run_event_order():
     """Events must arrive in: started → progress* → completed order."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(ProgressAgent, "x"):
         events.append(event)
@@ -117,7 +118,7 @@ async def test_run_event_order():
 
 
 async def test_run_event_agent_path_contains_run_id():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(EchoAgent, "x", run_id="abc123"):
         events.append(event)
@@ -133,7 +134,7 @@ async def test_run_event_agent_path_contains_run_id():
 
 
 async def test_run_raises_on_agent_failure():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     with pytest.raises(ValueError, match="boom: bad"):
         async for event in system.run(BrokenAgent, "bad"):
@@ -146,7 +147,7 @@ async def test_run_raises_on_agent_failure():
 
 
 async def test_run_failed_event_carries_error_message():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     with pytest.raises(ValueError):
         async for event in system.run(BrokenAgent, "oops"):
@@ -165,7 +166,7 @@ async def test_run_failed_event_carries_error_message():
 
 async def test_run_captures_child_events():
     """Events from child agents (spawned via dispatch) appear in the stream."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(OrchestratorAgent, "hi"):
         events.append(event)
@@ -180,7 +181,7 @@ async def test_run_captures_child_events():
 
 async def test_run_captures_events_from_all_agents():
     """Agent paths in events span root and children."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     paths: set[str] = set()
     async for event in system.run(OrchestratorAgent, "x"):
         paths.add(event.agent_path)
@@ -197,7 +198,7 @@ async def test_run_captures_events_from_all_agents():
 
 async def test_two_concurrent_runs_have_isolated_events():
     """Events from concurrent runs don't bleed into each other."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     async def collect(run_id: str) -> list[str]:
         paths = []
@@ -221,7 +222,7 @@ async def test_two_concurrent_runs_have_isolated_events():
 
 async def test_abort_stops_the_run():
     """abort() cancels the running agent; the stream closes."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     run_id = "to-abort"
     events: list[TaskEvent] = []
@@ -251,7 +252,7 @@ async def test_abort_stops_the_run():
 
 
 async def test_no_orphaned_actors_after_successful_run():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     async for _ in system.run(EchoAgent, "x"):
         pass
 
@@ -262,7 +263,7 @@ async def test_no_orphaned_actors_after_successful_run():
 
 
 async def test_no_orphaned_actors_after_failed_run():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     with pytest.raises(ValueError):
         async for _ in system.run(BrokenAgent, "x"):
             pass
@@ -278,7 +279,7 @@ async def test_no_orphaned_actors_after_failed_run():
 
 
 async def test_root_event_has_no_parent():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(EchoAgent, "x"):
         events.append(event)
@@ -290,7 +291,7 @@ async def test_root_event_has_no_parent():
 
 async def test_child_events_link_to_parent_task():
     """parent_task_id of child events equals task_id of root's started event."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(OrchestratorAgent, "x"):
         events.append(event)
@@ -306,7 +307,7 @@ async def test_child_events_link_to_parent_task():
 
 async def test_span_tree_is_reconstructable():
     """All events for a run form a valid tree: each non-root has exactly one parent."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     events = []
     async for event in system.run(OrchestratorAgent, "x"):
         events.append(event)
@@ -331,7 +332,7 @@ async def test_agent_system_plain_spawn_still_works():
         async def on_receive(self, message: str) -> str:
             return message.upper()
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(SimpleActor, "simple")
     result = await system.ask(ref, "hello")
     assert result == "HELLO"
@@ -346,7 +347,7 @@ async def test_agent_system_backend_param_ignored():
         async def on_receive(self, message: Any) -> None:
             pass
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(Noop, "noop", backend="local")
     assert ref.is_alive
     await system.shutdown()
@@ -359,7 +360,7 @@ async def test_agent_system_backend_param_ignored():
 
 async def test_ask_stream_yields_started_and_completed():
     """ask_stream yields StreamEvents then a final StreamResult."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(EchoAgent, "echo")
 
     items = []
@@ -379,7 +380,7 @@ async def test_ask_stream_yields_started_and_completed():
 
 async def test_ask_stream_yields_progress_events():
     """ask_stream captures emit_progress() calls from execute()."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(ProgressAgent, "prog")
 
     events: list[TaskEvent] = []
@@ -396,7 +397,7 @@ async def test_ask_stream_yields_progress_events():
 
 async def test_ask_stream_reraises_agent_error():
     """ask_stream propagates exceptions raised by execute()."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(BrokenAgent, "broken")
 
     with pytest.raises(ValueError, match="boom"):
@@ -408,7 +409,7 @@ async def test_ask_stream_reraises_agent_error():
 
 async def test_ask_stream_child_events_included():
     """Children spawned via dispatch() during ask_stream inherit the sink."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(OrchestratorAgent, "orch")
 
     events: list[TaskEvent] = []
@@ -428,7 +429,7 @@ async def test_ask_stream_child_events_included():
 
 async def test_ask_stream_no_orphaned_collector():
     """Collector actor is cleaned up after ask_stream completes."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(EchoAgent, "echo2")
 
     async for _ in system.ask_stream(ref, Task(input="x")):
@@ -443,7 +444,7 @@ async def test_ask_stream_no_orphaned_collector():
 
 async def test_ask_stream_reusable_ref():
     """The same ref can be used for multiple sequential ask_stream calls."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
     ref = await system.spawn(ProgressAgent, "prog2")
 
     for expected_input in ("first", "second"):

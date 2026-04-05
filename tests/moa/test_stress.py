@@ -4,6 +4,7 @@ import asyncio
 import pytest
 from typing import Any
 
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, AgentSystem, Task, TaskResult, TaskStatus
 
 pytestmark = pytest.mark.anyio
@@ -111,7 +112,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(outer)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "deep"):
@@ -133,7 +134,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "fan"):
@@ -154,7 +155,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "mix"):
@@ -178,7 +179,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             async def run_one(query: str) -> str:
                 events = []
@@ -208,7 +209,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "spawn"):
@@ -230,7 +231,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "stream"):
@@ -253,7 +254,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             with pytest.raises(RuntimeError, match="aggregator exploded"):
                 async for event in system.run(MoAAgent, "fail"):
@@ -271,7 +272,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, None):
@@ -293,7 +294,7 @@ class TestStress:
         )
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "x"):
@@ -324,7 +325,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "cascade"):
@@ -350,7 +351,7 @@ class TestStress:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "threshold"):
