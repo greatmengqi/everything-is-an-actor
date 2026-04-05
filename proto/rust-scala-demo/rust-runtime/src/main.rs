@@ -236,7 +236,11 @@ impl Runtime {
 }
 
 fn trunc(s: &str, max: usize) -> &str {
-    if s.len() <= max { s } else { &s[..max] }
+    if s.len() <= max { return s; }
+    // 在 char boundary 上截断
+    let mut end = max;
+    while end > 0 && !s.is_char_boundary(end) { end -= 1; }
+    &s[..end]
 }
 
 // ══════════════════════════════════════════════════
@@ -269,6 +273,26 @@ fn main() {
 
     println!("--- Researcher (parallel + streaming) ---");
     let r = rt.run("researcher", "r1", "quantum computing");
+    println!("  => {}\n", r);
+
+    // ── 用户 agent 示例 ──
+
+    println!("--- Translator (Level 1: 最简 agent) ---");
+    let r = rt.run("translator", "t1", "你好世界");
+    println!("  => {}\n", r);
+
+    println!("--- Todo List (Level 2: 带状态) ---");
+    for cmd in ["add Buy milk", "add Read paper", "list", "done 1", "list"] {
+        let r = rt.run("todo", "td1", cmd);
+        println!("  => {}\n", r);
+    }
+
+    println!("--- Code Reviewer (Level 3: streaming) ---");
+    let r = rt.run("code_reviewer", "cr1", "def foo(): return bar + 1");
+    println!("  => {}\n", r);
+
+    println!("--- Recruiter (Level 6: 组合) ---");
+    let r = rt.run("recruiter", "rec1", "Senior Rust Engineer");
     println!("  => {}\n", r);
 
     println!("=== Done ===");
