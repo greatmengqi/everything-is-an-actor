@@ -78,7 +78,7 @@ def to_dict(flow: Flow) -> dict[str, Any]:
             return {"type": "FallbackTo", "source": to_dict(source), "fallback": to_dict(fallback)}
 
         case _:
-            raise TypeError(f"Unknown Flow variant: {variant_name}")
+            raise TypeError(f"Unknown Flow variant: {type(flow).__name__}")
 
 
 def from_dict(d: dict[str, Any], registry: dict[str, type]) -> Flow:
