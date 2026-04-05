@@ -365,7 +365,7 @@ async def test_dispatch_stream_yields_child_chunks():
 async def test_dispatch_stream_ephemeral_child_cleaned_up():
     """Ephemeral child actor spawned by dispatch_stream is stopped after stream ends."""
     from everything_is_an_actor.agents import AgentSystem
-    from everything_is_an_actor.actor import ActorContext
+    from everything_is_an_actor.core.actor import ActorContext
 
     system = AgentSystem()
     ref = await system.spawn(PassthroughAgent, "passthrough2")

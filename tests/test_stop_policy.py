@@ -282,7 +282,7 @@ async def test_stop_already_dead_actor():
         assert not ref.is_alive
 
         # Ask dead actor should raise error
-        from everything_is_an_actor.ref import ActorStoppedError
+        from everything_is_an_actor.core.ref import ActorStoppedError
         with pytest.raises(ActorStoppedError, match="stopped"):
             await system.ask(ref, "test")
     finally:
@@ -407,6 +407,6 @@ async def test_ask_after_system_shutdown():
     await system.shutdown()
 
     # Actor should be stopped after system shutdown
-    from everything_is_an_actor.ref import ActorStoppedError
+    from everything_is_an_actor.core.ref import ActorStoppedError
     with pytest.raises(ActorStoppedError, match="stopped"):
         await system.ask(ref, "late-ask")

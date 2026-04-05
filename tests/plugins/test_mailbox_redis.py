@@ -3,7 +3,7 @@ import pytest
 redis = pytest.importorskip("redis.asyncio")
 
 from everything_is_an_actor.plugins.redis import RedisMailbox
-from everything_is_an_actor.ref import _Envelope, _Stop
+from everything_is_an_actor.core.ref import _Envelope, _Stop
 
 
 pytestmark = pytest.mark.anyio

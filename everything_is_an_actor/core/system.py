@@ -10,13 +10,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from everything_is_an_actor.actor_f import ActorF
-    from everything_is_an_actor.frees import Free
+    from everything_is_an_actor.core.actor_f import ActorF
+    from everything_is_an_actor.core.frees import Free
 
-from everything_is_an_actor.actor import Actor, ActorContext, MsgT, RetT, StopMode, AfterMessage, AfterIdle
-from everything_is_an_actor.mailbox import Empty, Mailbox, MemoryMailbox
-from everything_is_an_actor.middleware import ActorMailboxContext, Middleware, NextFn, build_middleware_chain
-from everything_is_an_actor.ref import (
+from everything_is_an_actor.core.actor import Actor, ActorContext, MsgT, RetT, StopMode, AfterMessage, AfterIdle
+from everything_is_an_actor.core.mailbox import Empty, Mailbox, MemoryMailbox
+from everything_is_an_actor.core.middleware import ActorMailboxContext, Middleware, NextFn, build_middleware_chain
+from everything_is_an_actor.core.ref import (
     ActorRef,
     ActorStoppedError,
     MailboxFullError,
@@ -26,7 +26,7 @@ from everything_is_an_actor.ref import (
     _ReplyRegistry,
     _Stop,
 )
-from everything_is_an_actor.supervision import Directive, SupervisorStrategy
+from everything_is_an_actor.core.supervision import Directive, SupervisorStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class ActorSystem:
                 Auto-starts the dispatcher on first use.
         """
         # Validate AgentActor compatibility at spawn-time
-        from everything_is_an_actor.validation import validate_agent_actor_compatibility
+        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
 
         validate_agent_actor_compatibility(actor_cls, mode="single")
 
@@ -137,7 +137,7 @@ class ActorSystem:
         resolved_dispatcher = None
         if dispatcher is None:
             # Auto-detect: sync actor (overrides receive()) → route to "default" pool
-            from everything_is_an_actor.validation import find_sync_handler
+            from everything_is_an_actor.core.validation import find_sync_handler
 
             if find_sync_handler(actor_cls, "receive") is not None and "io" in self._dispatchers:
                 dispatcher = "io"
@@ -162,7 +162,7 @@ class ActorSystem:
                 target_loop = None  # Same loop — no cross-loop overhead
             elif actual_mailbox is None:
                 # Cross-loop: use FastMailbox with target_loop for thread-safe signaling
-                from everything_is_an_actor.mailbox import FastMailbox
+                from everything_is_an_actor.core.mailbox import FastMailbox
 
                 actual_mailbox = FastMailbox(mailbox_size, target_loop=target_loop)
 
@@ -191,9 +191,9 @@ class ActorSystem:
 
         Example::
 
-            from everything_is_an_actor.frees import Free
-            from everything_is_an_actor.interpreter import run_free
-            from everything_is_an_actor.actor_f import spawn, tell, ask
+            from everything_is_an_actor.core.frees import Free
+            from everything_is_an_actor.core.interpreter import run_free
+            from everything_is_an_actor.core.actor_f import spawn, tell, ask
 
             async def workflow() -> Free[ActorF, str]:
                 r = await spawn("greeter", GreeterActor)
@@ -202,7 +202,7 @@ class ActorSystem:
 
             result = await system.run_free(workflow())
         """
-        from everything_is_an_actor.interpreter import run_free as interpret
+        from everything_is_an_actor.core.interpreter import run_free as interpret
 
         return await interpret(self, free)
 
@@ -411,7 +411,7 @@ class _ActorCell:
         self.actor.context = ActorContext(self)
 
         # Check if actor implements sync receive() (MRO-aware)
-        from everything_is_an_actor.validation import find_sync_handler
+        from everything_is_an_actor.core.validation import find_sync_handler
 
         has_sync_receive = find_sync_handler(self.actor_cls, "receive") is not None
 
@@ -556,7 +556,7 @@ class _ActorCell:
         middlewares: list[Middleware] | None = None,
     ) -> ActorRef[MsgT, RetT]:
         # Validate AgentActor compatibility at spawn-time
-        from everything_is_an_actor.validation import validate_agent_actor_compatibility
+        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
 
         validate_agent_actor_compatibility(actor_cls, mode="single")
 

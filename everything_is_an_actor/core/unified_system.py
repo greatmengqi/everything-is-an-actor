@@ -15,12 +15,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar
 
-from everything_is_an_actor.backend import ActorBackend
-from everything_is_an_actor.composable_future import ComposableFuture
+from everything_is_an_actor.core.backend import ActorBackend
+from everything_is_an_actor.core.composable_future import ComposableFuture
 
 if TYPE_CHECKING:
-    from everything_is_an_actor.actor import Actor
-    from everything_is_an_actor.ref import ActorRef
+    from everything_is_an_actor.core.actor import Actor
+    from everything_is_an_actor.core.ref import ActorRef
 
 MsgT = TypeVar("MsgT")
 RetT = TypeVar("RetT")

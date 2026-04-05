@@ -7,14 +7,14 @@ import warnings
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from everything_is_an_actor.actor import Actor
+from everything_is_an_actor.core.actor import Actor
 from everything_is_an_actor.agents.task import Task, TaskEvent, TaskResult, TaskStatus
 
 InputT = TypeVar("InputT")
 OutputT = TypeVar("OutputT")
 
 if TYPE_CHECKING:
-    from everything_is_an_actor.ref import ActorRef
+    from everything_is_an_actor.core.ref import ActorRef
 
 
 class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, OutputT]):

@@ -14,8 +14,8 @@ from typing import Any
 import pytest
 
 from everything_is_an_actor import Actor, ActorSystem
-from everything_is_an_actor.mailbox import MemoryMailbox, FastMailbox, ThreadedMailbox
-from everything_is_an_actor.middleware import Middleware
+from everything_is_an_actor.core.mailbox import MemoryMailbox, FastMailbox, ThreadedMailbox
+from everything_is_an_actor.core.middleware import Middleware
 
 
 class TestMiddlewareForSyncActors:

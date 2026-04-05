@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-from everything_is_an_actor.dispatcher import DefaultDispatcher, PoolDispatcher
-from everything_is_an_actor.mailbox import FastMailbox
+from everything_is_an_actor.core.dispatcher import DefaultDispatcher, PoolDispatcher
+from everything_is_an_actor.core.mailbox import FastMailbox
 
 
 class TestDefaultDispatcher:

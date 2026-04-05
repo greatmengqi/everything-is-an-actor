@@ -14,12 +14,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar
 
-from everything_is_an_actor.backend import ActorBackend
+from everything_is_an_actor.core.backend import ActorBackend
 
 if TYPE_CHECKING:
-    from everything_is_an_actor.actor import Actor
-    from everything_is_an_actor.ref import ActorRef
-    from everything_is_an_actor.unified_system import ActorSystemConfig
+    from everything_is_an_actor.core.actor import Actor
+    from everything_is_an_actor.core.ref import ActorRef
+    from everything_is_an_actor.core.unified_system import ActorSystemConfig
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +321,7 @@ class _MultiLoopActorRef:
         thread-safe, so the actor (on its own loop) can resolve without
         manual ``call_soon_threadsafe`` plumbing.
         """
-        from everything_is_an_actor.composable_future import ComposableFuture
+        from everything_is_an_actor.core.composable_future import ComposableFuture
 
         async def _ask() -> Any:
             cf, resolve, reject = ComposableFuture.promise()
@@ -434,7 +434,7 @@ class MultiLoopBackend(ActorBackend):
     ) -> ActorRef[MsgT, RetT]:
         """创建 Actor"""
         # Validate AgentActor compatibility at spawn-time
-        from everything_is_an_actor.validation import validate_agent_actor_compatibility
+        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
 
         validate_agent_actor_compatibility(actor_cls, mode="multi-loop")
 
@@ -520,7 +520,7 @@ class MultiLoopBackend(ActorBackend):
     ) -> ActorRef:
         """创建子 Actor（共享父节点的 Loop）"""
         # Validate AgentActor compatibility at spawn-time
-        from everything_is_an_actor.validation import validate_agent_actor_compatibility
+        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
 
         validate_agent_actor_compatibility(actor_cls, mode="multi-loop")
 

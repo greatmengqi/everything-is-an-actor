@@ -13,7 +13,7 @@ from everything_is_an_actor import (
     Middleware,
     OneForOneStrategy,
 )
-from everything_is_an_actor.ref import ActorStoppedError
+from everything_is_an_actor.core.ref import ActorStoppedError
 
 
 # ---------------------------------------------------------------------------
