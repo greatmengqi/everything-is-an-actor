@@ -10,9 +10,11 @@ import asyncio
 import uuid
 from typing import Any
 
+from collections.abc import AsyncIterator
+
 from everything_is_an_actor.agents.agent_actor import AgentActor
 from everything_is_an_actor.agents.system import AgentSystem
-from everything_is_an_actor.agents.task import Task
+from everything_is_an_actor.agents.task import StreamEvent, StreamResult, Task, TaskEvent
 from everything_is_an_actor.flow.flow import (
     Continue,
     Done,
@@ -199,6 +201,111 @@ async def _interpret_agent(
     try:
         result = await ref._ask(Task(input=input), timeout=timeout)
         return result.get_or_raise()
+    finally:
+        ref.stop()
+        await ref.join()
+
+
+# ── Streaming interpreter ────────────────────────────────
+
+
+async def interpret_stream(
+    flow: Flow, input: Any, system: AgentSystem,
+) -> AsyncIterator[TaskEvent]:
+    """Interpret a Flow, yielding TaskEvent streams from all agent nodes.
+
+    Yields TaskEvent objects (task_started, task_progress, task_chunk, etc.)
+    as they are emitted by agents in the flow. The final value is accessible
+    via the last task_completed event's data field.
+
+    Non-agent nodes (Pure, Map, etc.) execute silently — only _Agent nodes
+    produce events.
+    """
+    match flow:
+        case _Agent(cls=cls, timeout=timeout):
+            async for event in _interpret_agent_stream(cls, input, system, timeout=timeout):
+                yield event
+
+        case _Pure():
+            return  # no events from pure functions
+
+        case _Map(source=source, f=f):
+            async for event in interpret_stream(source, input, system):
+                yield event
+
+        case _FlatMap(first=first, next=next_flow):
+            # Stream first, capture result from events, then stream next
+            first_result = None
+            async for event in interpret_stream(first, input, system):
+                yield event
+                if event.type == "task_completed":
+                    first_result = event.data
+            # Fallback: if no task_completed event, interpret synchronously
+            if first_result is None:
+                first_result = await interpret(first, input, system)
+            async for event in interpret_stream(next_flow, first_result, system):
+                yield event
+
+        case _Recover(source=source, handler=handler):
+            try:
+                async for event in interpret_stream(source, input, system):
+                    yield event
+            except Exception:
+                return  # recovery produces no events
+
+        case _RecoverWith(source=source, handler=handler):
+            try:
+                async for event in interpret_stream(source, input, system):
+                    yield event
+            except Exception as e:
+                async for event in interpret_stream(handler, e, system):
+                    yield event
+
+        case _FallbackTo(source=source, fallback=fallback):
+            try:
+                async for event in interpret_stream(source, input, system):
+                    yield event
+            except Exception:
+                async for event in interpret_stream(fallback, input, system):
+                    yield event
+
+        case _Loop(body=body, max_iter=max_iter):
+            current = input
+            for _ in range(max_iter):
+                # Stream body and capture result
+                body_result = None
+                async for event in interpret_stream(body, current, system):
+                    yield event
+                    if event.type == "task_completed":
+                        body_result = event.data
+                if body_result is None:
+                    body_result = await interpret(body, current, system)
+                match body_result:
+                    case Done(value=value):
+                        return
+                    case Continue(value=value):
+                        current = value
+
+        case _:
+            # For variants without streaming semantics (Zip, Race, Branch, etc.),
+            # fall back to non-streaming interpret — no events yielded.
+            return
+
+
+async def _interpret_agent_stream(
+    cls: type[AgentActor], input: Any, system: AgentSystem, *, timeout: float = 30.0,
+) -> AsyncIterator[TaskEvent]:
+    """Spawn ephemeral actor, stream events via ask_stream, stop."""
+    name = f"_flow-stream-{cls.__name__}-{uuid.uuid4().hex[:8]}"
+    ref = await system.spawn(cls, name)
+    try:
+        async for item in ref._ask_stream(Task(input=input), timeout=timeout):
+            match item:
+                case StreamEvent(event=event):
+                    yield event
+                case StreamResult(result=result):
+                    if result.is_failure():
+                        raise RuntimeError(f"Agent {cls.__name__} failed: {result.error}")
     finally:
         ref.stop()
         await ref.join()
