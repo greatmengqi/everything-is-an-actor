@@ -107,9 +107,16 @@ print(result.task_id)       # same as task.id
 
 ### Status transitions
 
-```
-PENDING → RUNNING → COMPLETED
-                 ↘ FAILED
+```mermaid
+graph LR
+    P(PENDING) --> R(RUNNING)
+    R --> C(COMPLETED)
+    R --> F(FAILED)
+
+    style P fill:#d9d4b8,stroke:#b5b07a,color:#2c3e50
+    style R fill:#b8c9d9,stroke:#7a9bb5,color:#2c3e50
+    style C fill:#b8d9c4,stroke:#7ab59b,color:#2c3e50
+    style F fill:#d9a3a3,stroke:#b57a7a,color:#2c3e50
 ```
 
 | Status | When |
