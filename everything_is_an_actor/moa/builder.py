@@ -61,22 +61,12 @@ class MoABuilder:
                 for node in self._moa_nodes:
                     proposer_tasks: list[tuple[type[AgentActor], Task]] = []
                     for cls in node.proposers:
-                        task_input = (
-                            current
-                            if directive is None
-                            else {"input": current, "directive": directive}
-                        )
+                        task_input = current if directive is None else {"input": current, "directive": directive}
                         proposer_tasks.append((cls, Task(input=task_input)))
 
-                    results = await self._run_proposers(
-                        proposer_tasks, node.min_success, node.proposer_timeout
-                    )
+                    results = await self._run_proposers(proposer_tasks, node.min_success, node.proposer_timeout)
 
-                    agg_output = (
-                        await self.context.ask(
-                            node.aggregator, Task(input=results)
-                        )
-                    ).get_or_raise()
+                    agg_output = (await self.context.ask(node.aggregator, Task(input=results))).get_or_raise()
 
                     match agg_output:
                         case LayerOutput(result=r, directive=d):

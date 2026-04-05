@@ -41,8 +41,7 @@ class MoANode:
             raise ValueError("min_success must be >= 1")
         if self.min_success > len(self.proposers):
             raise ValueError(
-                f"min_success ({self.min_success}) cannot exceed "
-                f"number of proposers ({len(self.proposers)})"
+                f"min_success ({self.min_success}) cannot exceed number of proposers ({len(self.proposers)})"
             )
 
 
