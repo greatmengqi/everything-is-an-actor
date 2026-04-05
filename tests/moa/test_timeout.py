@@ -6,6 +6,7 @@ from typing import Any
 
 from everything_is_an_actor.agents import AgentActor, AgentSystem, Task, TaskResult, TaskStatus
 
+pytestmark = pytest.mark.anyio
 
 class HangingAgent(AgentActor[Any, str]):
     async def execute(self, input: Any) -> str:
@@ -25,7 +26,6 @@ class CountAgg(AgentActor[list, str]):
         return f"s={s},f={f}"
 
 
-@pytest.mark.asyncio
 class TestProposerTimeout:
 
     async def test_hanging_proposer_times_out_and_recovers(self):

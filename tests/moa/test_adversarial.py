@@ -6,6 +6,7 @@ from typing import Any
 
 from everything_is_an_actor.agents import AgentActor, AgentSystem, Task, TaskResult, TaskStatus
 
+pytestmark = pytest.mark.anyio
 
 # --- Adversarial agents ---
 
@@ -90,7 +91,6 @@ class ReentrantProposer(AgentActor[Any, str]):
         return f"[Reentrant:{result.get_or_raise()}]"
 
 
-@pytest.mark.asyncio
 class TestAdversarial:
 
     async def test_timeout_kills_hanging_proposer(self):

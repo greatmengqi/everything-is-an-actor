@@ -6,6 +6,7 @@ from typing import Any
 
 from everything_is_an_actor.agents import AgentActor, AgentSystem, Task, TaskResult, TaskStatus
 
+pytestmark = pytest.mark.anyio
 
 # --- Test agents ---
 
@@ -92,7 +93,6 @@ class FailingAgg(AgentActor[list, str]):
 
 # --- Tests ---
 
-@pytest.mark.asyncio
 class TestStress:
 
     async def test_deep_nesting_3_levels(self):

@@ -2,6 +2,7 @@ import pytest
 from typing import Any
 from everything_is_an_actor.agents import AgentActor, Task, TaskResult, TaskStatus
 
+pytestmark = pytest.mark.anyio
 
 class StubAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
@@ -108,7 +109,6 @@ class TestMoABuilder:
 
 # --- Runtime tests ---
 
-@pytest.mark.asyncio
 class TestMoARuntime:
     async def test_single_layer_end_to_end(self):
         from everything_is_an_actor.moa.builder import MoABuilder
@@ -392,7 +392,6 @@ class TestMoARuntime:
 
 # --- Directive tests ---
 
-@pytest.mark.asyncio
 class TestDirective:
     async def test_directive_passed_to_next_layer(self):
         from everything_is_an_actor.moa.builder import MoABuilder, LayerOutput
