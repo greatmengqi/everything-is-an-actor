@@ -9,18 +9,14 @@ Architecture overview and key design decisions for `everything-is-an-actor`.
 The framework has five layers with a strict downward dependency direction:
 
 ```mermaid
-block-beta
-    columns 1
-    block:int["Integrations — LangChain adapter"]
-    end
-    block:moa["MOA — moa_layer · moa_tree · MoASystem · LayerOutput"]
-    end
-    block:flow["Flow ADT — Flow · combinators · interpreter · serialize · viz"]
-    end
-    block:agent["Agent layer — Task · AgentActor · AgentSystem · streaming"]
-    end
-    block:core["Core layer — Actor · ActorRef · ActorSystem · Mailbox"]
-    end
+graph TB
+    int["<b>Integrations</b><br/>LangChain adapter"]
+    moa["<b>MOA</b><br/>moa_layer · moa_tree · MoASystem · LayerOutput"]
+    flow["<b>Flow ADT</b><br/>Flow · combinators · interpreter · serialize · viz"]
+    agent["<b>Agent layer</b><br/>Task · AgentActor · AgentSystem · streaming"]
+    core["<b>Core layer</b><br/>Actor · ActorRef · ActorSystem · Mailbox"]
+
+    int --> moa --> flow --> agent --> core
 
     style int fill:#b8c9d9,stroke:#7a9bb5,color:#2c3e50
     style moa fill:#c4b8d9,stroke:#9b7ab5,color:#2c3e50
