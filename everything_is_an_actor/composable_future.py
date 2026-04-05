@@ -135,7 +135,9 @@ class ComposableFuture(Generic[T]):
     __slots__ = ("_coro", "_loop")
 
     def __init__(
-        self, coro: Awaitable[T], loop: Optional[asyncio.AbstractEventLoop] = None,
+        self,
+        coro: Awaitable[T],
+        loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
         self._coro = coro
         self._loop = loop
@@ -187,8 +189,7 @@ class ComposableFuture(Generic[T]):
         if self._loop is not None:
             if running is self._loop:
                 raise RuntimeError(
-                    "ComposableFuture.result() called from the same loop it's pinned to. "
-                    "Use 'await' instead."
+                    "ComposableFuture.result() called from the same loop it's pinned to. Use 'await' instead."
                 )
             coro = _ensure_coro(self._coro)
             fut = asyncio.run_coroutine_threadsafe(coro, self._loop)  # type: ignore[arg-type]
@@ -213,8 +214,10 @@ class ComposableFuture(Generic[T]):
 
     def map(self, fn: Callable[[T], U]) -> ComposableFuture[U]:
         """Functor fmap.  ``(A → B) → F[A] → F[B]``"""
+
         async def _mapped():
             return fn(await self._resolve())
+
         return self._wrap(_mapped())
 
     # -- Monad --------------------------------------------------------
@@ -226,21 +229,27 @@ class ComposableFuture(Generic[T]):
         Python's ``Awaitable`` is the natural effect-monad type class —
         any ``async def`` returns one, and ``ComposableFuture`` is one.
         """
+
         async def _flat_mapped():
             return await fn(await self._resolve())
+
         return self._wrap(_flat_mapped())
 
     # -- Applicative / Product ----------------------------------------
 
     def zip(self, other: ComposableFuture[U]) -> ComposableFuture[tuple[T, U]]:
         """Product.  Run two futures concurrently, pair results."""
+
         async def _zipped():
             async def _a() -> T:
                 return await self
+
             async def _b() -> U:
                 return await other
+
             a, b = await asyncio.gather(_a(), _b())
             return (a, b)
+
         return self._wrap(_zipped())
 
     def ap(self, fn_future: ComposableFuture[Callable[[T], U]]) -> ComposableFuture[U]:
@@ -254,20 +263,24 @@ class ComposableFuture(Generic[T]):
 
     def recover(self, fn: Callable[[Exception], T]) -> ComposableFuture[T]:
         """Handle exceptions synchronously.  MonadError ``handleError``."""
+
         async def _recovered():
             try:
                 return await self._resolve()
             except Exception as e:
                 return fn(e)
+
         return self._wrap(_recovered())
 
     def recover_with(self, fn: Callable[[Exception], Awaitable[T]]) -> ComposableFuture[T]:
         """Handle exceptions with async recovery.  MonadError ``handleErrorWith``."""
+
         async def _recovered():
             try:
                 return await self._resolve()
             except Exception as e:
                 return await fn(e)
+
         return self._wrap(_recovered())
 
     # =================================================================
@@ -279,11 +292,13 @@ class ComposableFuture(Generic[T]):
 
         ``map(a → a if p(a) else raise ValueError)``
         """
+
         async def _filtered():
             result = await self._resolve()
             if not predicate(result):
                 raise ValueError(f"ComposableFuture.filter predicate failed for {result!r}")
             return result
+
         return self._wrap(_filtered())
 
     def transform(
@@ -292,11 +307,13 @@ class ComposableFuture(Generic[T]):
         failure: Callable[[Exception], U],
     ) -> ComposableFuture[U]:
         """Bifunctor-like — transform both success and failure paths."""
+
         async def _transformed():
             try:
                 return success(await self._resolve())
             except Exception as e:
                 return failure(e)
+
         return self._wrap(_transformed())
 
     def fallback_to(self, other: Callable[[], Awaitable[T]]) -> ComposableFuture[T]:
@@ -304,21 +321,25 @@ class ComposableFuture(Generic[T]):
 
         Takes a zero-arg callable to avoid unawaited coroutine warnings.
         """
+
         async def _fallback():
             try:
                 return await self._resolve()
             except Exception:
                 return await other()
+
         return self._wrap(_fallback())
 
     # -- Side effects -------------------------------------------------
 
     def and_then(self, fn: Callable[[T], Any]) -> ComposableFuture[T]:
         """Side effect on success (logging, metrics). Returns original value."""
+
         async def _tapped():
             result = await self._resolve()
             fn(result)
             return result
+
         return self._wrap(_tapped())
 
     def on_complete(
@@ -327,6 +348,7 @@ class ComposableFuture(Generic[T]):
         on_failure: Callable[[Exception], Any] | None = None,
     ) -> ComposableFuture[T]:
         """Attach callbacks for side effects. Returns original result/error."""
+
         async def _observed():
             try:
                 result = await self._resolve()
@@ -337,16 +359,20 @@ class ComposableFuture(Generic[T]):
             if on_success is not None:
                 on_success(result)
             return result
+
         return self._wrap(_observed())
 
     # -- Timeout ------------------------------------------------------
 
     def with_timeout(self, seconds: float) -> ComposableFuture[T]:
         """Fail with asyncio.TimeoutError if not complete within *seconds*."""
+
         async def _timed():
             async def _inner() -> T:
                 return await self
+
             return await asyncio.wait_for(_inner(), timeout=seconds)
+
         return self._wrap(_timed())
 
     # =================================================================
@@ -356,8 +382,10 @@ class ComposableFuture(Generic[T]):
     @staticmethod
     def of(value: T) -> ComposableFuture[T]:
         """Monad return / pure.  Lift a value into a resolved future."""
+
         async def _resolved():
             return value
+
         return ComposableFuture(_resolved())
 
     @staticmethod
@@ -411,8 +439,10 @@ class ComposableFuture(Generic[T]):
     @staticmethod
     def failed(error: Exception) -> ComposableFuture[Any]:
         """MonadError ``raiseError``.  Already-failed future."""
+
         async def _failed():
             raise error
+
         return ComposableFuture(_failed())
 
     @staticmethod
@@ -421,21 +451,26 @@ class ComposableFuture(Generic[T]):
 
         Mixed-loop futures work: each element bridges independently.
         """
+
         async def _sequenced():
             async def _await_one(f: ComposableFuture[T]) -> T:
                 return await f
+
             return list(await asyncio.gather(*[_await_one(f) for f in futures]))
+
         return ComposableFuture(_sequenced())
 
     @staticmethod
     def first_completed(
-        *futures: ComposableFuture[T], cancel_pending: bool = True,
+        *futures: ComposableFuture[T],
+        cancel_pending: bool = True,
     ) -> ComposableFuture[T]:
         """Alternative ``race`` — return the first future to complete.
 
         By default, losers are cancelled.  Pass ``cancel_pending=False``
         for idempotent/read-only branches.
         """
+
         async def _first():
             if not futures:
                 raise ValueError("first_completed requires at least one future")
@@ -474,4 +509,5 @@ class ComposableFuture(Generic[T]):
             if first_exc is not None:
                 return first_exc.result()  # re-raises
             raise asyncio.CancelledError()
+
         return ComposableFuture(_first())

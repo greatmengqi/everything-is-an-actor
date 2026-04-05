@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 class ActorSystemMode(str, Enum):
     """Actor System 模式"""
+
     SINGLE = "single"
     MULTI_LOOP = "multi-loop"
     MULTI_PROCESS = "multi-process"
@@ -106,20 +107,19 @@ class ActorSystem:
         """创建后端"""
         if mode is ActorSystemMode.SINGLE:
             from everything_is_an_actor.backends.single_loop import SingleLoopBackend
+
             return SingleLoopBackend(name=self.name, config=config)
 
         if mode is ActorSystemMode.MULTI_LOOP:
             from everything_is_an_actor.backends.multi_loop import MultiLoopBackend
+
             return MultiLoopBackend(name=self.name, config=config)
 
         if mode is ActorSystemMode.MULTI_PROCESS:
-            raise ValueError(
-                "mode=MULTI_PROCESS is not yet implemented. "
-                "Use SINGLE or MULTI_LOOP instead."
-            )
+            raise ValueError("mode=MULTI_PROCESS is not yet implemented. Use SINGLE or MULTI_LOOP instead.")
 
         raise ValueError(f"Unknown mode: {mode}")
-    
+
     async def spawn(
         self,
         actor_cls: type[Actor[MsgT, RetT]],
@@ -142,10 +142,11 @@ class ActorSystem:
         """
         # 兼容性校验委托给 backend（单一权威），避免 config.mode 与实际 backend 产生 skew
         return await self._backend.spawn(actor_cls, name, **kwargs)
-    
+
     async def tell(self, ref: ActorRef, message: Any) -> None:
         """发送消息（不等待回复）。"""
         import asyncio as _aio
+
         result = ref._tell(message)
         if _aio.iscoroutine(result):
             await result
@@ -159,7 +160,7 @@ class ActorSystem:
         """发送消息并等待回复。返回 ComposableFuture 支持链式组合。"""
         t = timeout if timeout is not None else self.config.default_timeout
         return ref._ask(message, timeout=t)
-    
+
     async def spawn_child(
         self,
         parent_ref: ActorRef,
@@ -169,19 +170,19 @@ class ActorSystem:
     ) -> ActorRef:
         """创建子 Actor"""
         return await self._backend.spawn_child(parent_ref, actor_cls, name, **kwargs)
-    
+
     async def stop(self, ref: ActorRef) -> None:
         """停止 Actor"""
         await self._backend.stop(ref)
-    
+
     async def shutdown(self) -> None:
         """关闭系统"""
         await self._backend.shutdown()
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """获取系统统计信息"""
         return self._backend.get_stats()
-    
+
     @property
     def mode(self) -> ActorSystemMode:
         """当前模式"""

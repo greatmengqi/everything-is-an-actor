@@ -21,7 +21,7 @@ from everything_is_an_actor.middleware import Middleware
 class TestMiddlewareForSyncActors:
     """Verify that middleware is applied to sync actors (receive() method)."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_sync_actor_middleware_is_called(self):
         """Middleware should be called for sync actors."""
         call_log = []
@@ -57,7 +57,7 @@ class TestMiddlewareForSyncActors:
 
         await system.shutdown()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_sync_actor_middleware_can_modify_message(self):
         """Middleware can modify messages for sync actors."""
         class ModifyMiddleware(Middleware):
@@ -80,7 +80,7 @@ class TestMiddlewareForSyncActors:
 
         await system.shutdown()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_sync_actor_middleware_can_short_circuit(self):
         """Middleware can short-circuit and return without calling actor."""
         class ShortCircuitMiddleware(Middleware):
@@ -107,7 +107,7 @@ class TestMiddlewareForSyncActors:
 class TestEventLoopCleanup:
     """Verify that event loop cleanup handles background tasks correctly."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_event_loop_cleanup_on_exception(self):
         """When sync actor throws, event loop should clean up background tasks."""
         import asyncio
@@ -138,7 +138,7 @@ class TestEventLoopCleanup:
 
         await system.shutdown()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_event_loop_cleanup_with_multiple_threads(self):
         """Event loop cleanup works correctly with multiple concurrent sync actors."""
         results = []
@@ -232,7 +232,7 @@ class TestThreadedMailboxThreadSafety:
         assert len(put_count) == 100
         assert len(get_count) == 100
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_threaded_mailbox_with_async_interface(self):
         """ThreadedMailbox works with async put/get interface."""
         import asyncio
@@ -258,7 +258,7 @@ class TestThreadedMailboxThreadSafety:
 class TestSyncActorWithDifferentMailboxes:
     """Verify sync actors work correctly with different mailbox types."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_sync_actor_with_fastmailbox(self):
         """Sync actor works with FastMailbox."""
         class SyncActor(Actor):
@@ -273,7 +273,7 @@ class TestSyncActorWithDifferentMailboxes:
 
         await system.shutdown()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_sync_actor_with_threadedmailbox(self):
         """Sync actor works with ThreadedMailbox."""
         class SyncActor(Actor):
@@ -292,7 +292,7 @@ class TestSyncActorWithDifferentMailboxes:
 class TestSyncActorErrorHandling:
     """Verify error handling works correctly for sync actors."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_sync_actor_exception_propagates(self):
         """Exceptions in sync actors propagate correctly."""
         class FailingActor(Actor):
@@ -307,7 +307,7 @@ class TestSyncActorErrorHandling:
 
         await system.shutdown()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_sync_actor_can_recover_after_exception(self):
         """Sync actor can continue processing after an exception."""
         state = {'count': 0}

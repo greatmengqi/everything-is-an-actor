@@ -63,6 +63,7 @@ class ActorRef(Generic[MsgT, RetT]):
 
         Use ``system.ask(ref, msg)`` or ``actor.ask(target, msg)`` instead.
         """
+
         async def _ask() -> RetT:
             if self._cell.stopped:
                 raise ActorStoppedError(f"Actor {self.path} is stopped")

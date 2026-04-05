@@ -68,6 +68,7 @@ asyncio.run(main())
 - `RedisMailbox` — persistent, survives process restarts
 - `OneForOneStrategy` / `AllForOneStrategy` supervision
 - Middleware pipeline for all lifecycle events
+- **Virtual actors** — `VirtualActorRegistry` activates on first message and deactivates on idle; supports `ask`/`tell`/`ask_stream`, manual `deactivate`, and pluggable `RegistryStore`
 - **Stop Policy ADT** — declarative lifecycle: `StopMode.NEVER` / `StopMode.ONE_TIME` / `AfterMessage(msg)` / `AfterIdle(seconds)`
 - **Path-based lookup** — address actors by path: `system.get_actor("/app/workers/collector")`
 - **Free Monad API** — composable workflows: `ref.free_ask()` / `ref.free_tell()` / `ref.free_stop()`

@@ -44,7 +44,7 @@ class FastActor(Actor):
         return f"fast: {msg}"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_single_loop_spawn_and_ask():
     """测试 single 模式"""
     system = ActorSystem(mode=ActorSystemMode.SINGLE)
@@ -57,7 +57,7 @@ async def test_single_loop_spawn_and_ask():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_multi_loop_spawn_and_ask():
     """测试 multi-loop 模式"""
     system = ActorSystem(mode=ActorSystemMode.MULTI_LOOP)
@@ -70,7 +70,7 @@ async def test_multi_loop_spawn_and_ask():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_multi_loop_isolation():
     """测试 multi-loop 隔离性"""
     system = ActorSystem(mode=ActorSystemMode.MULTI_LOOP)
@@ -92,7 +92,7 @@ async def test_multi_loop_isolation():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_multi_loop_child_actor():
     """测试 multi-loop 子 Actor"""
     system = ActorSystem(mode=ActorSystemMode.MULTI_LOOP)
@@ -109,7 +109,7 @@ async def test_multi_loop_child_actor():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_auto_mode():
     """测试自动模式"""
     system = ActorSystem(mode=ActorSystemMode.AUTO)
@@ -125,7 +125,7 @@ async def test_auto_mode():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_timeout_zero_immediate_fail():
     """测试 timeout=0 立即超时"""
     system = ActorSystem(mode=ActorSystemMode.SINGLE)
@@ -142,7 +142,7 @@ async def test_timeout_zero_immediate_fail():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_timeout_zero_point_zero_immediate_fail():
     """测试 timeout=0.0 立即超时"""
     system = ActorSystem(mode=ActorSystemMode.SINGLE)
@@ -159,7 +159,7 @@ async def test_timeout_zero_point_zero_immediate_fail():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_timeout_none_uses_default():
     """测试 timeout=None 使用默认超时"""
     system = ActorSystem(mode=ActorSystemMode.SINGLE)
@@ -173,7 +173,7 @@ async def test_timeout_none_uses_default():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_explicit_timeout_not_overridden():
     """测试显式超时值不会被覆盖"""
     system = ActorSystem(mode=ActorSystemMode.SINGLE)
