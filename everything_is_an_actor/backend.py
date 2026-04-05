@@ -10,7 +10,7 @@ Actor System 后端抽象
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, TypeVar
 
 if TYPE_CHECKING:
     from everything_is_an_actor.actor import Actor

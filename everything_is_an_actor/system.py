@@ -588,7 +588,6 @@ class _ActorCell:
         consecutive_failures = 0
         # Cache stop_policy to avoid repeated method calls per message
         cached_policy = None
-        policy_is_static = True  # Track if policy changes at runtime
 
         try:
             while not self.stopped:
@@ -596,8 +595,6 @@ class _ActorCell:
                 idle_timeout: float | None = None
                 if cached_policy is None and self.actor is not None:
                     cached_policy = self.actor.stop_policy()
-                    # Check if it's a static policy we can cache
-                    policy_is_static = isinstance(cached_policy, StopMode) or isinstance(cached_policy, AfterMessage)
 
                 if cached_policy is not None and isinstance(cached_policy, AfterIdle):
                     idle_timeout = cached_policy.seconds

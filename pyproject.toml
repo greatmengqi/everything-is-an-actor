@@ -47,4 +47,8 @@ markers = [
 line-length = 120
 
 [tool.ruff.lint]
-ignore = ["F811"]  # Redefinition of unused name (type alias pattern)
+ignore = [
+    "F811",  # Redefinition of unused name (type alias pattern)
+    "F821",  # Undefined name — lazy imports for ComposableFuture in TYPE_CHECKING blocks
+    "E741",  # Ambiguous variable name (I, O) — intentional TypeVar names for Input/Output
+]
