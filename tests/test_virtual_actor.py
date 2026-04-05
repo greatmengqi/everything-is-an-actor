@@ -121,7 +121,7 @@ class FailingStopAgent(Actor):
         raise RuntimeError("on_stopped failed")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_basic_activation():
     """Virtual actor is activated on first message."""
     system = ActorSystem("test")
@@ -136,7 +136,7 @@ async def test_basic_activation():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_multiple_sessions():
     """Different actor IDs activate different instances."""
     system = ActorSystem("test")
@@ -151,7 +151,7 @@ async def test_multiple_sessions():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_same_session_reuses_actor():
     """Multiple messages to the same ID go to the same actor instance."""
     system = ActorSystem("test")
@@ -167,7 +167,7 @@ async def test_same_session_reuses_actor():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_idle_deactivation():
     """Actor deactivates after idle timeout."""
     system = ActorSystem("test")
@@ -184,7 +184,7 @@ async def test_idle_deactivation():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_reactivation_after_idle():
     """Actor can be reactivated after idle deactivation."""
     system = ActorSystem("test")
@@ -206,7 +206,7 @@ async def test_reactivation_after_idle():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_manual_deactivation():
     """Actor can be manually deactivated."""
     system = ActorSystem("test")
@@ -221,7 +221,7 @@ async def test_manual_deactivation():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_deactivate_all():
     """All actors can be deactivated at once."""
     system = ActorSystem("test")
@@ -239,7 +239,7 @@ async def test_deactivate_all():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_tell_activates():
     """tell() also activates the actor."""
     system = ActorSystem("test")
@@ -251,7 +251,7 @@ async def test_tell_activates():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_concurrent_activation():
     """Concurrent messages to the same ID only activate once."""
     system = ActorSystem("test")
@@ -271,7 +271,7 @@ async def test_concurrent_activation():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_on_deactivate_callback():
     """Deactivation callback is called when actor stops."""
     system = ActorSystem("test")
@@ -290,7 +290,7 @@ async def test_on_deactivate_callback():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_different_actor_types_same_id():
     """Different actor types with the same ID are separate virtual actors."""
     system = ActorSystem("test")
@@ -309,7 +309,7 @@ async def test_different_actor_types_same_id():
 # ── State persistence across activations ──────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_state_persists_across_activations():
     """State saved in on_stopped is available in next on_started."""
     _fake_db.clear()
@@ -335,7 +335,7 @@ async def test_state_persists_across_activations():
     _fake_db.clear()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_state_independent_per_id():
     """Different actor IDs have independent state."""
     _fake_db.clear()
@@ -358,7 +358,7 @@ async def test_state_independent_per_id():
 # ── Concurrent activation with slow startup ───────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_slow_activation_concurrent_asks():
     """Concurrent asks during slow activation all wait and succeed."""
     system = ActorSystem("test")
@@ -378,7 +378,7 @@ async def test_slow_activation_concurrent_asks():
 # ── High density ──────────────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_high_density_activation():
     """Many virtual actors can be activated concurrently."""
     system = ActorSystem("test")
@@ -403,7 +403,7 @@ async def test_high_density_activation():
 # ── Deactivation during message processing ────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_deactivate_then_reactivate_immediately():
     """Deactivate and immediately send a new message → clean reactivation."""
     system = ActorSystem("test")
@@ -425,7 +425,7 @@ async def test_deactivate_then_reactivate_immediately():
 # ── active_ids property ───────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_active_ids_tracking():
     """active_ids reflects current state accurately."""
     system = ActorSystem("test")
@@ -449,7 +449,7 @@ async def test_active_ids_tracking():
 # ── Rapid activation/deactivation cycles ──────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_rapid_reactivation_cycles():
     """Actor can go through multiple activate/deactivate cycles."""
     system = ActorSystem("test")
@@ -468,7 +468,7 @@ async def test_rapid_reactivation_cycles():
 # ── is_active after system shutdown ───────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_is_active_false_for_nonexistent():
     """is_active returns False for never-activated actors."""
     system = ActorSystem("test")
@@ -483,7 +483,7 @@ async def test_is_active_false_for_nonexistent():
 # ── Lifecycle guarantees ──────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_on_stopped_completes_on_idle_deactivation():
     """on_stopped runs fully when actor deactivates due to idle timeout."""
     SlowStopAgent.stopped_called = False
@@ -504,7 +504,7 @@ async def test_on_stopped_completes_on_idle_deactivation():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_on_stopped_completes_on_manual_deactivation():
     """on_stopped runs fully on manual deactivation."""
     SlowStopAgent.stopped_called = False
@@ -522,7 +522,7 @@ async def test_on_stopped_completes_on_manual_deactivation():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_on_stopped_completes_on_system_shutdown():
     """on_stopped runs fully even during system shutdown."""
     SlowStopAgent.stopped_called = False
@@ -540,7 +540,7 @@ async def test_on_stopped_completes_on_system_shutdown():
     assert SlowStopAgent.stopped_completed
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_on_stopped_failure_does_not_block_deactivation():
     """on_stopped exception doesn't prevent actor from being cleaned up."""
     FailingStopAgent.stop_attempts = 0
@@ -560,7 +560,7 @@ async def test_on_stopped_failure_does_not_block_deactivation():
     await system.shutdown()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_reactivation_after_failed_on_stopped():
     """Actor can be reactivated even if previous on_stopped failed."""
     FailingStopAgent.stop_attempts = 0

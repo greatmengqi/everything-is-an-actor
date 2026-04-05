@@ -90,6 +90,38 @@ class ActorContext:
         """Spawn a child actor supervised by this actor."""
         return await self._cell.spawn_child(actor_cls, name, mailbox_size=mailbox_size, middlewares=middlewares)
 
+    def register_background_task(self, task: Any) -> None:
+        """Register a task as durable — it survives per-message cleanup.
+
+        Use inside sync ``receive()`` for long-lived background work::
+
+            loop = asyncio.get_event_loop()
+            task = loop.create_task(my_background_work())
+            self.context.register_background_task(task)
+
+        Unregistered tasks created during a message are cancelled after
+        the message completes. Registered tasks live until actor shutdown.
+
+        Raises:
+            TypeError: if ``task`` is not an ``asyncio.Task``.
+            ValueError: if ``task`` belongs to a different event loop.
+        """
+        import asyncio
+
+        if not isinstance(task, asyncio.Task):
+            raise TypeError(f"register_background_task() requires an asyncio.Task, got {type(task).__name__}")
+        # Validate loop ownership when sync loop is known
+        sync_loop = getattr(self._cell, "_sync_loop", None)
+        if sync_loop is not None:
+            task_loop = task.get_loop()
+            if task_loop is not sync_loop:
+                raise ValueError(
+                    f"Task belongs to a different event loop. Expected the actor's sync loop, got {task_loop!r}"
+                )
+        bg = self._cell._background_tasks
+        bg.add(task)
+        task.add_done_callback(bg.discard)
+
     async def stop_self(self) -> None:
         """Stop this actor (self) and remove from parent's children.
 
@@ -131,8 +163,10 @@ class ActorContext:
         import uuid
 
         if isinstance(target, type):
+
             async def _ephemeral_ask() -> RetT:
                 import asyncio
+
                 actor_name = name or f"{target.__name__.lower()}-{uuid.uuid4().hex[:8]}"
                 ref = await self.spawn(target, actor_name)
                 try:
@@ -143,6 +177,7 @@ class ActorContext:
                     if current is not None and getattr(current, "cancelling", lambda: 0)() > 0:
                         ref.interrupt()
                     await ref.join()
+
             return ComposableFuture(_ephemeral_ask())
         else:
             return target._ask(message, timeout=timeout)
@@ -162,10 +197,13 @@ class ActorContext:
 
         async def _seq() -> list[Any]:
             import asyncio
+
             if not tasks:
                 return []
+
             async def _run(t: Any, msg: Any) -> Any:
                 return await self.ask(t, msg, timeout=timeout)
+
             spawned = [asyncio.create_task(_run(t, msg)) for t, msg in tasks]
             _, pending = await asyncio.wait(spawned, return_when=asyncio.FIRST_EXCEPTION)
             if pending:
@@ -178,6 +216,7 @@ class ActorContext:
                     if exc is not None:
                         raise exc
             return [t.result() for t in spawned]
+
         return ComposableFuture(_seq())
 
     def traverse(
@@ -206,10 +245,13 @@ class ActorContext:
 
         async def _race() -> Any:
             import asyncio
+
             if not tasks:
                 raise ValueError("race() requires at least one task")
+
             async def _run(t: Any, msg: Any) -> Any:
                 return await self.ask(t, msg, timeout=timeout)
+
             spawned = [asyncio.create_task(_run(t, msg)) for t, msg in tasks]
             try:
                 _, pending = await asyncio.wait(spawned, return_when=asyncio.FIRST_COMPLETED)
@@ -224,6 +266,7 @@ class ActorContext:
                         t.cancel()
                 await asyncio.gather(*spawned, return_exceptions=True)
                 raise
+
         return ComposableFuture(_race())
 
     def zip(
@@ -235,6 +278,7 @@ class ActorContext:
     ) -> ComposableFuture[tuple[Any, Any]]:
         """Run two tasks concurrently, return pair. Returns ComposableFuture."""
         from everything_is_an_actor.composable_future import Fn
+
         return self.sequence([task_a, task_b], timeout=timeout).map(
             Fn[list[Any], tuple[Any, Any]](lambda r: (r[0], r[1]))
         )

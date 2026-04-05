@@ -136,6 +136,59 @@ Every `TaskEvent` carries `parent_task_id` and `parent_agent_path` — reconstru
 
 ---
 
+## Virtual Actor
+
+Virtual actors activate on demand and deactivate when idle — no manual lifecycle management.
+
+```python
+from everything_is_an_actor import Actor, ActorSystem, AfterIdle
+from everything_is_an_actor.virtual import VirtualActorRegistry
+
+class ChatAgent(Actor):
+    def stop_policy(self):
+        return AfterIdle(seconds=300)  # deactivate after 5 min idle
+
+    async def on_started(self):                          # = on_activate
+        self.history = await db.load(self.context.self_ref.name)
+
+    async def on_receive(self, message):
+        self.history.append(message)
+        return respond(self.history)
+
+    async def on_stopped(self):                          # = on_deactivate
+        await db.save(self.context.self_ref.name, self.history)
+
+async def main():
+    system = ActorSystem("app")
+    registry = VirtualActorRegistry(system)
+
+    # Actor activates on first message, deactivates on idle
+    reply = await registry.ask(ChatAgent, "session_123", "hello")
+    reply = await registry.ask(ChatAgent, "session_123", "how are you")
+
+    # Different sessions are independent actors
+    await registry.tell(ChatAgent, "session_456", "hi")
+
+    await system.shutdown()
+```
+
+### Pluggable registry store
+
+Default is in-memory. For persistence across restarts, supply a custom backend:
+
+```python
+from everything_is_an_actor.virtual import RegistryStore
+
+class RedisRegistryStore(RegistryStore):
+    async def put(self, key):   await redis.sadd("actors", key)
+    async def delete(self, key): await redis.srem("actors", key)
+    async def list_all(self):   return list(await redis.smembers("actors"))
+
+registry = VirtualActorRegistry(system, store=RedisRegistryStore())
+```
+
+---
+
 ## Core Actor API
 
 | Class | Description |
@@ -144,6 +197,8 @@ Every `TaskEvent` carries `parent_task_id` and `parent_agent_path` — reconstru
 | `ActorRef` | Lightweight handle. `tell(msg)` / `ask(msg)` / `ask_stream(task)` / `free_ask(msg)` / `free_tell(msg)` / `free_stop()` |
 | `ActorSystem` | Container. `spawn(cls, name)` / `get_actor(path)` / `ask(path, msg)` / `shutdown()` |
 | `AgentSystem` | Drop-in replacement with event streaming. `run(cls, input)` / `abort(run_id)` |
+| `VirtualActorRegistry` | On-demand activation / idle deactivation. `ask(cls, id, msg)` / `tell(cls, id, msg)` / `ask_stream(cls, id, msg)` / `deactivate(cls, id)` / `deactivate_all()` / `is_active(cls, id)` / `known_ids()` |
+| `RegistryStore` | Pluggable backend for virtual actor registry (`put(key)` / `delete(key)` / `list_all()`). Default in-memory, extensible to Redis/DB |
 | `Mailbox` | Interface. `MemoryMailbox` (default) or `RedisMailbox` |
 | `Middleware` | Interceptor chain for all lifecycle events |
 | `OneForOneStrategy` | Restart only the failing child |

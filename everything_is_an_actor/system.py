@@ -40,11 +40,9 @@ _MAX_DEAD_LETTERS = 10000
 _MAX_CONSECUTIVE_FAILURES = 10
 
 # Timeout for canceling pending tasks during sync wrapper teardown (non-blocking)
-_SYNC_WRAPPER_TEARD_CLEANUP_TIMEOUT = 0.1
 
 # Thread-local storage for persistent event loops per executor thread
 _thread_local_loop = threading.local()
-
 
 
 @dataclass
@@ -129,6 +127,7 @@ class ActorSystem:
         """
         # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.validation import validate_agent_actor_compatibility
+
         validate_agent_actor_compatibility(actor_cls, mode="single")
 
         if name in self._root_cells:
@@ -139,15 +138,13 @@ class ActorSystem:
         if dispatcher is None:
             # Auto-detect: sync actor (overrides receive()) → route to "default" pool
             from everything_is_an_actor.validation import find_sync_handler
+
             if find_sync_handler(actor_cls, "receive") is not None and "io" in self._dispatchers:
                 dispatcher = "io"
 
         if dispatcher is not None:
             if dispatcher not in self._dispatchers:
-                raise ValueError(
-                    f"Unknown dispatcher '{dispatcher}'. "
-                    f"Available: {list(self._dispatchers.keys())}"
-                )
+                raise ValueError(f"Unknown dispatcher '{dispatcher}'. Available: {list(self._dispatchers.keys())}")
             resolved_dispatcher = self._dispatchers[dispatcher]
             # Lazy start on first use
             if dispatcher not in self._dispatchers_started:
@@ -166,6 +163,7 @@ class ActorSystem:
             elif actual_mailbox is None:
                 # Cross-loop: use FastMailbox with target_loop for thread-safe signaling
                 from everything_is_an_actor.mailbox import FastMailbox
+
                 actual_mailbox = FastMailbox(mailbox_size, target_loop=target_loop)
 
         cell = _ActorCell(
@@ -211,13 +209,16 @@ class ActorSystem:
     async def shutdown(self, *, timeout: float = 10.0) -> None:
         """Gracefully stop all actors."""
         self._shutting_down = True
-        tasks = []
+        waitables = []
         for cell in list(self._root_cells.values()):
             cell.request_stop()
-            if cell.task is not None:
-                tasks.append(cell.task)
-        if tasks:
-            _, pending = await asyncio.wait(tasks, timeout=timeout)
+            if cell._done is not None:
+                # Cross-loop actor: use the concurrent.futures.Future wrapped for asyncio
+                waitables.append(asyncio.wrap_future(cell._done))
+            elif cell.task is not None:
+                waitables.append(cell.task)
+        if waitables:
+            _, pending = await asyncio.wait(waitables, timeout=timeout)
             # Cancel tasks that didn't finish within the timeout to prevent zombie tasks
             for t in pending:
                 t.cancel()
@@ -330,6 +331,7 @@ class ActorSystem:
         if ref is None:
             raise ValueError(f"Actor not found: {target}")
         import asyncio as _aio
+
         result = ref._tell(message)
         if _aio.iscoroutine(result):
             await result
@@ -391,10 +393,10 @@ class _ActorCell:
         self._receive_chain: NextFn | None = None
         self._last_message_time: float = time.time()  # For AfterIdle tracking
         self._target_loop = target_loop
+        self._sync_loop: asyncio.AbstractEventLoop | None = None  # thread-local loop used by _sync_wrapper
+        self._background_tasks: set[asyncio.Task] = set()  # durable tasks registered via context API
         # Cross-loop completion signal (None when same-loop)
-        self._done: concurrent.futures.Future | None = (
-            concurrent.futures.Future() if target_loop is not None else None
-        )
+        self._done: concurrent.futures.Future | None = concurrent.futures.Future() if target_loop is not None else None
         # Cache path (immutable after init — parent never changes)
         parts: list[str] = []
         cell: _ActorCell | None = self
@@ -410,22 +412,29 @@ class _ActorCell:
 
         # Check if actor implements sync receive() (MRO-aware)
         from everything_is_an_actor.validation import find_sync_handler
+
         has_sync_receive = find_sync_handler(self.actor_cls, "receive") is not None
 
         if has_sync_receive:
-            # Sync actor: wrap in async handler that dispatches to executor
-            def _sync_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
-                return self.actor.receive(message)  # type: ignore[union-attr]
+            if self.system.threaded and self.system.executor:
+                # Threaded mode: _sync_wrapper already dispatches to executor with
+                # a thread-local event loop. Call receive() directly — no double dispatch.
+                async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
+                    return self.actor.receive(message)  # type: ignore[union-attr]
+            else:
+                # Non-threaded: wrap sync receive() in executor dispatch
+                def _sync_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
+                    return self.actor.receive(message)  # type: ignore[union-attr]
 
-            async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
-                loop = asyncio.get_running_loop()
-                future = loop.run_in_executor(
-                    self.system.executor,
-                    _sync_handler,
-                    _ctx,
-                    message,
-                )
-                return await future
+                async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
+                    loop = asyncio.get_running_loop()
+                    future = loop.run_in_executor(
+                        self.system.executor,
+                        _sync_handler,
+                        _ctx,
+                        message,
+                    )
+                    return await future
 
             if self._middlewares:
                 self._receive_chain = build_middleware_chain(self._middlewares, _inner_handler)
@@ -469,9 +478,10 @@ class _ActorCell:
         captured and propagated so middleware can read trace IDs, auth context, and other
         contextvar-based state even in sync actors.
 
-        Teardown is non-blocking: only tasks created during this invocation are cancelled
-        with a bounded timeout to prevent head-of-line blocking on leaked background tasks.
-        Long-lived/background tasks that span multiple messages are preserved.
+        Per-invocation cleanup: tasks created during a message are cancelled after
+        the message completes, UNLESS registered as durable via
+        ``context.register_background_task()``. This prevents unbounded task
+        accumulation in long-lived actors.
         """
         import contextvars
 
@@ -481,43 +491,35 @@ class _ActorCell:
             asyncio.set_event_loop(_thread_local_loop.loop)
 
         loop = _thread_local_loop.loop
+        self._sync_loop = loop  # track for shutdown cleanup
         context = contextvars.copy_context()
 
-        # Track existing tasks before this invocation to only cancel new tasks
         existing_tasks = set(asyncio.all_tasks(loop))
 
         try:
-            # Capture and return the handler result
-            result = context.run(loop.run_until_complete, self._receive_chain(ctx, payload))  # type: ignore[misc]
-            return result
+            return context.run(loop.run_until_complete, self._receive_chain(ctx, payload))  # type: ignore[misc]
         finally:
-            # Non-blocking teardown: cancel only tasks created during this invocation
-            try:
-                current_tasks = asyncio.all_tasks(loop)
-                # Only cancel tasks that were created during this invocation
-                new_tasks = [task for task in current_tasks if task not in existing_tasks and not task.done()]
-                if new_tasks:
-                    # Cancel only the new tasks created during this message
-                    for task in new_tasks:
-                        task.cancel()
-                    # Wait with bounded timeout - don't block message completion
-                    try:
-                        loop.run_until_complete(
-                            asyncio.wait(new_tasks, timeout=_SYNC_WRAPPER_TEARD_CLEANUP_TIMEOUT)
+            # Cancel non-durable tasks created during this invocation
+            current_tasks = asyncio.all_tasks(loop)
+            leaked = [
+                t for t in current_tasks if t not in existing_tasks and not t.done() and t not in self._background_tasks
+            ]
+            if leaked:
+                for t in leaked:
+                    t.cancel()
+                try:
+                    loop.run_until_complete(
+                        asyncio.wait_for(
+                            asyncio.gather(*leaked, return_exceptions=True),
+                            timeout=1.0,
                         )
-                    except asyncio.TimeoutError:
-                        # Log warning but don't block - message completes anyway
-                        logger.warning(
-                            "Sync wrapper teardown timed out waiting for %d new tasks in %s",
-                            len(new_tasks),
-                            self.path,
-                        )
-                    except Exception:
-                        # Any error during cleanup is logged but doesn't block
-                        logger.exception("Error during sync wrapper teardown in %s", self.path)
-            except Exception:
-                # Guard against any errors in the cleanup logic itself
-                logger.exception("Unexpected error in sync wrapper cleanup for %s", self.path)
+                    )
+                except (asyncio.TimeoutError, Exception):
+                    logger.warning(
+                        "Sync wrapper cleanup: %d leaked tasks not cancelled in time for %s",
+                        len(leaked),
+                        self.path,
+                    )
 
     async def enqueue(self, msg: _Envelope | _Stop) -> None:
         # Try non-blocking first (fast path for MemoryMailbox)
@@ -555,6 +557,7 @@ class _ActorCell:
     ) -> ActorRef[MsgT, RetT]:
         # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.validation import validate_agent_actor_compatibility
+
         validate_agent_actor_compatibility(actor_cls, mode="single")
 
         if name in self.children:
@@ -583,7 +586,6 @@ class _ActorCell:
         consecutive_failures = 0
         # Cache stop_policy to avoid repeated method calls per message
         cached_policy = None
-        policy_is_static = True  # Track if policy changes at runtime
 
         try:
             while not self.stopped:
@@ -591,8 +593,6 @@ class _ActorCell:
                 idle_timeout: float | None = None
                 if cached_policy is None and self.actor is not None:
                     cached_policy = self.actor.stop_policy()
-                    # Check if it's a static policy we can cache
-                    policy_is_static = isinstance(cached_policy, StopMode) or isinstance(cached_policy, AfterMessage)
 
                 if cached_policy is not None and isinstance(cached_policy, AfterIdle):
                     idle_timeout = cached_policy.seconds
@@ -741,6 +741,46 @@ class _ActorCell:
         except Exception:
             logger.exception("Error closing mailbox for %s", self.path)
         # Break circular reference: _ActorCell → actor → context → _cell → _ActorCell
+        # Cancel pending tasks on the thread-local sync loop (background + leaked)
+        if self._sync_loop is not None:
+            loop = self._sync_loop
+            _CLEANUP_TIMEOUT = 2.0
+            if loop.is_running():
+                # Loop is active on another thread — schedule and WAIT for cleanup
+                try:
+
+                    async def _cancel_all() -> None:
+                        tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                        for t in tasks:
+                            t.cancel()
+                        if tasks:
+                            await asyncio.gather(*tasks, return_exceptions=True)
+
+                    fut = asyncio.run_coroutine_threadsafe(_cancel_all(), loop)
+                    fut.result(timeout=_CLEANUP_TIMEOUT)
+                except TimeoutError:
+                    logger.warning(
+                        "Sync loop cleanup timed out after %.1fs for %s, tasks may leak",
+                        _CLEANUP_TIMEOUT,
+                        self.path,
+                    )
+                except Exception:
+                    logger.warning("Sync loop cleanup failed for %s", self.path, exc_info=True)
+            else:
+                pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                if pending:
+                    for t in pending:
+                        t.cancel()
+                    try:
+                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    except Exception:
+                        logger.warning(
+                            "Sync loop cleanup: %d tasks could not be drained for %s",
+                            len(pending),
+                            self.path,
+                        )
+            self._background_tasks.clear()
+            self._sync_loop = None
         self.actor = None
         # Signal cross-loop joiners
         if self._done is not None and not self._done.done():

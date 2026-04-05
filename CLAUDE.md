@@ -17,6 +17,27 @@ everything_is_an_actor          ← generic actor runtime (Actor, ActorRef, Acto
 - `everything_is_an_actor.agents` only uses public APIs from the core layer
 - Never reach into `_cell`, `_cell.actor`, or other private internals from outside the owning module — use factory patterns or messages instead
 
+## Virtual Actor model (Orleans style)
+
+Two kinds of actor coexist:
+
+- **Declarative actors**: code-defined via `system.spawn()`, live with the process, recreated by code on restart
+- **Virtual actors**: managed by `VirtualActorRegistry`, activated on demand, deactivated on idle, flat structure (no parent-child)
+
+Design constraints:
+- Virtual actors are flat — no parent-child relationships between virtual actors. Use registry ID-based addressing, not `context.spawn()`
+- `context.spawn()` is for ephemeral child actors only (run and discard)
+- Runtime does not manage state — `on_started`/`on_stopped` are business extension points
+- Runtime does not recover dynamic topology — declarative actors are rebuilt by code, virtual actors reactivate on demand
+- `RegistryStore` is pluggable — default in-memory, swap to Redis/DB for persistence across restarts
+
+## Lifecycle guarantees
+
+- `on_started` is guaranteed: actor does not start without it completing successfully
+- `on_stopped` is guaranteed: protected by `asyncio.shield`, has timeout, retries once on `CancelledError`
+- Only exception: process killed by OS (kill -9) — no user-space code can handle this
+- Retry logic for `on_stopped` failures is the business's responsibility, not the runtime's
+
 ## Actor encapsulation
 
 - Actors communicate only through messages — no shared mutable state

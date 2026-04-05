@@ -72,7 +72,9 @@ def validate_agent_actor_compatibility(actor_cls: type, *, mode: str = "unknown"
         return
 
     execute_method = actor_cls.__dict__.get("execute")
-    if execute_method is not None and not (inspect.iscoroutinefunction(execute_method) or inspect.isasyncgenfunction(execute_method)):
+    if execute_method is not None and not (
+        inspect.iscoroutinefunction(execute_method) or inspect.isasyncgenfunction(execute_method)
+    ):
         raise TypeError(
             f"Actor '{actor_cls.__name__}' has sync execute() method; "
             "AgentActor requires async execute(). "

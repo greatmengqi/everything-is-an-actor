@@ -29,15 +29,16 @@ RetT = TypeVar("RetT")
 
 class BackpressurePolicy(str, Enum):
     """Backpressure policy for multi-loop backend queues."""
+
     BLOCK = "block"  # Block until queue has space (neither tell nor ask are dropped)
-    DROP = "drop"    # Drop messages silently (tell only, ask always fails)
-    FAIL = "fail"    # Raise exception for both tell and ask
+    DROP = "drop"  # Drop messages silently (tell only, ask always fails)
+    FAIL = "fail"  # Raise exception for both tell and ask
 
 
 class MailboxFullError(RuntimeError):
     """Raised when mailbox is full and backpressure policy is FAIL."""
-    pass
 
+    pass
 
 
 @dataclass
@@ -48,15 +49,17 @@ class _Envelope:
     回调自带跨 loop 线程安全（内部自动检测并走 call_soon_threadsafe），
     不再需要 reply_loop 字段。
     """
+
     payload: Any
     sender_path: Optional[str]
     resolve: Optional[Any] = None  # Callable[[Any], None] | None
-    reject: Optional[Any] = None   # Callable[[Exception], None] | None
+    reject: Optional[Any] = None  # Callable[[Exception], None] | None
 
 
 @dataclass
 class LoopContext:
     """Loop 上下文"""
+
     loop: asyncio.AbstractEventLoop
     thread: threading.Thread
     root_name: str
@@ -65,7 +68,7 @@ class LoopContext:
 
 class _RootActorCell:
     """Root Actor 运行时容器"""
-    
+
     def __init__(
         self,
         actor_cls: type,
@@ -89,10 +92,10 @@ class _RootActorCell:
         self.stopped = False
         self._task: Optional[asyncio.Task] = None
         # Dead-letter counters — observable via get_stats()
-        self.dropped_stopped: int = 0    # tell dropped: actor stopped
-        self.dropped_full: int = 0       # tell dropped: mailbox full
-        self.dropped_closed: int = 0     # tell dropped: owning loop closed
-    
+        self.dropped_stopped: int = 0  # tell dropped: actor stopped
+        self.dropped_full: int = 0  # tell dropped: mailbox full
+        self.dropped_closed: int = 0  # tell dropped: owning loop closed
+
     async def start(self) -> None:
         """启动 Actor：先完成 on_started，再启动消息循环，保证初始化顺序。
 
@@ -105,7 +108,7 @@ class _RootActorCell:
             logger.error("Actor %s on_started failed: %s", self.name, e)
             raise
         self._task = asyncio.create_task(self._run())
-    
+
     async def _run(self) -> None:
         """消息处理循环"""
         while not self.stopped:
@@ -118,7 +121,8 @@ class _RootActorCell:
                     else:
                         logger.warning(
                             "Actor %s: dropped tell message after stop (payload=%r)",
-                            self.name, env.payload,
+                            self.name,
+                            env.payload,
                         )
                     break
 
@@ -139,7 +143,7 @@ class _RootActorCell:
                 await self.actor.on_stopped()
             except Exception:
                 pass
-    
+
     async def _process_message(self, env: _Envelope) -> None:
         """处理消息"""
         if self.actor is None:
@@ -224,6 +228,7 @@ class _RootActorCell:
 
     def enqueue_from_other_loop(self, envelope: _Envelope) -> None:
         """从其他 Loop 入队（跨线程安全，check-and-enqueue 在 owning loop 中原子执行）"""
+
         def _enqueue_or_reject() -> None:
             if self.stopped or self.backend.is_shutting_down:
                 self._reject_envelope(envelope, "stopped", "dropped_stopped")
@@ -249,7 +254,7 @@ class _RootActorCell:
                         logger.error(
                             "Actor '%s': mailbox full and backpressure policy is FAIL. "
                             "Message dropped. Consider increasing mailbox_size or using BLOCK policy.",
-                            self.name
+                            self.name,
                         )
 
         try:
@@ -283,7 +288,7 @@ class _RootActorCell:
 
 class _MultiLoopActorRef:
     """Multi Loop Actor 引用"""
-    
+
     def __init__(
         self,
         cell: _RootActorCell,
@@ -295,7 +300,7 @@ class _MultiLoopActorRef:
         self.path = f"/{name}"
         self._backend = backend
         self.loop = cell.loop
-    
+
     def _tell(self, message: Any) -> None:
         """发送消息（不等待）"""
         envelope = _Envelope(payload=message, sender_path=None)
@@ -321,14 +326,16 @@ class _MultiLoopActorRef:
         async def _ask() -> Any:
             cf, resolve, reject = ComposableFuture.promise()
             envelope = _Envelope(
-                payload=message, sender_path=None,
-                resolve=resolve, reject=reject,
+                payload=message,
+                sender_path=None,
+                resolve=resolve,
+                reject=reject,
             )
             self._cell.enqueue_from_same_loop(envelope)
             return await cf.with_timeout(timeout)
 
         return ComposableFuture(_ask(), loop=self.loop)
-    
+
     def stop(self) -> None:
         """停止"""
         self._cell.stop()
@@ -337,30 +344,30 @@ class _MultiLoopActorRef:
 class MultiLoopBackend(ActorBackend):
     """
     多 Loop 后端。
-    
+
     每个 Root Actor 一个专用 Loop。
     """
-    
+
     def __init__(self, name: str, config: ActorSystemConfig):
         self.name = name
         self.config = config
-        
+
         self._loop_contexts: Dict[str, LoopContext] = {}
         self._cells: Dict[str, _RootActorCell] = {}
         self._root_descendants: Dict[str, set[str]] = {}  # root_name → child names
         self._lock = threading.Lock()
         self._shutting_down = False
-    
+
     def _create_loop(self, root_name: str) -> LoopContext:
         """创建专用 Loop"""
         loop = asyncio.new_event_loop()
         ready = threading.Event()
-        
+
         def run_loop():
             asyncio.set_event_loop(loop)
             ready.set()
             loop.run_forever()
-        
+
         thread = threading.Thread(
             target=run_loop,
             name=f"loop-{root_name}",
@@ -368,31 +375,35 @@ class MultiLoopBackend(ActorBackend):
         )
         thread.start()
         ready.wait(timeout=5.0)
-        
+
         return LoopContext(
             loop=loop,
             thread=thread,
             root_name=root_name,
         )
-    
+
     def _shutdown_loop(self, root_name: str, timeout: float = 5.0) -> None:
         """关闭 Loop"""
         with self._lock:
             ctx = self._loop_contexts.pop(root_name, None)
-        
+
         if ctx is None:
             return
-        
+
         # 停止 loop
         ctx.loop.call_soon_threadsafe(ctx.loop.stop)
         ctx.thread.join(timeout=timeout)
-    
+
     @property
     def is_shutting_down(self) -> bool:
         return self._shutting_down
 
     def _rollback_spawn(
-        self, name: str, *, shutdown_loop: bool = False, parent_name: Optional[str] = None,
+        self,
+        name: str,
+        *,
+        shutdown_loop: bool = False,
+        parent_name: Optional[str] = None,
     ) -> None:
         """Undo a failed spawn: remove cell, optionally close loop or decrement parent count."""
         with self._lock:
@@ -424,6 +435,7 @@ class MultiLoopBackend(ActorBackend):
         """创建 Actor"""
         # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.validation import validate_agent_actor_compatibility
+
         validate_agent_actor_compatibility(actor_cls, mode="multi-loop")
 
         name = self._canonical_name(name)
@@ -443,9 +455,8 @@ class MultiLoopBackend(ActorBackend):
             backpressure_policy = BackpressurePolicy(backpressure_policy_str.lower())
         except ValueError:
             logger.warning(
-                "Invalid backpressure_policy '%s', defaulting to BLOCK. "
-                "Valid values: 'block', 'drop', 'fail'",
-                backpressure_policy_str
+                "Invalid backpressure_policy '%s', defaulting to BLOCK. Valid values: 'block', 'drop', 'fail'",
+                backpressure_policy_str,
             )
             backpressure_policy = BackpressurePolicy.BLOCK
 
@@ -480,7 +491,7 @@ class MultiLoopBackend(ActorBackend):
             raise RuntimeError(f"Actor '{name}' failed to start: {e}") from e
 
         return _MultiLoopActorRef(cell, name, self)
-    
+
     async def tell(
         self,
         ref: ActorRef,
@@ -490,7 +501,7 @@ class MultiLoopBackend(ActorBackend):
         result = ref._tell(message)
         if asyncio.iscoroutine(result):
             await result
-    
+
     async def ask(
         self,
         ref: ActorRef,
@@ -499,7 +510,7 @@ class MultiLoopBackend(ActorBackend):
     ) -> Any:
         """发送消息并等待回复"""
         return await ref._ask(message, timeout=timeout)
-    
+
     async def spawn_child(
         self,
         parent_ref: ActorRef,
@@ -510,6 +521,7 @@ class MultiLoopBackend(ActorBackend):
         """创建子 Actor（共享父节点的 Loop）"""
         # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.validation import validate_agent_actor_compatibility
+
         validate_agent_actor_compatibility(actor_cls, mode="multi-loop")
 
         parent_name = self._canonical_name(parent_ref.name)
@@ -522,7 +534,7 @@ class MultiLoopBackend(ActorBackend):
             parent_ctx = self._loop_contexts.get(parent_name)
             if parent_ctx is None:
                 raise ValueError(f"Parent '{parent_name}' not found")
-        
+
         # 提取系统级 kwargs，避免污染 actor 构造函数
         mailbox_size = kwargs.pop("mailbox_size", self.config.mailbox_size)
         backpressure_policy_str = kwargs.pop("backpressure_policy", self.config.backpressure_policy)
@@ -533,9 +545,8 @@ class MultiLoopBackend(ActorBackend):
             backpressure_policy = BackpressurePolicy(backpressure_policy_str.lower())
         except ValueError:
             logger.warning(
-                "Invalid backpressure_policy '%s', defaulting to BLOCK. "
-                "Valid values: 'block', 'drop', 'fail'",
-                backpressure_policy_str
+                "Invalid backpressure_policy '%s', defaulting to BLOCK. Valid values: 'block', 'drop', 'fail'",
+                backpressure_policy_str,
             )
             backpressure_policy = BackpressurePolicy.BLOCK
 
@@ -549,7 +560,7 @@ class MultiLoopBackend(ActorBackend):
             maxsize=mailbox_size,
             backpressure_policy=backpressure_policy,
         )
-        
+
         root_name = parent_name.split("/")[0]
         with self._lock:
             self._cells[child_name] = cell
@@ -567,7 +578,7 @@ class MultiLoopBackend(ActorBackend):
             raise RuntimeError(f"Child actor '{child_name}' failed to start: {e}") from e
 
         return _MultiLoopActorRef(cell, child_name, self)
-    
+
     def _collect_descendants(self, name: str) -> list[_RootActorCell]:
         """Collect and remove all descendant cells of *name* from _cells and _root_descendants.
 
@@ -636,7 +647,7 @@ class MultiLoopBackend(ActorBackend):
                 except Exception as e:
                     logger.warning("Actor '%s': task did not quiesce cleanly during stop: %s", name, e)
             self._shutdown_loop(name)
-    
+
     async def shutdown(self) -> None:
         """关闭系统（有序：先停 cell 触发 on_stopped，再关 loop）"""
         self._shutting_down = True
@@ -669,7 +680,7 @@ class MultiLoopBackend(ActorBackend):
         with self._lock:
             self._cells.clear()
             self._root_descendants.clear()
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
         with self._lock:
