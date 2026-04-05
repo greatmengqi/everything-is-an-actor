@@ -12,11 +12,10 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import TypeVar
 
-_log = logging.getLogger(__name__)
-
 from everything_is_an_actor.agents.agent_actor import AgentActor
 from everything_is_an_actor.agents.system import AgentSystem
 from everything_is_an_actor.agents.task import StreamEvent, StreamResult, Task, TaskEvent
+
 from everything_is_an_actor.flow.flow import (
     Continue,
     Done,
@@ -40,6 +39,8 @@ from everything_is_an_actor.flow.flow import (
     _Zip,
     _ZipAll,
 )
+
+_log = logging.getLogger(__name__)
 
 I = TypeVar("I")
 O = TypeVar("O")
@@ -265,7 +266,7 @@ class Interpreter:
             case _Pure():
                 return  # no events from pure functions
 
-            case _Map(source=source, f=f):
+            case _Map(source=source):
                 async for event in self._interpret_stream(source, input):
                     yield event
 
