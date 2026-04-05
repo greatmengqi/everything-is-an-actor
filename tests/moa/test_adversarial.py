@@ -4,6 +4,7 @@ import asyncio
 import pytest
 from typing import Any
 
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, AgentSystem, Task, TaskResult, TaskStatus
 
 pytestmark = pytest.mark.anyio
@@ -120,7 +121,7 @@ class TestAdversarial:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "timeout-test"):
@@ -142,7 +143,7 @@ class TestAdversarial:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             for i in range(5):
                 events = []
@@ -166,7 +167,7 @@ class TestAdversarial:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "immutable"):
@@ -189,7 +190,7 @@ class TestAdversarial:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "big"):
@@ -211,7 +212,7 @@ class TestAdversarial:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "re"):
@@ -237,7 +238,7 @@ class TestAdversarial:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "init-fail"):
@@ -268,7 +269,7 @@ class TestAdversarial:
         assert len(classes) == 20
 
         # Run the last one to verify it works
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(agents[-1], "class-leak"):

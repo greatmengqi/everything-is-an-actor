@@ -1,5 +1,6 @@
 import pytest
 from typing import Any
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, Task, TaskResult, TaskStatus
 
 pytestmark = pytest.mark.anyio
@@ -120,7 +121,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "hello"):
@@ -145,7 +146,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "hello"):
@@ -170,7 +171,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "hello"):
@@ -195,7 +196,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             with pytest.raises(RuntimeError, match="MOA:"):
                 async for event in system.run(MoAAgent, "hello"):
@@ -218,7 +219,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "hello"):
@@ -248,7 +249,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "hi"):
@@ -271,7 +272,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "solo"):
@@ -292,7 +293,7 @@ class TestMoARuntime:
         tree = MoATree.repeated(node, num_layers=3)
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "x"):
@@ -319,7 +320,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "nested"):
@@ -346,7 +347,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "observe"):
@@ -378,7 +379,7 @@ class TestMoARuntime:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "plain"):
@@ -420,7 +421,7 @@ class TestDirective:
         ])
         MoAAgent = MoABuilder().build(tree)
 
-        system = AgentSystem("test")
+        system = AgentSystem(ActorSystem("test"))
         try:
             events = []
             async for event in system.run(MoAAgent, "hello"):

@@ -1,4 +1,8 @@
-"""AgentSystem — event-streaming ActorSystem for agent runs (M3)."""
+"""AgentSystem — event-streaming actor system for agent runs.
+
+Wraps an ActorSystem with agent-specific capabilities:
+validation, event streaming, and run management.
+"""
 
 from __future__ import annotations
 
@@ -17,22 +21,41 @@ from everything_is_an_actor.core.ref import ActorRef
 from everything_is_an_actor.core.system import ActorSystem
 
 
-class AgentSystem(ActorSystem):
-    """ActorSystem extended with event-streaming agent runs.
+class AgentSystem:
+    """Agent-layer facade over ActorSystem.
 
-    Drop-in replacement for ``ActorSystem`` — all existing APIs work unchanged.
-    Adds ``run()`` for event-streaming and ``abort()`` for cancellation.
+    Adds spawn-time validation, event-streaming runs, and abort.
+    The underlying ActorSystem is injected — AgentSystem does not own
+    its lifecycle.
 
     Usage::
 
-        system = AgentSystem()
+        actor_system = ActorSystem()
+        system = AgentSystem(actor_system)
         async for event in system.run(ResearchOrchestrator, user_input):
             yield format_sse(event)
+        await actor_system.shutdown()
     """
 
-    def __init__(self, name: str = "agent-system", **kwargs: Any) -> None:
-        super().__init__(name, **kwargs)
+    __slots__ = ("_actor_system", "_active_runs")
+
+    def __init__(self, system: ActorSystem) -> None:
+        self._actor_system = system
         self._active_runs: dict[str, ActorRef] = {}
+
+    @property
+    def actor_system(self) -> ActorSystem:
+        """Access the underlying ActorSystem for low-level control."""
+        return self._actor_system
+
+    @property
+    def name(self) -> str:
+        return self._actor_system.name
+
+    @property
+    def _root_cells(self) -> dict:
+        """Delegate to ActorSystem internals (used by Interpreter cleanup)."""
+        return self._actor_system._root_cells
 
     async def spawn(
         self,
@@ -42,25 +65,50 @@ class AgentSystem(ActorSystem):
         mailbox_size: int = 256,
         mailbox: Mailbox | None = None,
         middlewares: list[Middleware] | None = None,
-        backend: str | None = None,  # Reserved for M5 distributed backends; ignored for now
+        backend: str | None = None,  # Reserved for M5 distributed backends
     ) -> ActorRef[MsgT, RetT]:
-        """Spawn a root-level actor.
+        """Spawn a root-level actor with agent validation.
 
         ``backend`` is reserved for M5 (distributed actor execution).
         Currently ignored — all actors run in-process.
         """
-        # Validate AgentActor compatibility at spawn-time
         from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
 
         validate_agent_actor_compatibility(actor_cls, mode="agent")
 
-        return await super().spawn(
+        return await self._actor_system.spawn(
             actor_cls,
             name,
             mailbox_size=mailbox_size,
             mailbox=mailbox,
             middlewares=middlewares,
         )
+
+    async def shutdown(self, *, timeout: float = 10.0) -> None:
+        """Shut down the underlying actor system."""
+        await self._actor_system.shutdown(timeout=timeout)
+
+    # ── Delegated ActorSystem methods ───────────────────────
+
+    async def ask(self, target: ActorRef | str, message: Any, *, timeout: float = 30.0) -> Any:
+        return await self._actor_system.ask(target, message, timeout=timeout)
+
+    async def tell(self, target: ActorRef | str, message: Any) -> None:
+        await self._actor_system.tell(target, message)
+
+    async def ask_stream(self, target: ActorRef | str, message: Any, *, timeout: float = 30.0):  # type: ignore[return]
+        async for item in self._actor_system.ask_stream(target, message, timeout=timeout):
+            yield item
+
+    async def get_actor(self, path: str) -> ActorRef | None:
+        return await self._actor_system.get_actor(path)
+
+    def on_dead_letter(self, callback: Any) -> None:
+        self._actor_system.on_dead_letter(callback)
+
+    @property
+    def dead_letters(self) -> list:
+        return self._actor_system.dead_letters
 
     async def run(
         self,
