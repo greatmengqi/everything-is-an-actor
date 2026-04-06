@@ -1,5 +1,9 @@
 # everything-is-an-actor: Python Agent 编排框架
 
+GitHub: https://github.com/greatmengqi/everything-is-an-actor
+
+文档站: https://greatmengqi.github.io/everything-is-an-actor
+
 ## 一句话
 
 基于 Actor Model 的 Python AI Agent 编排框架。用 Erlang/Akka 的思路解决多 Agent 系统的并发、容错和组合问题。
