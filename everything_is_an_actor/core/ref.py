@@ -132,37 +132,19 @@ class ActorRef(Generic[MsgT, RetT]):
         self._cell.request_stop()
 
     def interrupt(self) -> None:
-        """Cancel the actor's asyncio task immediately, interrupting in-progress work.
-
-        Cross-loop safe: uses ``call_soon_threadsafe`` when the actor
-        runs on a different event loop.
+        """Cancel the actor's asyncio task immediately.
 
         No-op if the actor has already stopped.
         """
         task = self._cell.task
         if task is not None and not task.done():
-            target = self._cell._target_loop
-            if target is not None:
-                target.call_soon_threadsafe(task.cancel)
-            else:
-                task.cancel()
+            task.cancel()
 
     async def join(self) -> None:
         """Wait until the actor has fully stopped (on_stopped completed).
 
-        Cross-loop safe: when the actor runs on a different loop, waits
-        on a ``concurrent.futures.Future`` via ``asyncio.wrap_future``.
-
         No-op if the actor has already stopped or was never started.
         """
-        # Cross-loop: use the concurrent.futures.Future
-        done = self._cell._done
-        if done is not None:
-            if done.done():
-                return
-            await asyncio.wrap_future(done)
-            return
-        # Same-loop: await task directly
         task = self._cell.task
         if task is None or task.done():
             return
