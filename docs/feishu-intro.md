@@ -168,7 +168,41 @@ class MyOrchestrator(AgentActor[str, str]):
 
 Agent 只管业务逻辑，容错交给框架。
 
-### 4. A2A — Agent 发现与多轮对话
+### 4. MOA — Mixture-of-Agents 多路投票
+
+论文 [Mixture-of-Agents](https://arxiv.org/abs/2406.04692) 的工程落地。核心思路：多个 Agent 并行提议，聚合器投票合并，层层递进提升质量。
+
+MOA 建立在 Flow 之上，两个函数搞定：
+
+```python
+from everything_is_an_actor.moa import moa_layer, moa_tree
+
+# 单层：3 个 proposer 并行，至少 2 个成功，aggregator 合并
+layer = moa_layer(
+    proposers=[GPT4Agent, ClaudeAgent, GeminiAgent],
+    aggregator=MergeAgent,
+    min_success=2,
+)
+
+# 多层：layer1 的输出喂给 layer2，逐层精炼
+pipeline = moa_tree([layer1, layer2, layer3])
+result = await system.run_flow(pipeline, user_query)
+```
+
+**Directive 传递**：aggregator 可以返回 `LayerOutput(result, directive)`，directive 会注入到下一层 proposer 的输入里。上层告诉下层"关注什么"——单向指导，不是双向对话。
+
+内部展开就是 Flow 组合子：
+
+```
+pure(inject_directive)
+  → at_least(min_success, proposer1, proposer2, ...)
+  → agent(aggregator)
+  → map(extract_directive)
+```
+
+没有 MOA 专属的运行时——它就是 Flow 的一种用法。
+
+### 5. A2A — Agent 发现与多轮对话
 
 受 Google A2A 协议启发，支持 Agent 能力声明和发现：
 
@@ -208,7 +242,7 @@ class ChatAgent(AgentActor[str, str]):
         return generate_response(self._history)    # 最终回答
 ```
 
-### 5. Virtual Actors — Orleans 风格按需激活
+### 6. Virtual Actors — Orleans 风格按需激活
 
 Agent 不需要常驻内存。Virtual Actor 在收到消息时自动激活，空闲超时后自动回收：
 
@@ -223,7 +257,7 @@ reply = await registry.ask(ChatAgent, "session_123", "hello")
 
 适合长会话场景——每个 session 对应一个 Virtual Actor，用完即走。
 
-### 6. ComposableFuture — 函数式异步原语
+### 7. ComposableFuture — 函数式异步原语
 
 替代 Python 原生的 asyncio.Task，支持链式组合：
 
