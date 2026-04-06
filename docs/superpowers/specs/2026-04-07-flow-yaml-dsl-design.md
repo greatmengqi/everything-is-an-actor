@@ -28,17 +28,6 @@ YAML（人类编写） ←→ Flow ADT ←→ JSON（机器传输）
 | 守卫 | `guard: {source: A, check: C}` | `Guard(source, check)` | `a.guard(c)` |
 | 子flow | `flow: Name` | 展开为 ADT | 变量引用 |
 
-## 仅 Python（含 callable，不可序列化）
-
-| 操作 | Python | 可序列化替代 |
-|------|--------|------------|
-| 纯变换 | `.map(fn)` | 无 |
-| 条件过滤 | `.filter(pred)` | `.guard(agent(Checker))` |
-| 条件旁路 | `.divert_to(side, when=pred)` | `.notify(side)` |
-| 同步回调 | `.and_then(callback)` | `.tap(agent(Logger))` |
-| 条件分支 | `.branch_on(pred, a, b)` | `.branch({Type: flow})` |
-| 异常处理 | `.recover(fn)` | `.recover_with(agent(Handler))` |
-
 ## 数据传递
 
 | 组合子 | 输入行为 | 输出行为 |
