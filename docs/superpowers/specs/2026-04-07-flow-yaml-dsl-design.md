@@ -182,12 +182,64 @@ $ python -m flow validate pipeline.yaml --registry myapp.agents
 | `flow/validate.py` | 类型校验逻辑 |
 | `flow/__main__.py` | CLI 入口 `python -m flow validate` |
 
-## 混合使用
+## 跨语言 & 跨系统
 
-YAML 定义可序列化骨架，Python 补充 callable：
+Flow DSL 是**协议规范**，不绑定 Python。任何语言实现三样东西即可对接：
+
+1. **解析器** — YAML/JSON → 本语言的 Flow ADT
+2. **Interpreter** — 遍历 ADT，按组合子语义执行
+3. **Agent 接口** — `execute(input) → output`
+
+```
+┌──────────────────────────────────────┐
+│      Flow JSON/YAML（规范层）         │
+│  组合子语义确定，语言无关             │
+└──────────────┬───────────────────────┘
+               │
+    ┌──────────┼──────────┐
+    ▼          ▼          ▼
+  Python     Go/Rust    任何语言
+  asyncio    goroutine  本地运行时
+    │          │          │
+    ▼          ▼          ▼
+  本地 Agent  gRPC Agent  A2A HTTP Agent
+```
+
+### 混合编排
+
+同一个 pipeline 里的 agent 可以跨语言、跨进程、跨网络。Interpreter 按 `cls` 前缀路由：
+
+```json
+{"type":"FlatMap",
+ "first": {"type":"Agent", "cls":"Researcher"},
+ "next":  {"type":"Agent", "cls":"a2a://writer.example.com"}}
+```
+
+| cls 前缀 | 路由 |
+|----------|------|
+| 无前缀 | 本地 spawn |
+| `a2a://` | A2A HTTP JSON-RPC |
+| `grpc://` | gRPC 调用 |
+| `mcp://` | MCP tool 调用 |
+
+### 混合使用（YAML + Python）
+
+YAML 定义可序列化骨架，Python 补充含 callable 的部分：
 
 ```python
 pipeline = Flow.from_yaml("pipeline.yaml", registry=agent_registry)
 pipeline = pipeline.map(lambda r: r.summary).filter(lambda r: len(r) > 100)
 result = await system.run_flow(pipeline, input)
 ```
+
+## 新增代码总结
+
+| 文件 | 改动 |
+|------|------|
+| `flow/flow.py` | 新增 `_Notify`, `_Tap`, `_Guard`；`Flow` 加 `notify()`, `tap()`, `guard()` |
+| `flow/combinators.py` | 新增 `broadcast()` |
+| `flow/interpreter.py` | 新增三个 case |
+| `flow/serialize.py` | 新增四个 to_dict/from_dict |
+| `flow/validate.py` | **新建** — 静态类型校验 |
+| `flow/yaml_parser.py` | **新建** — YAML → Flow ADT 解析器 |
+| `flow/__main__.py` | **新建** — CLI 入口 |
