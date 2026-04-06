@@ -30,20 +30,20 @@ YAML（人类编写） ←→ Flow ADT ←→ JSON（机器传输）
 
 ## 数据传递
 
-| 组合子 | 输入行为 | 输出行为 |
-|--------|---------|---------|
-| flat_map | 上一步 output → 下一步 input | 最后一步的 output |
-| zip | **拆 tuple**：`a_in, b_in = input` | `(a_out, b_out)` tuple |
-| broadcast | **同一个 input** 给所有 | 全部结果 tuple |
-| race | **同一个 input** 给所有 | 最快的 output |
-| at_least | **同一个 input** 给所有 | `QuorumResult(succeeded, failed)` |
-| branch | source output 按类型路由 | 匹配分支的 output |
-| fallback_to | source 和 fallback 拿**同一个 input** | 成功方的 output |
-| recover_with | handler 拿 **Exception** 作为 input | handler 的 output |
-| loop | `Continue(val)` → val 作下轮 input | `Done(val)` 的 val |
-| notify | source output 给 side（后台） | source output **不变** |
-| tap | source output 给 side（同步） | source output **不变** |
-| guard | source output 给 check agent | source output **不变**（或异常） |
+| 组合子 | 类型签名 | 输入 | 输出 |
+|--------|---------|------|------|
+| flat_map | `Flow[I,M] → Flow[M,O]` = `Flow[I,O]` | M 链式传递 | O |
+| zip | `Flow[I,O] × Flow[I2,O2]` = `Flow[(I,I2), (O,O2)]` | 拆 tuple | tuple |
+| broadcast | `Flow[I,O] × N` = `Flow[I, (O,...)]` | **同一个 I** 广播 | tuple |
+| race | `Flow[I,O] × N` = `Flow[I, O]` | **同一个 I** 广播 | 最快的 O |
+| at_least | `Flow[I,O] × N` = `Flow[I, QuorumResult[O]]` | **同一个 I** 广播 | QuorumResult |
+| branch | `Flow[I, A\|B] → {A: Flow[A,O], B: Flow[B,O]}` | isinstance 路由 | O |
+| fallback_to | `Flow[I,O] × Flow[I,O]` = `Flow[I, O]` | **同一个 I** | 成功方的 O |
+| recover_with | `Flow[I,O] × Flow[Exception,O]` = `Flow[I, O]` | Exception | O |
+| loop | `Flow[I, Continue[I]\|Done[O]]` = `Flow[I, O]` | Continue → 下轮 I | Done 的 O |
+| notify | `Flow[I,O] × Flow[O,Any]` = `Flow[I, O]` | O 给 side（后台） | O **穿透** |
+| tap | `Flow[I,O] × Flow[O,Any]` = `Flow[I, O]` | O 给 side（同步） | O **穿透** |
+| guard | `Flow[I,O] × Flow[O,bool]` = `Flow[I, O]` | O 给 check | O **穿透**（或异常） |
 
 ## 新增代码
 
