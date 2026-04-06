@@ -12,21 +12,21 @@ YAML（人类编写） ←→ Flow ADT ←→ JSON（机器传输）
 
 | 组合子 | YAML | JSON | Python |
 |--------|------|------|--------|
-| **单 agent** | `agent: Researcher` | `{"type":"Agent","cls":"Researcher"}` | `agent(Researcher)` |
-| agent+超时 | `agent: {name: W, timeout: 30s}` | `{"type":"Agent","cls":"W","timeout":30}` | `agent(W, timeout=30)` |
-| **顺序** | `steps: [A, B, C]` | `{"type":"FlatMap","first":A,"next":B}` | `a.flat_map(b).flat_map(c)` |
-| **分发并行** (拆tuple) | `each: [A, B]` | `{"type":"Zip","left":A,"right":B}` | `a.zip(b)` |
-| **广播并行** (同一input) | `all: [A, B]` | `{"type":"Broadcast","flows":[A,B]}` | `broadcast(a, b)` |
-| **竞争** (取最快) | `race: [A, B, C]` | `{"type":"Race","flows":[A,B,C]}` | `race(a, b, c)` |
-| **法定人数** | `quorum: {n: 2, flows: [A,B,C]}` | `{"type":"AtLeast","n":2,"flows":[A,B,C]}` | `at_least(2, a, b, c)` |
-| **类型路由** | `route: {source: X, mapping: {...}}` | `{"type":"Branch","source":X,"mapping":{...}}` | `x.branch({T1: a, T2: b})` |
-| **兜底** | `fallback: {primary: A, backup: B}` | `{"type":"FallbackTo","source":A,"fallback":B}` | `a.fallback_to(b)` |
-| **异常恢复** | `recover: {source: A, handler: B}` | `{"type":"RecoverWith","source":A,"handler":B}` | `a.recover_with(b)` |
-| **循环** | `loop: {body: A, max_iter: 10}` | `{"type":"Loop","body":A,"max_iter":10}` | `loop(a, max_iter=10)` |
-| **旁路通知** (fire-and-forget) | `agent: {name: W, notify: L}` | `{"type":"Notify","source":W,"side":L}` | `w.notify(l)` |
-| **同步副作用** | `agent: {name: W, tap: T}` | `{"type":"Tap","source":W,"side":T}` | `w.tap(t)` |
-| **守卫** (bool判定) | `agent: {name: W, guard: C}` | `{"type":"Guard","source":W,"check":C}` | `w.guard(c)` |
-| **子flow引用** | `flow: PipelineName` | 展开为 ADT | 变量引用 |
+| 单 agent | `agent: A` | `Agent` | `agent(A)` |
+| agent+参数 | `agent: {name: A, timeout: 30}` | `Agent(cls, timeout)` | `agent(A, timeout=30)` |
+| 顺序 | `steps: [A, B, C]` | `FlatMap(first, next)` | `a.flat_map(b)` |
+| 分发并行 | `each: [A, B]` | `Zip(left, right)` | `a.zip(b)` |
+| 广播并行 | `all: [A, B]` | `Broadcast(flows)` | `broadcast(a, b)` |
+| 竞争 | `race: [A, B, C]` | `Race(flows)` | `race(a, b, c)` |
+| 法定人数 | `at_least: {n: 2, flows: [A,B,C]}` | `AtLeast(n, flows)` | `at_least(2, a, b, c)` |
+| 类型路由 | `route: {source: X, mapping: {...}}` | `Branch(source, mapping)` | `x.branch({T: a})` |
+| 兜底 | `fallback: {primary: A, backup: B}` | `FallbackTo(source, fallback)` | `a.fallback_to(b)` |
+| 异常恢复 | `recover: {source: A, handler: B}` | `RecoverWith(source, handler)` | `a.recover_with(b)` |
+| 循环 | `loop: {body: A, max_iter: 10}` | `Loop(body, max_iter)` | `loop(a, max_iter=10)` |
+| 旁路通知 | `notify: {source: A, side: L}` | `Notify(source, side)` | `a.notify(l)` |
+| 同步副作用 | `tap: {source: A, side: T}` | `Tap(source, side)` | `a.tap(t)` |
+| 守卫 | `guard: {source: A, check: C}` | `Guard(source, check)` | `a.guard(c)` |
+| 子flow | `flow: Name` | 展开为 ADT | 变量引用 |
 
 ## 仅 Python（含 callable，不可序列化）
 
@@ -71,7 +71,7 @@ YAML（人类编写） ←→ Flow ADT ←→ JSON（机器传输）
 ```yaml
 flow: ResearchReport
 steps:
-  - quorum:
+  - at_least:
       n: 2
       flows:
         - agent: Google
@@ -82,10 +82,10 @@ steps:
       - agent: Analyst
   - agent:
       name: Writer
+      timeout: 60
       fallback: BackupWriter
       notify: AuditLogger
       guard: QualityChecker
-      timeout: 60s
   - loop:
       body: Reviewer
       max_iter: 5
