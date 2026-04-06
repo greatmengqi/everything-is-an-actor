@@ -19,7 +19,6 @@ Blocking callers can use ``result(timeout)`` from any non-async thread.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine
 from typing import Any, Awaitable, Callable, TypeVar, Generic, Sequence
 
 import anyio
@@ -78,13 +77,6 @@ class AsyncFn(Generic[I, O]):
 # =====================================================================
 # ComposableFuture
 # =====================================================================
-
-
-async def _cancel_and_wait(tasks: list[asyncio.Task]) -> None:
-    """Cancel all tasks and await their completion (absorbing exceptions)."""
-    for t in tasks:
-        t.cancel()
-    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 class ComposableFuture(Generic[T]):
@@ -175,16 +167,15 @@ class ComposableFuture(Generic[T]):
             pass  # No running loop — good, we're in a sync thread
         else:
             raise RuntimeError(
-                "ComposableFuture.result() called from within a running event loop. Use 'await' instead."
+                "ComposableFuture.result() called from within a running event loop. "
+                "Use 'await' instead."
             )
 
         # Sync thread — run in a fresh event loop
         if timeout is not None:
-
             async def _timed() -> T:
                 with anyio.fail_after(timeout):
                     return await self._resolve()
-
             return asyncio.run(_timed())
         return asyncio.run(self._resolve())
 
@@ -220,21 +211,17 @@ class ComposableFuture(Generic[T]):
     # -- Applicative / Product ----------------------------------------
 
     def zip(self, other: ComposableFuture[U]) -> ComposableFuture[tuple[T, U]]:
-        """Product.  Run two futures concurrently, pair results.
-
-        Cancel-on-failure: if either side raises, the other is cancelled
-        and awaited (ensuring cleanup like actor stop+join), then the
-        original exception propagates.
-        """
+        """Product.  Run two futures concurrently, pair results."""
 
         async def _zipped():
-            tasks = [asyncio.ensure_future(self._resolve()), asyncio.ensure_future(other._resolve())]
-            try:
-                a, b = await asyncio.gather(*tasks)
-                return (a, b)
-            except Exception:
-                await _cancel_and_wait(tasks)
-                raise
+            async def _a() -> T:
+                return await self
+
+            async def _b() -> U:
+                return await other
+
+            a, b = await asyncio.gather(_a(), _b())
+            return (a, b)
 
         return self._wrap(_zipped())
 
@@ -385,7 +372,6 @@ class ComposableFuture(Generic[T]):
             cf = ComposableFuture.from_executor(dispatcher.executor(), actor.receive, msg)
             result = await cf
         """
-
         async def _run() -> T:
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(executor, fn, *args)
@@ -401,7 +387,6 @@ class ComposableFuture(Generic[T]):
             cf = ComposableFuture.from_blocking(requests.get, url)
             result = await cf.map(lambda r: r.json())
         """
-
         async def _run() -> T:
             return await anyio.to_thread.run_sync(lambda: fn(*args))
 
@@ -456,19 +441,13 @@ class ComposableFuture(Generic[T]):
 
     @staticmethod
     def sequence(futures: Sequence[ComposableFuture[T]]) -> ComposableFuture[list[T]]:
-        """Traverse with identity — run all concurrently, collect results.
-
-        Cancel-on-failure: if any future raises, all others are cancelled
-        and awaited (ensuring cleanup), then the first exception propagates.
-        """
+        """Traverse with identity — run all concurrently, collect results."""
 
         async def _sequenced():
-            tasks = [asyncio.ensure_future(f._resolve()) for f in futures]
-            try:
-                return list(await asyncio.gather(*tasks))
-            except Exception:
-                await _cancel_and_wait(tasks)
-                raise
+            async def _await_one(f: ComposableFuture[T]) -> T:
+                return await f
+
+            return list(await asyncio.gather(*[_await_one(f) for f in futures]))
 
         return ComposableFuture(_sequenced())
 
@@ -533,91 +512,3 @@ class ComposableFuture(Generic[T]):
             raise asyncio.CancelledError()
 
         return ComposableFuture(_first())
-
-    @staticmethod
-    def race(*futures: ComposableFuture[T]) -> ComposableFuture[T]:
-        """First-completed-wins — return whatever finishes first.
-
-        Unlike ``first_completed`` (success-biased), ``race`` propagates
-        the first outcome regardless of success or failure.  Remaining
-        futures are cancelled and awaited for cleanup.
-        """
-
-        async def _race():
-            if not futures:
-                raise ValueError("race requires at least one future")
-            tasks = [asyncio.ensure_future(f._resolve()) for f in futures]
-            try:
-                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-                await _cancel_and_wait(list(pending))
-                return done.pop().result()
-            except Exception:
-                await _cancel_and_wait(tasks)
-                raise
-
-        return ComposableFuture(_race())
-
-    @staticmethod
-    def join_all(*futures: ComposableFuture[T]) -> ComposableFuture[list[T | BaseException]]:
-        """Wait for all futures, absorbing failures (including CancelledError).
-
-        Unlike ``sequence`` (cancel-on-failure), ``join_all`` waits for
-        every future to settle.  Each result is either the resolved value
-        or the raised exception.  Used by shutdown paths where all actors
-        must finish regardless of individual failures.
-        """
-
-        async def _join():
-            return list(
-                await asyncio.gather(
-                    *[asyncio.ensure_future(f._resolve()) for f in futures],
-                    return_exceptions=True,
-                )
-            )
-
-        return ComposableFuture(_join())
-
-    # =================================================================
-    #  RUNTIME PRIMITIVES — async infrastructure via CF
-    # =================================================================
-
-    @staticmethod
-    def sleep(seconds: float) -> ComposableFuture[None]:
-        """Async sleep wrapped as ComposableFuture."""
-
-        async def _sleep() -> None:
-            await anyio.sleep(seconds)
-
-        return ComposableFuture(_sleep())
-
-    def shield(self) -> ComposableFuture[T]:
-        """Protect from cancellation.
-
-        The inner computation continues even if the outer task is cancelled.
-        """
-
-        async def _shielded() -> T:
-            with anyio.CancelScope(shield=True):
-                return await self._resolve()
-
-        return self._wrap(_shielded())
-
-    @staticmethod
-    def eager(
-        coro: Coroutine[Any, Any, T],
-        *,
-        name: str | None = None,
-    ) -> tuple[ComposableFuture[T], Callable[[], None]]:
-        """Start a coroutine eagerly as a background task.
-
-        Returns ``(future, cancel)`` — the future for join/await,
-        the cancel callable to interrupt the running task.
-
-        Used by the actor runtime for long-lived message loops.
-        """
-        task = asyncio.create_task(coro, name=name)
-
-        def _cancel() -> None:
-            task.cancel()
-
-        return ComposableFuture(task), _cancel

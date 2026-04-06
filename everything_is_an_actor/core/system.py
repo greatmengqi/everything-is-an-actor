@@ -5,10 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
-
-import anyio
 from dataclasses import dataclass
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -16,7 +13,6 @@ if TYPE_CHECKING:
     from everything_is_an_actor.core.frees import Free
 
 from everything_is_an_actor.core.actor import Actor, ActorContext, MsgT, RetT, StopMode, AfterMessage, AfterIdle
-from everything_is_an_actor.core.composable_future import ComposableFuture
 from everything_is_an_actor.core.dispatcher import Dispatcher
 from everything_is_an_actor.core.mailbox import Empty, Mailbox, MemoryMailbox
 from everything_is_an_actor.core.middleware import ActorMailboxContext, Middleware, NextFn, build_middleware_chain
@@ -37,11 +33,6 @@ logger = logging.getLogger(__name__)
 _MIDDLEWARE_HOOK_TIMEOUT = 10.0
 _MAX_DEAD_LETTERS = 10000
 _MAX_CONSECUTIVE_FAILURES = 10
-
-
-def _timed(coro: Any) -> ComposableFuture:
-    """Wrap a lifecycle hook coroutine with the standard middleware timeout."""
-    return ComposableFuture(coro).with_timeout(_MIDDLEWARE_HOOK_TIMEOUT)
 
 
 @dataclass
@@ -104,8 +95,6 @@ class ActorSystem:
 
         validate_agent_actor_compatibility(actor_cls, mode="single")
 
-        if self._shutting_down:
-            raise RuntimeError("Cannot spawn actor: system is shutting down")
         if name in self._root_cells:
             raise ValueError(f"Root actor '{name}' already exists")
 
@@ -161,27 +150,17 @@ class ActorSystem:
     async def shutdown(self, *, timeout: float = 10.0) -> None:
         """Gracefully stop all actors."""
         self._shutting_down = True
-        cells = list(self._root_cells.values())
-        futures = []
-        for cell in cells:
+        waitables = []
+        for cell in list(self._root_cells.values()):
             cell.request_stop()
-            if cell._run_future is not None:
-                futures.append(cell._run_future)
-        if futures:
-            try:
-                with anyio.fail_after(timeout):
-                    await ComposableFuture.join_all(*futures)
-            except TimeoutError:
-                for cell in cells:
-                    if not cell.stopped and cell._cancel_run is not None:
-                        cell._cancel_run()
-                remaining = [c._run_future for c in cells if c._run_future and not c.stopped]
-                if remaining:
-                    try:
-                        with anyio.fail_after(2.0):
-                            await ComposableFuture.join_all(*remaining)
-                    except TimeoutError:
-                        pass
+            if cell.task is not None:
+                waitables.append(cell.task)
+        if waitables:
+            _, pending = await asyncio.wait(waitables, timeout=timeout)
+            for t in pending:
+                t.cancel()
+            if pending:
+                await asyncio.wait(pending, timeout=2.0)
         self._root_cells.clear()
         self._replies.reject_all(ActorStoppedError("ActorSystem shutting down"))
         await self._reply_channel.stop_listener()
@@ -191,7 +170,6 @@ class ActorSystem:
             except Exception:
                 logger.exception("Error shutting down dispatcher '%s'", disp_name)
         self._dispatchers_started.clear()
-        self._shutting_down = False
         logger.info("ActorSystem '%s' shut down (%d dead letters)", self.name, len(self._dead_letters))
 
     def _dead_letter(self, recipient: ActorRef, message: Any, sender: ActorRef | None) -> None:
@@ -322,14 +300,14 @@ class _ActorCell:
         self.mailbox = mailbox
         self.ref = ActorRef(self)
         self.actor: Actor | None = None
-        self._run_future: ComposableFuture | None = None
-        self._cancel_run: Callable[[], None] | None = None
+        self.task: asyncio.Task[None] | None = None
         self.stopped = False
         self._supervisor_strategy: SupervisorStrategy | None = None
         self._middlewares = middlewares or []
         self._receive_chain: NextFn | None = None
         self._last_message_time: float = time.time()
         self._dispatcher = dispatcher
+        self._background_tasks: set[asyncio.Task] = set()
         # Cache path (immutable after init — parent never changes)
         parts: list[str] = []
         cell: _ActorCell | None = self
@@ -352,21 +330,19 @@ class _ActorCell:
             # Sync actor + dispatcher: offload receive() via dispatcher.dispatch()
             async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
                 return await self._dispatcher.dispatch(  # type: ignore[union-attr]
-                    self.actor.receive,
-                    message,  # type: ignore[union-attr]
+                    self.actor.receive, message,  # type: ignore[union-attr]
                 )
         elif has_sync_receive:
             # Sync actor, no dispatcher: run receive() in default executor
             async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
                 return await ComposableFuture.from_blocking(
-                    self.actor.receive,
-                    message,  # type: ignore[union-attr]
+                    self.actor.receive, message,  # type: ignore[union-attr]
                 )
         elif self._dispatcher:
-            # Async actor + dispatcher: bridge async handler into dispatcher thread
+            # Async actor + dispatcher: wrap on_receive in dispatcher
             async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
                 return await self._dispatcher.dispatch(  # type: ignore[union-attr]
-                    lambda msg: ComposableFuture(self.actor.on_receive(msg)).result(),  # type: ignore[union-attr]
+                    lambda msg: asyncio.run(self.actor.on_receive(msg)),  # type: ignore[union-attr]
                     message,
                 )
         else:
@@ -381,29 +357,22 @@ class _ActorCell:
 
         for mw in self._middlewares:
             try:
-                await _timed(mw.on_started(self.ref))
-            except TimeoutError:
+                await asyncio.wait_for(mw.on_started(self.ref), timeout=_MIDDLEWARE_HOOK_TIMEOUT)
+            except asyncio.TimeoutError:
                 logger.warning("Middleware %s.on_started timed out for %s", type(mw).__name__, self.path)
         await self.actor.on_started()
 
-        self._run_future, self._cancel_run = ComposableFuture.eager(
-            self._run(),
-            name=f"actor:{self.path}",
-        )
+        self.task = asyncio.create_task(self._run(), name=f"actor:{self.path}")
 
     async def enqueue(self, msg: _Envelope | _Stop) -> None:
         # Try non-blocking first (fast path for MemoryMailbox)
         if self.mailbox.put_nowait(msg):
             return
-        # ask path: never block on enqueue — reject immediately to prevent
-        # deadlocks when two actors ask each other with full mailboxes.
-        if isinstance(msg, _Envelope) and msg.correlation_id is not None:
-            self.system._replies.reject(msg.correlation_id, MailboxFullError(f"Mailbox full: {self.path}"))
-            return
-        # tell / _Stop path: fall back to async put (may block for BLOCK policy,
-        # required for Redis and other async backends)
+        # Fallback to async put (required for Redis and other async backends)
         if not await self.mailbox.put(msg):
-            if isinstance(msg, _Envelope):
+            if isinstance(msg, _Envelope) and msg.correlation_id is not None:
+                self.system._replies.reject(msg.correlation_id, MailboxFullError(f"Mailbox full: {self.path}"))
+            elif isinstance(msg, _Envelope):
                 self.system._dead_letter(self.ref, msg.payload, msg.sender)
 
     def request_stop(self) -> None:
@@ -414,8 +383,9 @@ class _ActorCell:
         """
         if not self.stopped:
             if not self.mailbox.put_nowait(_Stop()):
-                if self._cancel_run is not None:
-                    self._cancel_run()
+                # Redis/async backends can't put_nowait — cancel the task
+                if self.task is not None and not self.task.done():
+                    self.task.cancel()
                 else:
                     self.stopped = True
 
@@ -472,11 +442,10 @@ class _ActorCell:
 
                 try:
                     if idle_timeout is not None:
-                        with anyio.fail_after(idle_timeout):
-                            msg = await self.mailbox.get()
+                        msg = await asyncio.wait_for(self.mailbox.get(), timeout=idle_timeout)
                     else:
                         msg = await self.mailbox.get()
-                except TimeoutError:
+                except asyncio.TimeoutError:
                     break  # Idle timeout reached
                 except asyncio.CancelledError:
                     break
@@ -539,29 +508,29 @@ class _ActorCell:
         # Shield the entire shutdown sequence from cancellation.
         # on_started/on_stopped are lifecycle guarantees — they must complete.
         try:
-            await ComposableFuture(self._shutdown_inner()).shield()
+            await asyncio.shield(self._shutdown_inner())
         except asyncio.CancelledError:
+            # shield raises CancelledError on the outer task but _shutdown_inner continues.
+            # Wait for it to actually finish.
             pass
 
     async def _shutdown_inner(self) -> None:
         self.stopped = True
-        # Parallel child shutdown
-        children = list(self.children.values())
-        child_futures = []
-        for child in children:
+        # Parallel child shutdown prevents cascading timeouts.
+        child_tasks = []
+        for child in list(self.children.values()):
             child.request_stop()
-            if child._run_future is not None:
-                child_futures.append(child._run_future)
-        if child_futures:
-            try:
-                with anyio.fail_after(10.0):
-                    await ComposableFuture.join_all(*child_futures)
-            except TimeoutError:
-                for child in children:
-                    if not child.stopped and child._cancel_run is not None:
-                        child._cancel_run()
+            if child.task is not None:
+                child_tasks.append(child.task)
+        if child_tasks:
+            _, pending = await asyncio.wait(child_tasks, timeout=10.0)
+            for t in pending:
+                t.cancel()
+                # Mark leaked children as stopped
+                for child in self.children.values():
+                    if child.task is t:
                         child.stopped = True
-        # Drain mailbox → dead letters
+        # Drain mailbox → dead letters (use try/except to handle all backends)
         while True:
             try:
                 msg = self.mailbox.get_nowait()
@@ -572,29 +541,32 @@ class _ActorCell:
                     self.system._replies.reject(msg.correlation_id, ActorStoppedError(f"Actor {self.path} stopped"))
                 else:
                     self.system._dead_letter(self.ref, msg.payload, msg.sender)
-        # Lifecycle hooks
+        # Lifecycle hook
         for mw in self._middlewares:
             try:
-                await _timed(mw.on_stopped(self.ref))
-            except TimeoutError:
+                await asyncio.wait_for(mw.on_stopped(self.ref), timeout=_MIDDLEWARE_HOOK_TIMEOUT)
+            except asyncio.TimeoutError:
                 logger.warning("Middleware %s.on_stopped timed out for %s", type(mw).__name__, self.path)
             except Exception:
                 logger.exception("Error in middleware on_stopped for %s", self.path)
         if self.actor is not None:
             try:
-                await _timed(self.actor.on_stopped())
-            except TimeoutError:
+                await asyncio.wait_for(self.actor.on_stopped(), timeout=_MIDDLEWARE_HOOK_TIMEOUT)
+            except asyncio.TimeoutError:
                 logger.error("on_stopped timed out for %s", self.path)
             except asyncio.CancelledError:
+                # on_stopped must complete even during cancellation — run unshielded retry
                 logger.warning("on_stopped cancelled for %s, retrying once", self.path)
                 try:
-                    await _timed(self.actor.on_stopped())
+                    await asyncio.wait_for(self.actor.on_stopped(), timeout=_MIDDLEWARE_HOOK_TIMEOUT)
                 except Exception:
                     logger.exception("on_stopped retry failed for %s", self.path)
             except Exception:
                 logger.exception("Error in on_stopped for %s", self.path)
+        # Remove from parent
         if self.parent is not None:
             self.parent.children.pop(self.name, None)
+        # Close mailbox to release backend resources (e.g. Redis connections)
         try:
             await self.mailbox.close()
         except Exception:
@@ -669,8 +641,8 @@ class _ActorCell:
         # Notify middleware of restart (reset per-instance state)
         for mw in child._middlewares:
             try:
-                await _timed(mw.on_restart(child.ref, error))
-            except TimeoutError:
+                await asyncio.wait_for(mw.on_restart(child.ref, error), timeout=_MIDDLEWARE_HOOK_TIMEOUT)
+            except asyncio.TimeoutError:
                 logger.warning("Middleware %s.on_restart timed out for %s", type(mw).__name__, child.path)
             except Exception:
                 logger.exception("Error in middleware on_restart for %s", child.path)

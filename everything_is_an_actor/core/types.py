@@ -142,6 +142,9 @@ class Left(Either[E, A]):
     def ap(self, f: Either[E, Callable[[A], B]]) -> Either[E, B]:
         return self  # type: ignore[return-value]
 
+    def join(self) -> Either[E, A]:
+        return self
+
     def mapL(self, f: Callable[[E], F]) -> Either[F, A]:
         return Left(f(self.value))  # type: ignore[return-value]
 
@@ -175,6 +178,9 @@ class Right(Either[E, A]):
         if isinstance(f, Left):
             return f  # type: ignore[return-value]
         return Right(f.value(self.value))  # type: ignore[return-value]
+
+    def join(self) -> Either[E, A]:
+        return self  # type: ignore[return-value]
 
     def mapL(self, f: Callable[[E], F]) -> Either[F, A]:
         return self  # type: ignore[return-value]

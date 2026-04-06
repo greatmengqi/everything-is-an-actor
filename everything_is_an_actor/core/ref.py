@@ -116,7 +116,7 @@ class ActorRef(Generic[MsgT, RetT]):
                 system._root_cells.pop(f"_ask-collector-{stream_id}", None)
                 await stream.close()
 
-        ComposableFuture.eager(_drive(), name=f"ask-stream:{stream_id}")
+        asyncio.create_task(_drive(), name=f"ask-stream:{stream_id}")
 
         async for event in stream:
             yield StreamEvent(event=event)
@@ -132,24 +132,24 @@ class ActorRef(Generic[MsgT, RetT]):
         self._cell.request_stop()
 
     def interrupt(self) -> None:
-        """Cancel the actor's running task immediately.
+        """Cancel the actor's asyncio task immediately.
 
         No-op if the actor has already stopped.
         """
-        cancel = self._cell._cancel_run
-        if cancel is not None and not self._cell.stopped:
-            cancel()
+        task = self._cell.task
+        if task is not None and not task.done():
+            task.cancel()
 
     async def join(self) -> None:
         """Wait until the actor has fully stopped (on_stopped completed).
 
         No-op if the actor has already stopped or was never started.
         """
-        future = self._cell._run_future
-        if future is None:
+        task = self._cell.task
+        if task is None or task.done():
             return
         try:
-            await future.shield()
+            await asyncio.shield(task)
         except asyncio.CancelledError:
             pass
 
