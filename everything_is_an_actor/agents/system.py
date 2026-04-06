@@ -6,7 +6,6 @@ validation, event streaming, and run management.
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
@@ -15,6 +14,7 @@ if TYPE_CHECKING:
     from everything_is_an_actor.flow.flow import Flow
 
 from everything_is_an_actor.core.actor import Actor, MsgT, RetT
+from everything_is_an_actor.core.composable_future import ComposableFuture
 from everything_is_an_actor.agents.agent_actor import AgentActor
 from everything_is_an_actor.agents.run_stream import RunStream, _run_event_sink, make_collector_cls
 from everything_is_an_actor.agents.task import Task, TaskEvent
@@ -203,7 +203,7 @@ class AgentSystem:
                 await stream.close()
                 self._active_runs.pop(run_id, None)
 
-        asyncio.create_task(_drive(), name=f"run:{run_id}")
+        ComposableFuture.eager(_drive(), name=f"run:{run_id}")
 
         async for event in stream:
             yield event

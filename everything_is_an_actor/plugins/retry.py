@@ -13,7 +13,6 @@ Design notes:
 
 from __future__ import annotations
 
-import asyncio
 import random
 import time
 import uuid
@@ -102,6 +101,9 @@ class IdempotentActorMixin:
         return result
 
 
+from everything_is_an_actor.core.composable_future import ComposableFuture as _CF
+
+
 async def ask_with_retry(
     ref,
     payload: Any,
@@ -111,7 +113,7 @@ async def ask_with_retry(
     base_backoff_s: float = 0.1,
     max_backoff_s: float = 5.0,
     jitter_ratio: float = 0.3,
-    retry_exceptions: tuple[type[BaseException], ...] = (asyncio.TimeoutError,),
+    retry_exceptions: tuple[type[BaseException], ...] = (TimeoutError,),
     idempotency_key: str | None = None,
 ) -> Any:
     """Ask actor with bounded retries and envelope metadata."""
@@ -137,6 +139,6 @@ async def ask_with_retry(
 
             backoff = min(max_backoff_s, base_backoff_s * (2 ** (attempt - 1)))
             jitter = backoff * jitter_ratio * random.random()
-            await asyncio.sleep(backoff + jitter)
+            await _CF.sleep(backoff + jitter)
 
     raise last_exc  # type: ignore[misc]  # always set: loop runs ≥1 time and sets on last iteration

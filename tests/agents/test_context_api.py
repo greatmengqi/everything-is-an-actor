@@ -238,14 +238,15 @@ async def test_race_cancels_losers():
     await system.shutdown()
 
 
-async def test_race_propagates_exception_if_first_fails():
+async def test_race_propagates_exception_if_all_fail():
+    """race raises when ALL racers fail (first_completed prefers success)."""
     system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
             r: TaskResult[str] = await self.context.race([
-                (FailAgent, Task(input="bad")),
-                (SlowAgent, Task(input="10:never")),
+                (FailAgent, Task(input="bad1")),
+                (FailAgent, Task(input="bad2")),
             ])
             return r.output
 
