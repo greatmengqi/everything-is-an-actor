@@ -12,7 +12,7 @@ The codebase has five layers:
 everything_is_an_actor.integrations  ← LLM adapters (LangChain, OpenAI, Anthropic)
 everything_is_an_actor.flow          ← Flow ADT + categorical combinators + actor interpreter
 everything_is_an_actor.moa           ← MOA pattern library (moa_layer, moa_tree, MoASystem)
-everything_is_an_actor.agents        ← AI-specific (Task, AgentActor, streaming)
+everything_is_an_actor.agents        ← AI-specific (Task, AgentActor, streaming, A2A multi-turn)
 everything_is_an_actor.core          ← generic actor runtime (Actor, ActorRef, ActorSystem)
 ```
 
@@ -112,9 +112,25 @@ Design constraints:
 - `dispatch_stream()` uses an async generator `try/finally` so cleanup runs even when the caller breaks early
 - Flow interpreter cleanup: each `_interpret_agent` spawns + stops in `try/finally`, then removes from `_root_cells`
 
+## A2A multi-turn protocol
+
+A2A support lives in `agents/` — no separate package. Three additions:
+
+- `AgentCard`: frozen dataclass on `AgentActor.__card__` — static capability metadata (skills, description). Agents without `__card__` work as before, just not discoverable
+- `Message[T]`: user-facing envelope wrapping `body` + `Sender`. Framework sets `self.message` before `execute()`. `Sender` has `tell()` only — no ask, no callback
+- `context.receive()`: Erlang-style pull from mailbox within `execute()`. Returns `Message`. Stop sentinels must be re-enqueued and raise `ActorStoppedError`
+
+Interaction patterns:
+- **Single-shot**: `ask` — unchanged, promise-based
+- **Multi-turn**: both sides use `tell` + `receive`, symmetric. Parent `tell`s task, child `tell`s inquiry back, parent `receive`s and `tell`s answer, child `receive`s answer and `tell`s result
+- `discover(skill)` on `AgentSystem`: queries `_root_cells` for actors whose `__card__` declares the skill
+- `converse()` on `AgentSystem`: external caller API, spawns internal relay actor
+
+Sender propagation: `context.tell()` and `context.ask()` populate `_Envelope.sender` with `self.context.self_ref`. System-level calls set `sender=None`.
+
 ## Minimal public surface
 
-- `ActorContext` exposes: `self_ref`, `parent`, `children`, `spawn`, `ask`, `sequence`, `traverse`, `race`, `zip`, `stream`, `dispatch`, `dispatch_parallel`, `dispatch_stream`, `run_in_executor`
+- `ActorContext` exposes: `self_ref`, `parent`, `children`, `spawn`, `ask`, `sequence`, `traverse`, `race`, `zip`, `stream`, `dispatch`, `dispatch_parallel`, `dispatch_stream`, `run_in_executor`, `receive`
 - Internal state (`_active_sink`, `_current_task_id`, `_stream`) is private to its module
 - Do not add public attributes or methods to satisfy a single call site
 
