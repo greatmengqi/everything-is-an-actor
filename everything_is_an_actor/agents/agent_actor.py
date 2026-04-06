@@ -8,6 +8,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from everything_is_an_actor.core.actor import Actor
+from everything_is_an_actor.agents.card import AgentCard
 from everything_is_an_actor.agents.task import Task, TaskEvent, TaskResult, TaskStatus
 
 InputT = TypeVar("InputT")
@@ -28,6 +29,12 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
     Override ``execute()`` for async logic or ``receive()`` for sync (blocking) logic.
     Optionally override ``on_started()``, ``on_stopped()``, ``on_restart()``.
     Do NOT override ``on_receive()`` — it is managed by the framework.
+
+    Set ``__card__`` to declare capabilities for discovery::
+
+        class MyAgent(AgentActor[str, str]):
+            __card__ = AgentCard(skills=("search",), description="Searches the web")
+
 
     Example (async)::
 
@@ -58,6 +65,8 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
         output: str = result.output
 
     """
+
+    __card__: AgentCard = AgentCard()
 
     def __init__(self) -> None:
         super().__init__()

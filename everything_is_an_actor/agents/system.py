@@ -13,9 +13,12 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from everything_is_an_actor.flow.flow import Flow
 
+from collections.abc import Callable
+
 from everything_is_an_actor.core.actor import Actor, MsgT, RetT
 from everything_is_an_actor.core.composable_future import ComposableFuture
 from everything_is_an_actor.agents.agent_actor import AgentActor
+from everything_is_an_actor.agents.card import AgentCard
 from everything_is_an_actor.agents.run_stream import RunStream, _run_event_sink, make_collector_cls
 from everything_is_an_actor.agents.task import Task, TaskEvent
 from everything_is_an_actor.core.mailbox import Mailbox
@@ -108,6 +111,27 @@ class AgentSystem:
 
         async for event in Interpreter(self).run_stream(flow, input):
             yield event
+
+    # ── Discovery ─────────────────────────────────────────────
+
+    def discover(self, match: Callable[[AgentCard], bool]) -> list[ActorRef]:
+        """Find spawned agents whose AgentCard satisfies the predicate.
+
+        Scans root-level actors. Predicate-based — extensible to any
+        AgentCard field without changing this method.
+
+        Example::
+
+            system.discover(lambda c: "translation" in c.skills)
+        """
+        return [
+            cell.ref
+            for cell in self._actor_system._root_cells.values()
+            if hasattr(cell, "actor_cls")
+            and hasattr(cell.actor_cls, "__card__")
+            and isinstance(cell.actor_cls.__card__, AgentCard)
+            and match(cell.actor_cls.__card__)
+        ]
 
     # ── Delegated ActorSystem methods ───────────────────────
 

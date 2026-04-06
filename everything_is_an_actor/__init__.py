@@ -17,6 +17,7 @@ Usage::
 """
 
 from everything_is_an_actor.core.actor import Actor, ActorContext, AfterIdle, AfterMessage, StopMode, StopPolicy
+from everything_is_an_actor.agents.card import AgentCard
 from everything_is_an_actor.agents.system import AgentSystem
 from everything_is_an_actor.core.dispatcher import Dispatcher, PoolDispatcher
 from everything_is_an_actor.core.frees import Free, FlatMap, Pure, Suspend, lift_free, run_free
@@ -62,6 +63,7 @@ __all__ = [
     "ActorSystem",
     "AfterIdle",
     "AfterMessage",
+    "AgentCard",
     "AgentSystem",
     "AllForOneStrategy",
     "AskF",
