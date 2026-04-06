@@ -366,7 +366,7 @@ class TestExecutor:
                 result = await self.context.run_in_executor(time.sleep, 0.01)
                 return "done"
 
-        system = ActorSystem("test", executor_workers=2)
+        system = ActorSystem("test")
         ref = await system.spawn(BlockingActor, "blocker")
         result = await system.ask(ref, "go", timeout=5.0)
         assert result == "done"
@@ -382,7 +382,7 @@ class TestExecutor:
                 await self.context.run_in_executor(time.sleep, 0.1)
                 return "ok"
 
-        system = ActorSystem("test", executor_workers=4)
+        system = ActorSystem("test")
         refs = [await system.spawn(SlowActor, f"s{i}") for i in range(4)]
 
         start = time.monotonic()

@@ -6,13 +6,13 @@ Uses existing AgentSystem / ComposableFuture infrastructure.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
 from typing import TypeVar
 
 from everything_is_an_actor.agents.agent_actor import AgentActor
+from everything_is_an_actor.core.composable_future import ComposableFuture
 from everything_is_an_actor.agents.system import AgentSystem
 from everything_is_an_actor.agents.task import StreamEvent, StreamResult, Task, TaskEvent
 
@@ -46,10 +46,12 @@ I = TypeVar("I")
 O = TypeVar("O")
 
 
-def _log_divert_error(task: asyncio.Task) -> None:
-    """Log exceptions from fire-and-forget DivertTo tasks."""
-    if not task.cancelled() and task.exception() is not None:
-        _log.error("DivertTo side flow failed: %s", task.exception(), exc_info=task.exception())
+async def _divert_side(interpret_fn: object, side: object, result: object) -> None:
+    """Fire-and-forget wrapper for DivertTo — logs errors instead of propagating."""
+    try:
+        await interpret_fn(side, result)  # type: ignore[misc]
+    except Exception as exc:
+        _log.error("DivertTo side flow failed: %s", exc, exc_info=exc)
 
 
 class Interpreter:
@@ -107,27 +109,15 @@ class Interpreter:
 
             case _Zip(left=left, right=right):
                 left_input, right_input = input
-                left_task = asyncio.create_task(self._interpret(left, left_input))
-                right_task = asyncio.create_task(self._interpret(right, right_input))
-                try:
-                    left_result, right_result = await asyncio.gather(left_task, right_task)
-                except Exception:
-                    left_task.cancel()
-                    right_task.cancel()
-                    await asyncio.gather(left_task, right_task, return_exceptions=True)
-                    raise
-                return (left_result, right_result)
+                return await ComposableFuture(self._interpret(left, left_input)).zip(
+                    ComposableFuture(self._interpret(right, right_input))
+                )
 
             case _ZipAll(flows=flows):
                 inputs = input  # expects a list/tuple of inputs matching flows
-                tasks = [asyncio.create_task(self._interpret(f, inp)) for f, inp in zip(flows, inputs)]
-                try:
-                    return list(await asyncio.gather(*tasks))
-                except Exception:
-                    for t in tasks:
-                        t.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                    raise
+                return await ComposableFuture.sequence(
+                    [ComposableFuture(self._interpret(f, inp)) for f, inp in zip(flows, inputs)]
+                )
 
             case _Branch(source=source, mapping=mapping):
                 value = await self._interpret(source, input)
@@ -145,19 +135,7 @@ class Interpreter:
                 return await self._interpret(otherwise_flow, value)
 
             case _Race(flows=flows):
-                tasks = [asyncio.create_task(self._interpret(f, input)) for f in flows]
-                try:
-                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-                    for t in pending:
-                        t.cancel()
-                    # Await cancelled tasks so actor cleanup (stop + join) runs
-                    await asyncio.gather(*pending, return_exceptions=True)
-                    return done.pop().result()
-                except Exception:
-                    for t in tasks:
-                        t.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                    raise
+                return await ComposableFuture.race(*[ComposableFuture(self._interpret(f, input)) for f in flows])
 
             case _Recover(source=source, handler=handler):
                 try:
@@ -180,8 +158,7 @@ class Interpreter:
             case _DivertTo(source=source, side=side, when=when):
                 result = await self._interpret(source, input)
                 if when(result):
-                    task = asyncio.create_task(self._interpret(side, result))
-                    task.add_done_callback(_log_divert_error)
+                    ComposableFuture.eager(_divert_side(self._interpret, side, result))
                 return result
 
             case _AndThen(source=source, callback=callback):

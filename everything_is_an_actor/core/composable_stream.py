@@ -50,13 +50,6 @@ V = TypeVar("V")
 _STREAM_DONE = object()  # sentinel — safe even if stream yields None
 
 
-def _try_get_running_loop() -> asyncio.AbstractEventLoop | None:
-    try:
-        return asyncio.get_running_loop()
-    except RuntimeError:
-        return None
-
-
 # =====================================================================
 # Push-side infrastructure (Akka Source.queue equivalent)
 # =====================================================================
@@ -93,23 +86,21 @@ class _StreamError:
 class StreamSender(Generic[T]):
     """Push-side handle for a channel-backed ``ComposableStream``.
 
-    Thread-safe and cross-loop safe.  Two push modes:
+    Two push modes:
 
     - ``offer(element)`` — sync, non-blocking, applies overflow strategy
     - ``put(element)``   — async, backpressure-aware
     """
 
-    __slots__ = ("_queue", "_loop", "_overflow", "_closed", "_capacity")
+    __slots__ = ("_queue", "_overflow", "_closed", "_capacity")
 
     def __init__(
         self,
         queue: asyncio.Queue[Any],
-        loop: asyncio.AbstractEventLoop,
         overflow: OverflowStrategy,
         capacity: int,
     ) -> None:
         self._queue = queue
-        self._loop = loop
         self._overflow = overflow
         self._closed = False
         self._capacity = capacity  # user-visible limit (queue has +1 for sentinel)
@@ -118,17 +109,9 @@ class StreamSender(Generic[T]):
     def is_closed(self) -> bool:
         return self._closed
 
-    # -- sync, non-blocking -------------------------------------------
-
     def offer(self, element: T) -> OfferResult:
         if self._closed:
             return OfferResult.CLOSED
-        current = _try_get_running_loop()
-        if current is self._loop:
-            return self._offer_local(element)
-        return self._offer_remote(element)
-
-    def _offer_local(self, element: T) -> OfferResult:
         if self._queue.qsize() < self._capacity:
             self._queue.put_nowait(element)
             return OfferResult.ENQUEUED
@@ -143,75 +126,22 @@ class StreamSender(Generic[T]):
             return OfferResult.ENQUEUED
         raise BufferOverflowError("Stream buffer full (OverflowStrategy.FAIL)")
 
-    def _offer_remote(self, element: T) -> OfferResult:
-        overflow = self._overflow
-
-        capacity = self._capacity
-
-        def _do() -> None:
-            # Don't check _closed here — this callback was dispatched by
-            # offer() which already returned ENQUEUED.  Checking _closed
-            # would break the contract if complete() races ahead.
-            if self._queue.qsize() < capacity:
-                self._queue.put_nowait(element)
-            elif overflow == OverflowStrategy.DROP_HEAD:
-                try:
-                    self._queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
-                try:
-                    self._queue.put_nowait(element)
-                except asyncio.QueueFull:
-                    pass
-
-        self._loop.call_soon_threadsafe(_do)
-        return OfferResult.ENQUEUED  # best-effort
-
-    # -- async, backpressure-aware ------------------------------------
-
     async def put(self, element: T) -> None:
         if self._closed:
             raise StreamClosedError("StreamSender is closed")
-        current = _try_get_running_loop()
-        if current is self._loop:
-            await self._queue.put(element)
-        else:
-            fut = asyncio.run_coroutine_threadsafe(
-                self._queue.put(element),
-                self._loop,
-            )
-            await asyncio.wrap_future(fut)
-
-    # -- lifecycle ----------------------------------------------------
+        await self._queue.put(element)
 
     async def complete(self) -> None:
         if self._closed:
             return
         self._closed = True
-        current = _try_get_running_loop()
-        if current is self._loop:
-            await self._queue.put(_STREAM_DONE)
-        else:
-            fut = asyncio.run_coroutine_threadsafe(
-                self._queue.put(_STREAM_DONE),
-                self._loop,
-            )
-            await asyncio.wrap_future(fut)
+        await self._queue.put(_STREAM_DONE)
 
     async def fail(self, error: Exception) -> None:
         if self._closed:
             return
         self._closed = True
-        sentinel = _StreamError(error)
-        current = _try_get_running_loop()
-        if current is self._loop:
-            await self._queue.put(sentinel)
-        else:
-            fut = asyncio.run_coroutine_threadsafe(
-                self._queue.put(sentinel),
-                self._loop,
-            )
-            await asyncio.wrap_future(fut)
+        await self._queue.put(_StreamError(error))
 
 
 # =====================================================================
@@ -351,8 +281,8 @@ class ComposableStream(Generic[T]):
                     await q.put(item)
                 await q.put(_STREAM_DONE)
 
-            t1 = asyncio.create_task(_pump(self._source))
-            t2 = asyncio.create_task(_pump(other._source))
+            cf1, cancel1 = ComposableFuture.eager(_pump(self._source))
+            cf2, cancel2 = ComposableFuture.eager(_pump(other._source))
             try:
                 finished = 0
                 while finished < 2:
@@ -362,13 +292,12 @@ class ComposableStream(Generic[T]):
                     else:
                         yield item
             finally:
-                t1.cancel()
-                t2.cancel()
-                for t in (t1, t2):
-                    try:
-                        await t
-                    except asyncio.CancelledError:
-                        pass
+                cancel1()
+                cancel2()
+                try:
+                    await ComposableFuture.join_all(cf1, cf2)
+                except BaseException:
+                    pass
 
         return ComposableStream(_gen())
 
@@ -412,24 +341,24 @@ class ComposableStream(Generic[T]):
                 finally:
                     done_event.set()
 
-            producer = asyncio.create_task(_producer())
+            producer_cf, cancel_producer = ComposableFuture.eager(_producer())
             try:
                 while True:
                     if pending.empty() and done_event.is_set():
                         break
                     try:
-                        task = await asyncio.wait_for(pending.get(), timeout=0.1)
+                        task = await ComposableFuture(pending.get()).with_timeout(0.1)
                         yield await task
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         if done_event.is_set() and pending.empty():
                             break
                 if producer_error:
                     raise producer_error[0]
             finally:
-                producer.cancel()
+                cancel_producer()
                 try:
-                    await producer
-                except asyncio.CancelledError:
+                    await producer_cf
+                except (asyncio.CancelledError, Exception):
                     pass
 
         return ComposableStream(_ordered_parallel())
@@ -448,7 +377,7 @@ class ComposableStream(Generic[T]):
                     await q.put(item)
                 await q.put(_STREAM_DONE)
 
-            filler = asyncio.create_task(_fill())
+            filler_cf, cancel_filler = ComposableFuture.eager(_fill())
             try:
                 while True:
                     item = await q.get()
@@ -456,10 +385,10 @@ class ComposableStream(Generic[T]):
                         break
                     yield item
             finally:
-                filler.cancel()
+                cancel_filler()
                 try:
-                    await filler
-                except asyncio.CancelledError:
+                    await filler_cf
+                except (asyncio.CancelledError, Exception):
                     pass
 
         return ComposableStream(_gen())
@@ -759,7 +688,7 @@ class ComposableStream(Generic[T]):
                 if count >= elements:
                     elapsed = time.monotonic() - window_start
                     if elapsed < per:
-                        await asyncio.sleep(per - elapsed)
+                        await ComposableFuture.sleep(per - elapsed)
                     count = 0
                     window_start = time.monotonic()
                 yield item
@@ -781,12 +710,9 @@ class ComposableStream(Generic[T]):
                 while len(batch) < n:
                     try:
                         remaining = max(0, deadline - time.monotonic())
-                        item = await asyncio.wait_for(
-                            source.__anext__(),
-                            timeout=remaining,
-                        )
+                        item = await ComposableFuture(source.__anext__()).with_timeout(remaining)
                         batch.append(item)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         break
                     except StopAsyncIteration:
                         exhausted = True
@@ -806,9 +732,9 @@ class ComposableStream(Generic[T]):
         async def _gen() -> AsyncIterator[T]:
             while True:
                 try:
-                    item = await asyncio.wait_for(source.__anext__(), timeout=interval)
+                    item = await ComposableFuture(source.__anext__()).with_timeout(interval)
                     yield item
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield element
                 except StopAsyncIteration:
                     break
@@ -826,7 +752,7 @@ class ComposableStream(Generic[T]):
             deadline = time.monotonic() + seconds
             async for item in source:
                 if time.monotonic() > deadline:
-                    raise asyncio.TimeoutError(f"Stream did not complete within {seconds}s")
+                    raise TimeoutError(f"Stream did not complete within {seconds}s")
                 yield item
 
         return ComposableStream(_gen())
@@ -841,10 +767,10 @@ class ComposableStream(Generic[T]):
         async def _gen() -> AsyncIterator[T]:
             while True:
                 try:
-                    item = await asyncio.wait_for(source.__anext__(), timeout=seconds)
+                    item = await ComposableFuture(source.__anext__()).with_timeout(seconds)
                     yield item
-                except asyncio.TimeoutError:
-                    raise asyncio.TimeoutError(f"Stream idle for {seconds}s")
+                except TimeoutError:
+                    raise TimeoutError(f"Stream idle for {seconds}s")
                 except StopAsyncIteration:
                     break
 
@@ -888,13 +814,13 @@ class ComposableStream(Generic[T]):
                     await sem.acquire()
                     async with lock:
                         active += 1
-                    asyncio.create_task(_run_sub(item))
+                    ComposableFuture.eager(_run_sub(item))
                 producer_done.set()
                 async with lock:
                     if active == 0:
                         await q.put(_STREAM_DONE)
 
-            prod_task = asyncio.create_task(_producer())
+            prod_cf, cancel_prod = ComposableFuture.eager(_producer())
             try:
                 while True:
                     item = await q.get()
@@ -902,10 +828,10 @@ class ComposableStream(Generic[T]):
                         break
                     yield item
             finally:
-                prod_task.cancel()
+                cancel_prod()
                 try:
-                    await prod_task
-                except asyncio.CancelledError:
+                    await prod_cf
+                except (asyncio.CancelledError, Exception):
                     pass
 
         return ComposableStream(_gen())
@@ -1132,7 +1058,6 @@ class ComposableStream(Generic[T]):
 
         Akka ``Source.queue.preMaterialize()``.  Returns ``(stream, sender)``.
         """
-        loop = asyncio.get_running_loop()
         # +1 internal slot so complete()/fail() sentinel never blocks
         queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=buffer_size + 1)
 
@@ -1145,46 +1070,7 @@ class ComposableStream(Generic[T]):
                     raise item.error
                 yield item
 
-        return ComposableStream(_gen()), StreamSender(queue, loop, overflow, buffer_size)
-
-    # =================================================================
-    #  CROSS-LOOP — delegates to ComposableFuture's bridging
-    # =================================================================
-
-    def on(self, loop: asyncio.AbstractEventLoop) -> ComposableStream[T]:
-        """Pin stream to *loop* — enables cross-loop consumption.
-
-        Each ``__anext__()`` is bridged via ``ComposableFuture``'s
-        cross-loop machinery (``run_coroutine_threadsafe`` + callback
-        chaining).  The returned stream can be iterated from any loop.
-
-        No cross-loop logic lives here — it's fully delegated to
-        ``ComposableFuture.on(loop)``.
-
-        Usage::
-
-            # Stream source on loop-A, consumer on loop-B:
-            async for item in stream.on(loop_a):
-                process(item)
-
-            # Or pin the terminal future:
-            result = await stream.run_to_list().on(loop_a)
-        """
-        source = self._source
-        source_loop = loop
-
-        async def _gen() -> AsyncIterator[T]:
-            while True:
-                try:
-                    item = await ComposableFuture(
-                        source.__anext__(),
-                        loop=source_loop,
-                    )
-                    yield item
-                except StopAsyncIteration:
-                    break
-
-        return ComposableStream(_gen())
+        return ComposableStream(_gen()), StreamSender(queue, overflow, buffer_size)
 
     # =================================================================
     #  PROTOCOL

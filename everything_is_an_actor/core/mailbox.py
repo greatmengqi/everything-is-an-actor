@@ -129,9 +129,6 @@ class FastMailbox(Mailbox):
     """In-process mailbox backed by ``collections.deque``.
 
     Lower overhead than ``MemoryMailbox`` for single-threaded asyncio use cases.
-
-    When ``target_loop`` is set, ``put_nowait()`` uses ``call_soon_threadsafe``
-    to wake the consumer — making it safe for cross-loop (cross-thread) producers.
     """
 
     def __init__(
@@ -139,7 +136,6 @@ class FastMailbox(Mailbox):
         maxsize: int = 0,
         *,
         backpressure_policy: str = BACKPRESSURE_BLOCK,
-        target_loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
         if backpressure_policy not in BACKPRESSURE_POLICIES:
             raise ValueError(
@@ -149,21 +145,11 @@ class FastMailbox(Mailbox):
         self._maxsize = maxsize
         self._backpressure_policy = backpressure_policy
         self._get_event: asyncio.Event | None = None
-        self._target_loop = target_loop
 
     def _signal(self) -> None:
-        """Wake the consumer's get() — cross-loop safe when target_loop is set."""
-        if self._get_event is None:
-            return
-        if self._target_loop is not None:
-            try:
-                current = asyncio.get_running_loop()
-            except RuntimeError:
-                current = None
-            if current is not self._target_loop:
-                self._target_loop.call_soon_threadsafe(self._get_event.set)
-                return
-        self._get_event.set()
+        """Wake the consumer's get()."""
+        if self._get_event is not None:
+            self._get_event.set()
 
     async def put(self, msg: Any) -> bool:
         if self._backpressure_policy == BACKPRESSURE_BLOCK:
@@ -276,8 +262,9 @@ class ThreadedMailbox(Mailbox):
         if self._stop_event.is_set():
             raise MailboxClosed("mailbox closed")
         if self._backpressure_policy == BACKPRESSURE_BLOCK:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self._blocking_put, msg)
+            from everything_is_an_actor.core.composable_future import ComposableFuture
+
+            await ComposableFuture.from_blocking(self._blocking_put, msg)
             return True
         if self._backpressure_policy in (BACKPRESSURE_DROP_NEW, BACKPRESSURE_FAIL):
             if self._maxsize > 0 and self._queue.full():
@@ -308,8 +295,9 @@ class ThreadedMailbox(Mailbox):
                         raise Empty("mailbox closed")
 
     async def get(self) -> Any:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._blocking_get)
+        from everything_is_an_actor.core.composable_future import ComposableFuture
+
+        return await ComposableFuture.from_blocking(self._blocking_get)
 
     def get_nowait(self) -> Any:
         try:
