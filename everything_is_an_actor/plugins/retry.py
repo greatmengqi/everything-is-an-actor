@@ -19,6 +19,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from everything_is_an_actor.core.composable_future import ComposableFuture as _CF
+
 
 @dataclass(slots=True)
 class RetryEnvelope:
@@ -100,8 +102,6 @@ class IdempotentActorMixin:
         store.set(key, result)
         return result
 
-
-from everything_is_an_actor.core.composable_future import ComposableFuture as _CF
 
 
 async def ask_with_retry(
