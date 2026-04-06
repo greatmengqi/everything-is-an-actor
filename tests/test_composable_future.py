@@ -1,7 +1,6 @@
 """Tests for ComposableFuture."""
 
 import asyncio
-import threading
 
 import pytest
 
@@ -271,78 +270,14 @@ async def test_chain_with_failure_recovery():
 
 
 # ------------------------------------------------------------------
-# Cross-thread
+# Blocking result()
 # ------------------------------------------------------------------
-
-
-def _make_background_loop() -> tuple[asyncio.AbstractEventLoop, threading.Thread]:
-    """Start an event loop in a background thread."""
-    loop = asyncio.new_event_loop()
-    ready = threading.Event()
-
-    def run():
-        asyncio.set_event_loop(loop)
-        ready.set()
-        loop.run_forever()
-
-    t = threading.Thread(target=run, daemon=True)
-    t.start()
-    ready.wait()
-    return loop, t
-
-
-@pytest.mark.asyncio
-async def test_cross_loop_await():
-    """await a Cf pinned to a background loop from the test's loop."""
-    bg_loop, bg_thread = _make_background_loop()
-    try:
-        async def work():
-            await asyncio.sleep(0)
-            return "from_bg"
-
-        result = await Cf(work(), loop=bg_loop).map(str.upper)
-        assert result == "FROM_BG"
-    finally:
-        bg_loop.call_soon_threadsafe(bg_loop.stop)
-        bg_thread.join(timeout=2.0)
-
-
-@pytest.mark.asyncio
-async def test_cross_loop_chain():
-    """Full chain executes on the target loop."""
-    bg_loop, bg_thread = _make_background_loop()
-    try:
-        loop_ids: list[int] = []
-
-        async def capture_loop():
-            loop_ids.append(id(asyncio.get_running_loop()))
-            return 42
-
-        result = await (
-            Cf(capture_loop(), loop=bg_loop)
-                .map(lambda x: x * 2)
-                .recover(lambda e: -1)
-        )
-        assert result == 84
-        assert loop_ids[0] == id(bg_loop)
-    finally:
-        bg_loop.call_soon_threadsafe(bg_loop.stop)
-        bg_thread.join(timeout=2.0)
 
 
 def test_blocking_result():
     """result() works from a plain (non-async) thread."""
-    bg_loop, bg_thread = _make_background_loop()
-    try:
-        async def work():
-            await asyncio.sleep(0)
-            return 99
-
-        result = Cf(work(), loop=bg_loop).map(lambda x: x + 1).result(timeout=5.0)
-        assert result == 100
-    finally:
-        bg_loop.call_soon_threadsafe(bg_loop.stop)
-        bg_thread.join(timeout=2.0)
+    result = Cf.successful(99).map(lambda x: x + 1).result(timeout=5.0)
+    assert result == 100
 
 
 def test_blocking_result_no_loop():
@@ -351,101 +286,29 @@ def test_blocking_result_no_loop():
     assert result == 21
 
 
-@pytest.mark.asyncio
-async def test_on_sets_loop():
-    """on(loop) pins a loop-less Cf to a specific loop."""
-    bg_loop, bg_thread = _make_background_loop()
-    try:
-        result = await Cf.successful(10).map(lambda x: x + 5).on(bg_loop)
-        assert result == 15
-    finally:
-        bg_loop.call_soon_threadsafe(bg_loop.stop)
-        bg_thread.join(timeout=2.0)
-
-
-@pytest.mark.asyncio
-async def test_same_loop_no_overhead():
-    """When target loop == current loop, no bridging happens."""
-    current_loop = asyncio.get_running_loop()
-    result = await Cf.successful(42).on(current_loop)
-    assert result == 42
-
-
-# ------------------------------------------------------------------
-# Cross-thread: non-coroutine awaitables
-# ------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_unpinned_cross_loop_future():
-    """Cf wrapping a foreign-loop Future without .on() still works."""
-    bg_loop, bg_thread = _make_background_loop()
-    try:
-        # Create a future resolved on bg_loop
-        conc_fut = asyncio.run_coroutine_threadsafe(asyncio.sleep(0, result=55), bg_loop)
-        wrapped = asyncio.wrap_future(conc_fut, loop=bg_loop)
-
-        # No .on() — unpinned, but wrapping a bg_loop Future
-        result = await Cf(wrapped).map(lambda x: x + 5)
-        assert result == 60
-    finally:
-        bg_loop.call_soon_threadsafe(bg_loop.stop)
-        bg_thread.join(timeout=2.0)
-
-
-@pytest.mark.asyncio
-async def test_cross_loop_with_asyncio_future():
-    """Cross-loop works when wrapping an asyncio.Future (not a coroutine)."""
-    bg_loop, bg_thread = _make_background_loop()
-    try:
-        # Create a future on bg_loop
-        fut = asyncio.run_coroutine_threadsafe(asyncio.sleep(0, result=77), bg_loop)
-        wrapped_fut = asyncio.wrap_future(fut)
-
-        result = await Cf(wrapped_fut, loop=bg_loop).map(lambda x: x + 3)
-        assert result == 80
-    finally:
-        bg_loop.call_soon_threadsafe(bg_loop.stop)
-        bg_thread.join(timeout=2.0)
-
-
-@pytest.mark.asyncio
-async def test_cross_loop_with_task():
-    """Cross-loop works when wrapping an asyncio.Task."""
-    bg_loop, bg_thread = _make_background_loop()
-    try:
-        async def work():
-            return "task_result"
-
-        result = await Cf(work(), loop=bg_loop).map(str.upper)
-        assert result == "TASK_RESULT"
-    finally:
-        bg_loop.call_soon_threadsafe(bg_loop.stop)
-        bg_thread.join(timeout=2.0)
-
-
 # ------------------------------------------------------------------
 # result() safety
 # ------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_result_fails_in_async_context_without_loop():
-    """result() raises RuntimeError when called from a running event loop."""
-    with pytest.raises(RuntimeError, match="running event loop"):
-        Cf.successful(1).result()
+async def test_result_returns_cached_in_async_context():
+    """result() returns cached value even from async context (no loop needed)."""
+    assert Cf.successful(1).result() == 1
 
 
 @pytest.mark.asyncio
-async def test_result_fails_on_same_loop():
-    """result() raises RuntimeError when pinned to the current loop."""
-    current_loop = asyncio.get_running_loop()
-    with pytest.raises(RuntimeError, match="same loop"):
-        Cf.successful(1).on(current_loop).result()
+async def test_result_fails_unresolved_in_async_context():
+    """result() raises RuntimeError for unresolved CF in async context."""
+    async def slow():
+        await asyncio.sleep(10)
+        return 42
+    with pytest.raises(RuntimeError, match="running event loop"):
+        Cf(slow()).result()
 
 
 # ------------------------------------------------------------------
-# sequence / first_completed with mixed loops
+# sequence / first_completed
 # ------------------------------------------------------------------
 
 
@@ -476,16 +339,74 @@ async def test_first_completed_cancel_pending_settles():
     assert settled == [True]
 
 
-@pytest.mark.asyncio
-async def test_sequence_mixed_loops():
-    """sequence() works with futures pinned to different loops."""
-    bg_loop, bg_thread = _make_background_loop()
-    try:
-        local = Cf.successful(1)
-        remote = Cf.successful(2).on(bg_loop)
+# ------------------------------------------------------------------
+# Resolve-once caching
+# ------------------------------------------------------------------
 
-        result = await Cf.sequence([local, remote])
-        assert result == [1, 2]
-    finally:
-        bg_loop.call_soon_threadsafe(bg_loop.stop)
-        bg_thread.join(timeout=2.0)
+
+@pytest.mark.asyncio
+async def test_cache_value_on_resolve():
+    """First await caches result; second await returns cached value."""
+    call_count = 0
+
+    async def expensive():
+        nonlocal call_count
+        call_count += 1
+        return 42
+
+    cf = Cf(expensive())
+    assert await cf == 42
+    assert await cf == 42
+    assert call_count == 1  # coroutine ran only once
+
+
+@pytest.mark.asyncio
+async def test_cache_error_on_resolve():
+    """First await caches exception; second await re-raises from cache."""
+    call_count = 0
+
+    async def failing():
+        nonlocal call_count
+        call_count += 1
+        raise ValueError("boom")
+
+    cf = Cf(failing())
+    with pytest.raises(ValueError, match="boom"):
+        await cf
+    with pytest.raises(ValueError, match="boom"):
+        await cf
+    assert call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_fork_map_chains_from_same_cf():
+    """Multiple map chains from the same CF share the cached value."""
+    cf = Cf.successful(10)
+    doubled = cf.map(lambda x: x * 2)
+    tripled = cf.map(lambda x: x * 3)
+    assert await doubled == 20
+    assert await tripled == 30
+
+
+@pytest.mark.asyncio
+async def test_concurrent_awaiters_safe():
+    """Two concurrent tasks awaiting the same CF — no crash, both get the value."""
+    gate = asyncio.Event()
+
+    async def slow():
+        await gate.wait()
+        return "done"
+
+    cf = Cf(slow())
+
+    async def awaiter():
+        return await cf
+
+    t1 = asyncio.create_task(awaiter())
+    t2 = asyncio.create_task(awaiter())
+    await asyncio.sleep(0)  # let both tasks start
+    gate.set()
+
+    r1, r2 = await asyncio.gather(t1, t2)
+    assert r1 == "done"
+    assert r2 == "done"

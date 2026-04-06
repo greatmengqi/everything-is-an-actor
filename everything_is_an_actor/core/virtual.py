@@ -39,6 +39,7 @@ import logging
 from typing import Any, TypeVar
 
 from everything_is_an_actor.core.actor import Actor
+from everything_is_an_actor.core.composable_future import ComposableFuture
 from everything_is_an_actor.core.ref import ActorRef
 
 logger = logging.getLogger(__name__)
@@ -174,7 +175,7 @@ class VirtualActorRegistry:
             await self._store.put(key)
 
             # Monitor for deactivation in background
-            asyncio.create_task(
+            ComposableFuture.eager(
                 self._watch_deactivation(key, ref),
                 name=f"virtual-watch:{key}",
             )

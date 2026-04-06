@@ -90,38 +90,6 @@ class ActorContext:
         """Spawn a child actor supervised by this actor."""
         return await self._cell.spawn_child(actor_cls, name, mailbox_size=mailbox_size, middlewares=middlewares)
 
-    def register_background_task(self, task: Any) -> None:
-        """Register a task as durable — it survives per-message cleanup.
-
-        Use inside sync ``receive()`` for long-lived background work::
-
-            loop = asyncio.get_event_loop()
-            task = loop.create_task(my_background_work())
-            self.context.register_background_task(task)
-
-        Unregistered tasks created during a message are cancelled after
-        the message completes. Registered tasks live until actor shutdown.
-
-        Raises:
-            TypeError: if ``task`` is not an ``asyncio.Task``.
-            ValueError: if ``task`` belongs to a different event loop.
-        """
-        import asyncio
-
-        if not isinstance(task, asyncio.Task):
-            raise TypeError(f"register_background_task() requires an asyncio.Task, got {type(task).__name__}")
-        # Validate loop ownership when sync loop is known
-        sync_loop = getattr(self._cell, "_sync_loop", None)
-        if sync_loop is not None:
-            task_loop = task.get_loop()
-            if task_loop is not sync_loop:
-                raise ValueError(
-                    f"Task belongs to a different event loop. Expected the actor's sync loop, got {task_loop!r}"
-                )
-        bg = self._cell._background_tasks
-        bg.add(task)
-        task.add_done_callback(bg.discard)
-
     async def stop_self(self) -> None:
         """Stop this actor (self) and remove from parent's children.
 
@@ -172,7 +140,7 @@ class ActorContext:
                 _timed_out = False
                 try:
                     return await ref._ask(message, timeout=timeout)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     _timed_out = True
                     raise
                 finally:
@@ -202,29 +170,7 @@ class ActorContext:
         """
         from everything_is_an_actor.core.composable_future import ComposableFuture
 
-        async def _seq() -> list[Any]:
-            import asyncio
-
-            if not tasks:
-                return []
-
-            async def _run(t: Any, msg: Any) -> Any:
-                return await self.ask(t, msg, timeout=timeout)
-
-            spawned = [asyncio.create_task(_run(t, msg)) for t, msg in tasks]
-            _, pending = await asyncio.wait(spawned, return_when=asyncio.FIRST_EXCEPTION)
-            if pending:
-                for t in pending:
-                    t.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-            for t in spawned:
-                if not t.cancelled():
-                    exc = t.exception()
-                    if exc is not None:
-                        raise exc
-            return [t.result() for t in spawned]
-
-        return ComposableFuture(_seq())
+        return ComposableFuture.sequence([self.ask(t, msg, timeout=timeout) for t, msg in tasks])
 
     def traverse(
         self,
@@ -250,31 +196,9 @@ class ActorContext:
         """Return first completed result; cancel the rest. Returns ComposableFuture."""
         from everything_is_an_actor.core.composable_future import ComposableFuture
 
-        async def _race() -> Any:
-            import asyncio
-
-            if not tasks:
-                raise ValueError("race() requires at least one task")
-
-            async def _run(t: Any, msg: Any) -> Any:
-                return await self.ask(t, msg, timeout=timeout)
-
-            spawned = [asyncio.create_task(_run(t, msg)) for t, msg in tasks]
-            try:
-                _, pending = await asyncio.wait(spawned, return_when=asyncio.FIRST_COMPLETED)
-                for t in pending:
-                    t.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-                first = next(t for t in spawned if t not in pending)
-                return first.result()
-            except BaseException:
-                for t in spawned:
-                    if not t.done():
-                        t.cancel()
-                await asyncio.gather(*spawned, return_exceptions=True)
-                raise
-
-        return ComposableFuture(_race())
+        if not tasks:
+            return ComposableFuture.failed(ValueError("race() requires at least one task"))
+        return ComposableFuture.first_completed(*(self.ask(t, msg, timeout=timeout) for t, msg in tasks))
 
     def zip(
         self,
@@ -371,16 +295,21 @@ class ActorContext:
             yield item
 
     async def run_in_executor(self, fn: Callable[..., Any], *args: Any) -> Any:
-        """Run a blocking function in the system's thread pool.
+        """Run a blocking function in a thread pool.
+
+        Uses the actor's bound dispatcher if one was specified at spawn time,
+        otherwise falls back to the default thread pool.
 
         Usage::
 
             result = await self.context.run_in_executor(requests.get, url)
         """
-        import asyncio
+        from everything_is_an_actor.core.composable_future import ComposableFuture
 
-        executor = self._cell.system._executor
-        return await asyncio.get_running_loop().run_in_executor(executor, fn, *args)
+        dispatcher = self._cell._dispatcher
+        if dispatcher is not None:
+            return await dispatcher.dispatch(fn, *args)
+        return await ComposableFuture.from_blocking(fn, *args)
 
 
 class Actor(Generic[MsgT, RetT]):

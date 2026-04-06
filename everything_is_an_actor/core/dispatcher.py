@@ -1,116 +1,74 @@
-"""Dispatcher — assigns actors to event loops.
+"""Dispatcher — offloads handler execution via ComposableFuture.
 
-Decouples actor execution context from ActorSystem lifecycle.
-Inspired by Akka's Dispatcher model.
+Actor lifecycle (mailbox loop, on_started, on_stopped) always runs on the
+caller's event loop.  A Dispatcher offloads the *handler execution*
+to an executor, returning a ``ComposableFuture`` so the result
+flows back through the standard composition pipeline.
 
-Built-in dispatchers:
-- ``DefaultDispatcher``: all actors on caller's loop (zero overhead)
-- ``PoolDispatcher``: round-robin across N worker loops (I/O isolation)
+Built-in:
+- ``PoolDispatcher``: ``ThreadPoolExecutor``-backed dispatch.
 """
 
 from __future__ import annotations
 
 import abc
-import asyncio
-import threading
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, TypeVar
 
+from everything_is_an_actor.core.composable_future import ComposableFuture
 
-@dataclass
-class LoopContext:
-    """Worker loop context — an event loop running in a dedicated thread."""
-
-    loop: asyncio.AbstractEventLoop
-    thread: threading.Thread
-
-
-def _create_worker_loop(name: str) -> LoopContext:
-    """Create a worker event loop in a daemon thread.
-
-    Pattern reused from ``backends/multi_loop.py``.
-    """
-    loop = asyncio.new_event_loop()
-    ready = threading.Event()
-
-    def _run() -> None:
-        asyncio.set_event_loop(loop)
-        ready.set()
-        loop.run_forever()
-
-    thread = threading.Thread(target=_run, name=name, daemon=True)
-    thread.start()
-    ready.wait(timeout=5.0)
-    return LoopContext(loop=loop, thread=thread)
+T = TypeVar("T")
 
 
 class Dispatcher(abc.ABC):
-    """Assigns actors to event loops.
+    """Offloads handler execution, returning ComposableFuture.
 
-    Subclass and override ``assign()`` for custom scheduling policies.
+    Inject into ``ActorSystem(dispatchers={"io": PoolDispatcher(4)})``,
+    then select at spawn time: ``system.spawn(MyActor, "a", dispatcher="io")``.
+
+    The Cell calls ``dispatcher.dispatch(fn, *args)`` and awaits the result.
+    How and where ``fn`` runs is the Dispatcher's concern.
     """
 
     @abc.abstractmethod
-    def assign(self, actor_cls: type, name: str) -> asyncio.AbstractEventLoop:
-        """Return the event loop this actor should run on."""
+    def dispatch(self, fn: Callable[..., T], *args: Any) -> ComposableFuture[T]:
+        """Dispatch a function, return ComposableFuture with the result."""
 
     async def start(self) -> None:
-        """Start the dispatcher (create threads/loops if needed)."""
+        """Start the dispatcher (create resources if needed)."""
 
     async def shutdown(self) -> None:
-        """Shutdown the dispatcher (stop threads/loops)."""
-
-
-class DefaultDispatcher(Dispatcher):
-    """All actors run on the caller's event loop. Zero overhead."""
-
-    def assign(self, actor_cls: type, name: str) -> asyncio.AbstractEventLoop:
-        return asyncio.get_running_loop()
+        """Shutdown the dispatcher (release resources)."""
 
 
 class PoolDispatcher(Dispatcher):
-    """Round-robin actor assignment across N worker threads.
-
-    Each worker thread runs its own asyncio event loop.
-    Actors on different loops are isolated — one slow/blocking actor
-    doesn't starve actors on other loops.
+    """Thread-pool dispatcher — offloads handler execution to a ``ThreadPoolExecutor``.
 
     Example::
 
-        dispatcher = PoolDispatcher(pool_size=4)
-        await dispatcher.start()
-        system = ActorSystem("app", dispatcher=dispatcher)
-        # actors are distributed across 4 worker loops
+        system = ActorSystem("app", dispatchers={"io": PoolDispatcher(4)})
+        ref = await system.spawn(SlowActor, "worker", dispatcher="io")
     """
 
     def __init__(self, pool_size: int = 4) -> None:
         if pool_size < 1:
             raise ValueError(f"pool_size must be >= 1, got {pool_size}")
         self._pool_size = pool_size
-        self._workers: list[LoopContext] = []
-        self._counter = 0
-        self._started = False
+        self._pool: ThreadPoolExecutor | None = None
 
-    def assign(self, actor_cls: type, name: str) -> asyncio.AbstractEventLoop:
-        if not self._started:
+    def dispatch(self, fn: Callable[..., T], *args: Any) -> ComposableFuture[T]:
+        if self._pool is None:
             raise RuntimeError("PoolDispatcher not started — call await dispatcher.start() first")
-        loop = self._workers[self._counter % self._pool_size].loop
-        self._counter += 1
-        return loop
+        return ComposableFuture.from_executor(self._pool, fn, *args)
 
     async def start(self) -> None:
-        if self._started:
-            return
-        for i in range(self._pool_size):
-            self._workers.append(_create_worker_loop(f"dispatcher-worker-{i}"))
-        self._started = True
+        if self._pool is None:
+            self._pool = ThreadPoolExecutor(
+                max_workers=self._pool_size,
+                thread_name_prefix="dispatcher",
+            )
 
     async def shutdown(self) -> None:
-        if not self._started:
-            return
-        for w in self._workers:
-            w.loop.call_soon_threadsafe(w.loop.stop)
-        for w in self._workers:
-            w.thread.join(timeout=5.0)
-        self._workers.clear()
-        self._counter = 0
-        self._started = False
+        if self._pool is not None:
+            self._pool.shutdown(wait=False)
+            self._pool = None
