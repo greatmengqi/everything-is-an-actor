@@ -114,13 +114,12 @@ Design constraints:
 
 ## A2A multi-turn protocol
 
-A2A support lives in `agents/` — no separate package. Three additions:
+A2A support lives in `agents/` — no separate package. Two additions:
 
 - `AgentCard`: frozen dataclass on `AgentActor.__card__` — static capability metadata (skills, description). Agents without `__card__` work as before, just not discoverable
-- `Inquiry` + `TaskStatus.INPUT_REQUIRED`: `execute()` returns `Inquiry` to signal "need more input". Framework wraps it with `INPUT_REQUIRED` status. Parent asks again in a loop — no new communication primitive
 - `discover(skill)` on `AgentSystem`: queries `_root_cells` for actors whose `__card__` declares the skill
 
-Multi-turn is just `ask` in a loop. Child is a stateful actor that tracks conversation state via `self`. Each round is a normal `execute()` call.
+Multi-turn is a usage pattern, not a framework feature. Actor is already a state machine — `execute()` is called per message, `self` tracks conversation state, parent decides when the conversation is done via an ask loop. No new types, no new status, no framework involvement.
 
 ## Minimal public surface
 
