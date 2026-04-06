@@ -120,6 +120,68 @@ pipeline = (
 )
 ```
 
+## 静态类型校验
+
+YAML 上传后，不执行，纯静态检查类型链是否匹配。类型来自 Python agent 类的泛型参数。
+
+### 校验规则
+
+| 组合子 | 校验 |
+|--------|------|
+| flat_map(A, B) | A 的 O == B 的 I |
+| zip(A, B) | 输入必须是 tuple，A 和 B 各取一份 |
+| broadcast(A, B) | A 和 B 的 I 类型相同 |
+| race(A, B) | A 和 B 的 I 相同，O 相同 |
+| at_least(n, A, B) | 同 race |
+| branch(source, {T: flow}) | source 的 O 是 T 的超类型 |
+| fallback_to(A, B) | A 和 B 的 I 相同，O 相同 |
+| recover_with(A, B) | B 的 I == Exception |
+| notify/tap(A, side) | side 的 I == A 的 O |
+| guard(A, check) | check 的 I == A 的 O，check 的 O == bool |
+
+### 类型提取
+
+```python
+import typing
+
+def get_io_types(agent_cls: type) -> tuple[type, type] | None:
+    """从 AgentActor[I, O] 提取 I 和 O。"""
+    for base in getattr(agent_cls, '__orig_bases__', ()):
+        args = typing.get_args(base)
+        if len(args) >= 2:
+            return args[0], args[1]
+    return None
+```
+
+### CLI 使用
+
+```bash
+$ python -m flow validate pipeline.yaml --registry myapp.agents
+
+✓ Researcher [str → ResearchResult]
+✓ Analyst    [str → Analysis]
+✓ Writer     [ResearchResult → Report]
+✗ Reviewer   [str → bool]
+  Error: Writer outputs Report, but Reviewer expects str
+  
+1 error, 3 passed
+```
+
+### 跳过校验的情况
+
+| 情况 | 行为 |
+|------|------|
+| agent 没写泛型参数 `AgentActor` | 跳过，不报错 |
+| 类型是 `Any` | 跳过，兼容所有 |
+| registry 找不到 agent | 报错：未注册 |
+
+### 文件
+
+| 文件 | 内容 |
+|------|------|
+| `flow/validate.py` | 类型校验逻辑 |
+| `flow/__main__.py` | CLI 入口 `python -m flow validate` |
+
 ## 混合使用
 
 YAML 定义可序列化骨架，Python 补充 callable：
