@@ -116,8 +116,8 @@ Design constraints:
 
 A2A support lives in `agents/` — no separate package. Two additions:
 
-- `AgentCard`: frozen dataclass on `AgentActor.__card__` — static capability metadata (skills, description). Agents without `__card__` work as before, just not discoverable
-- `discover(skill)` on `AgentSystem`: queries `_root_cells` for actors whose `__card__` declares the skill
+- `AgentCard`: frozen dataclass on `AgentActor.__card__` — static capability metadata (name, description, skills). Agents without `__card__` work as before, just not discoverable
+- `discover_one(match)` / `discover_all(match)` on `AgentSystem`: match function receives full catalog (root + children, recursively) of `(ActorRef, AgentCard)` pairs, returns selection. Strategy is caller's — filter, score, LLM, anything
 
 Multi-turn is a usage pattern, not a framework feature. Actor is already a state machine — `execute()` is called per message, `self` tracks conversation state, parent decides when the conversation is done via an ask loop. No new types, no new status, no framework involvement.
 

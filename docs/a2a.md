@@ -7,7 +7,7 @@ Single-machine A2A support for agent discovery and multi-turn conversations.
 Two additions to the agent layer:
 
 1. **AgentCard** — declare what an agent can do
-2. **discover()** — find agents by skill
+2. **discover_one() / discover_all()** — find agents from the catalog
 
 Multi-turn is a usage pattern, not a framework feature. Actor is already a state machine.
 
@@ -20,6 +20,7 @@ from everything_is_an_actor.agents.card import AgentCard
 
 class TranslateAgent(AgentActor[str, str]):
     __card__ = AgentCard(
+        name="translator",
         skills=("translation", "summarization"),
         description="Translates and summarizes documents",
     )
@@ -28,22 +29,33 @@ class TranslateAgent(AgentActor[str, str]):
         return f"translated: {input}"
 ```
 
-Agents without `__card__` work normally — they just won't appear in `discover()` results.
+Agents without `__card__` work normally — they just won't appear in discovery results.
 
 ## Discovery
 
-Find running agents by predicate on AgentCard:
+Select agents from the catalog. Match function receives all `(ref, card)` pairs and returns the selection:
 
 ```python
-# By skill
-refs = system.discover(lambda c: "translation" in c.skills)
+# Select one by skill
+ref, card = system.discover_one(lambda agents:
+    next(((r, c) for r, c in agents if "translation" in c.skills), None)
+)
 
-# By description
-refs = system.discover(lambda c: "Chinese" in c.description)
+# Select all matching
+results = system.discover_all(lambda agents:
+    [(r, c) for r, c in agents if "summarize" in c.description.lower()]
+)
 
-# Combined
-refs = system.discover(lambda c: "translation" in c.skills and len(c.skills) > 1)
+# Score-based selection
+ref, card = system.discover_one(lambda agents:
+    max(agents, key=lambda rc: my_score(rc[1])) if agents else None
+)
+
+# LLM-based selection
+ref, card = system.discover_one(lambda agents: llm.select(agents))
 ```
+
+The catalog includes root actors and all children, recursively.
 
 ## Multi-Turn Pattern
 
@@ -87,7 +99,7 @@ class OrchestratorAgent(AgentActor[str, str]):
         return result.output
 ```
 
-Each round is a normal `ask` → `TaskResult`. No new framework mechanism.
+Each round is a normal `ask` -> `TaskResult`. No new framework mechanism.
 
 ## Design Rationale
 
@@ -108,4 +120,4 @@ Agent capabilities are static metadata — they don't change per instance. A cla
 | `input-required` | Actor state + ask loop |
 | Artifact | `TaskResult[O].output` |
 | Streaming | `ask_stream()` |
-| Discovery | `AgentSystem.discover()` |
+| Discovery | `AgentSystem.discover_one()` / `discover_all()` |
