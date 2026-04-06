@@ -461,10 +461,211 @@ result = await system.run_flow(pipeline, input)
 | `flow/serialize.py` | 新增三个序列化 + 反序列化 |
 | `flow/yaml_parser.py` | **新建**——YAML → Flow ADT 解析器 |
 
-## 和 to_dict/from_dict 的关系
+## JSON 语法
+
+和 YAML 覆盖同一组 variant。`to_dict` / `from_dict` 的 JSON 格式。每个节点有 `type` 字段标识 variant。
+
+### 全部节点类型
+
+```json
+// Agent
+{"type": "Agent", "cls": "Researcher", "timeout": 30.0}
+
+// FlatMap（顺序）
+{"type": "FlatMap",
+ "first": {"type": "Agent", "cls": "Researcher"},
+ "next":  {"type": "Agent", "cls": "Writer"}}
+
+// Zip（分发并行 —— 拆 tuple）
+{"type": "Zip",
+ "left":  {"type": "Agent", "cls": "A"},
+ "right": {"type": "Agent", "cls": "B"}}
+
+// ZipAll（N-way 分发）
+{"type": "ZipAll",
+ "flows": [
+   {"type": "Agent", "cls": "A"},
+   {"type": "Agent", "cls": "B"},
+   {"type": "Agent", "cls": "C"}
+ ]}
+
+// Broadcast（广播并行 —— 同一个 input）
+{"type": "Broadcast",
+ "flows": [
+   {"type": "Agent", "cls": "AnalystA"},
+   {"type": "Agent", "cls": "AnalystB"}
+ ]}
+
+// Race（竞争）
+{"type": "Race",
+ "flows": [
+   {"type": "Agent", "cls": "Google"},
+   {"type": "Agent", "cls": "Bing"}
+ ]}
+
+// AtLeast（法定人数）
+{"type": "AtLeast",
+ "n": 2,
+ "flows": [
+   {"type": "Agent", "cls": "AnalystA"},
+   {"type": "Agent", "cls": "AnalystB"},
+   {"type": "Agent", "cls": "AnalystC"}
+ ]}
+
+// Branch（类型路由）
+{"type": "Branch",
+ "source": {"type": "Agent", "cls": "Classifier"},
+ "mapping": {
+   "TechQuery":     {"type": "Agent", "cls": "TechWriter"},
+   "CreativeQuery": {"type": "Agent", "cls": "CreativeWriter"}
+ }}
+
+// FallbackTo（兜底）
+{"type": "FallbackTo",
+ "source":   {"type": "Agent", "cls": "Writer"},
+ "fallback": {"type": "Agent", "cls": "BackupWriter"}}
+
+// RecoverWith（异常恢复）
+{"type": "RecoverWith",
+ "source":  {"type": "Agent", "cls": "RiskyAgent"},
+ "handler": {"type": "Agent", "cls": "ErrorHandler"}}
+
+// Loop（循环）
+{"type": "Loop",
+ "body":     {"type": "Agent", "cls": "Refiner"},
+ "max_iter": 10}
+
+// LoopWithState（带状态循环）
+{"type": "LoopWithState",
+ "body":     {"type": "Agent", "cls": "StatefulRefiner"},
+ "max_iter": 10}
+
+// Notify（旁路 fire-and-forget）
+{"type": "Notify",
+ "source": {"type": "Agent", "cls": "Writer"},
+ "side":   {"type": "Agent", "cls": "AuditLogger"}}
+
+// Tap（同步副作用）
+{"type": "Tap",
+ "source": {"type": "Agent", "cls": "Writer"},
+ "side":   {"type": "Agent", "cls": "ProgressTracker"}}
+
+// Guard（守卫）
+{"type": "Guard",
+ "source": {"type": "Agent", "cls": "Writer"},
+ "check":  {"type": "Agent", "cls": "QualityChecker"}}
+```
+
+### 不可 JSON 化（含 callable）
+
+| type | 原因 |
+|------|------|
+| Pure | f 是 callable |
+| Map | f 是 callable |
+| Filter | predicate 是 callable |
+| AndThen | callback 是 callable |
+| DivertTo | when 是 callable |
+| BranchOn | predicate 是 callable |
+| Recover | handler 是 callable |
+
+### JSON ↔ YAML 对照
+
+| JSON `type` | YAML 关键词 | 说明 |
+|-------------|-----------|------|
+| `Agent` | `agent:` | 单 agent |
+| `FlatMap` | `steps:` 列表 | 顺序链 |
+| `Zip` | `each:` (2 项) | 分发并行 |
+| `ZipAll` | `each:` (N 项) | N-way 分发 |
+| `Broadcast` | `all:` | 广播并行 |
+| `Race` | `fastest of:` | 竞争 |
+| `AtLeast` | `best N of:` | 法定人数 |
+| `Branch` | `route:` | 类型路由 |
+| `FallbackTo` | `if fails:` | 兜底 |
+| `RecoverWith` | `recover:` | 异常恢复 |
+| `Loop` | `repeat:` | 循环 |
+| `Notify` | `notify:` | 旁路 |
+| `Tap` | `tap:` | 同步副作用 |
+| `Guard` | `guard:` | 守卫 |
+
+### 完整示例
+
+```json
+{
+  "type": "FlatMap",
+  "first": {
+    "type": "AtLeast",
+    "n": 2,
+    "flows": [
+      {"type": "Agent", "cls": "Google"},
+      {"type": "Agent", "cls": "Bing"},
+      {"type": "Agent", "cls": "DuckDuckGo"}
+    ]
+  },
+  "next": {
+    "type": "FlatMap",
+    "first": {
+      "type": "Notify",
+      "source": {
+        "type": "Broadcast",
+        "flows": [
+          {"type": "Agent", "cls": "Researcher"},
+          {"type": "Agent", "cls": "Analyst"}
+        ]
+      },
+      "side": {"type": "Agent", "cls": "AuditLogger"}
+    },
+    "next": {
+      "type": "Guard",
+      "source": {
+        "type": "FallbackTo",
+        "source":   {"type": "Agent", "cls": "Writer"},
+        "fallback": {"type": "Agent", "cls": "BackupWriter"}
+      },
+      "check": {"type": "Agent", "cls": "QualityChecker"}
+    }
+  }
+}
+```
+
+等价 YAML：
+
+```yaml
+flow: ResearchReport
+steps:
+  - best 2 of:
+      - agent: Google
+      - agent: Bing
+      - agent: DuckDuckGo
+  - all:
+      - agent: Researcher
+      - agent: Analyst
+    notify: AuditLogger
+  - agent: Writer
+    if fails: BackupWriter
+    guard: QualityChecker
+```
+
+等价 Python：
+
+```python
+pipeline = (
+    at_least(2, agent(Google), agent(Bing), agent(DuckDuckGo))
+    .flat_map(
+        broadcast(agent(Researcher), agent(Analyst))
+        .notify(agent(AuditLogger))
+    )
+    .flat_map(
+        agent(Writer)
+        .fallback_to(agent(BackupWriter))
+        .guard(agent(QualityChecker))
+    )
+)
+```
+
+### 三者互转
 
 ```
 YAML ←→ Flow ADT ←→ JSON (to_dict/from_dict)
 ```
 
-三者可互转。YAML 面向人类编写，JSON 面向机器传输，Flow ADT 面向代码组合。YAML 和 JSON 覆盖同一组可序列化 variant。
+YAML 面向人类编写，JSON 面向机器传输，Flow ADT 面向代码组合。三者覆盖同一组可序列化 variant，无损互转。
