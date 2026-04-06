@@ -14,9 +14,9 @@ YAML（人类编写） ←→ Flow ADT ←→ JSON（机器传输）
 |--------|------|------|--------|
 | 单 agent | `agent: A` | `Agent(cls)` | `agent(A)` |
 | agent+参数 | `agent: {name: A, timeout: 30}` | `Agent(cls, timeout)` | `agent(A, timeout=30)` |
-| 顺序 | `flat_map: [A, B, C]` | `FlatMap(first, next)` | `a.flat_map(b)` |
-| 分发并行 | `zip: [A, B]` | `Zip(left, right)` | `a.zip(b)` |
-| 广播并行 | `broadcast: [A, B]` | `Broadcast(flows)` | `broadcast(a, b)` |
+| 顺序 | `steps: [A, B, C]` | `FlatMap(first, next)` | `a.flat_map(b)` |
+| 分发并行 | `each: [A, B]` | `Zip(left, right)` | `a.zip(b)` |
+| 广播并行 | `all: [A, B]` | `Broadcast(flows)` | `broadcast(a, b)` |
 | 竞争 | `race: [A, B, C]` | `Race(flows)` | `race(a, b, c)` |
 | 法定人数 | `at_least: {n: 2, flows: [A,B,C]}` | `AtLeast(n, flows)` | `at_least(2, a, b, c)` |
 | 类型路由 | `branch: {source: X, mapping: {...}}` | `Branch(source, mapping)` | `x.branch({T: a})` |
@@ -70,14 +70,14 @@ YAML（人类编写） ←→ Flow ADT ←→ JSON（机器传输）
 
 ```yaml
 flow: ResearchReport
-flat_map:
+steps:
   - at_least:
       n: 2
       flows:
         - agent: Google
         - agent: Bing
         - agent: DuckDuckGo
-  - broadcast:
+  - all:
       - agent: Researcher
       - agent: Analyst
   - guard:
