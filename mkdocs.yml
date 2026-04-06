@@ -34,7 +34,7 @@ nav:
     - Agent Layer: agents.md
     - Flow API: flow.md
     - Mixture of Agents (MOA): moa.md
-    - A2A Multi-Turn: a2a.md
+    - A2A Discovery: a2a.md
     - Actor Lifecycle: lifecycle.md
     - Mailbox Architecture: mailbox.md
     - ComposableFuture: composable-future.md
