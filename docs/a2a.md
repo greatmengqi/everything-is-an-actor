@@ -107,20 +107,6 @@ msg.body    # payload
 msg.sender  # who sent it (Sender with .tell())
 ```
 
-### External Callers
-
-Non-actor code uses `converse()`:
-
-```python
-async for msg in system.converse(TranslateAgent, "hello world"):
-    match msg.body:
-        case Inquiry(q):
-            await msg.sender.tell("Chinese")
-        case result:
-            print(result)
-            break
-```
-
 ## Design Rationale
 
 ### Why `tell` + `receive`, not `ask` + callback?

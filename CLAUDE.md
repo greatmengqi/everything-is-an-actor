@@ -124,7 +124,6 @@ Interaction patterns:
 - **Single-shot**: `ask` — unchanged, promise-based
 - **Multi-turn**: both sides use `tell` + `receive`, symmetric. Parent `tell`s task, child `tell`s inquiry back, parent `receive`s and `tell`s answer, child `receive`s answer and `tell`s result
 - `discover(skill)` on `AgentSystem`: queries `_root_cells` for actors whose `__card__` declares the skill
-- `converse()` on `AgentSystem`: external caller API, spawns internal relay actor
 
 Sender propagation: `context.tell()` and `context.ask()` populate `_Envelope.sender` with `self.context.self_ref`. System-level calls set `sender=None`.
 
