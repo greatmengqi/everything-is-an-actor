@@ -662,10 +662,274 @@ pipeline = (
 )
 ```
 
-### 三者互转
+## 三列对比：YAML / JSON / Python
+
+逐 variant 展示三种写法。
+
+### Agent
+
+```yaml
+# YAML
+- agent: Researcher
+  max: 30s
+```
+```json
+// JSON
+{"type": "Agent", "cls": "Researcher", "timeout": 30.0}
+```
+```python
+# Python
+agent(Researcher, timeout=30.0)
+```
+
+### FlatMap（顺序）
+
+```yaml
+# YAML
+steps:
+  - agent: Researcher
+  - agent: Writer
+```
+```json
+// JSON
+{"type": "FlatMap",
+ "first": {"type": "Agent", "cls": "Researcher"},
+ "next":  {"type": "Agent", "cls": "Writer"}}
+```
+```python
+# Python
+agent(Researcher).flat_map(agent(Writer))
+```
+
+### Zip（分发并行 —— 拆 tuple）
+
+```yaml
+# YAML
+- each:
+    - agent: ProcessA
+    - agent: ProcessB
+```
+```json
+// JSON
+{"type": "Zip",
+ "left":  {"type": "Agent", "cls": "ProcessA"},
+ "right": {"type": "Agent", "cls": "ProcessB"}}
+```
+```python
+# Python
+agent(ProcessA).zip(agent(ProcessB))
+```
+
+### Broadcast（广播并行 —— 同一个 input）
+
+```yaml
+# YAML
+- all:
+    - agent: AnalystA
+    - agent: AnalystB
+```
+```json
+// JSON
+{"type": "Broadcast",
+ "flows": [
+   {"type": "Agent", "cls": "AnalystA"},
+   {"type": "Agent", "cls": "AnalystB"}]}
+```
+```python
+# Python
+broadcast(agent(AnalystA), agent(AnalystB))
+```
+
+### Race（竞争）
+
+```yaml
+# YAML
+- fastest of:
+    - agent: Google
+    - agent: Bing
+```
+```json
+// JSON
+{"type": "Race",
+ "flows": [
+   {"type": "Agent", "cls": "Google"},
+   {"type": "Agent", "cls": "Bing"}]}
+```
+```python
+# Python
+race(agent(Google), agent(Bing))
+```
+
+### AtLeast（法定人数）
+
+```yaml
+# YAML
+- best 2 of:
+    - agent: AnalystA
+    - agent: AnalystB
+    - agent: AnalystC
+```
+```json
+// JSON
+{"type": "AtLeast", "n": 2,
+ "flows": [
+   {"type": "Agent", "cls": "AnalystA"},
+   {"type": "Agent", "cls": "AnalystB"},
+   {"type": "Agent", "cls": "AnalystC"}]}
+```
+```python
+# Python
+at_least(2, agent(AnalystA), agent(AnalystB), agent(AnalystC))
+```
+
+### Branch（类型路由）
+
+```yaml
+# YAML
+- route:
+    TechQuery: TechWriter
+    CreativeQuery: CreativeWriter
+```
+```json
+// JSON
+{"type": "Branch",
+ "source": {"type": "Agent", "cls": "Classifier"},
+ "mapping": {
+   "TechQuery":     {"type": "Agent", "cls": "TechWriter"},
+   "CreativeQuery": {"type": "Agent", "cls": "CreativeWriter"}}}
+```
+```python
+# Python
+agent(Classifier).branch({
+    TechQuery: agent(TechWriter),
+    CreativeQuery: agent(CreativeWriter),
+})
+```
+
+### FallbackTo（兜底）
+
+```yaml
+# YAML
+- agent: Writer
+  if fails: BackupWriter
+```
+```json
+// JSON
+{"type": "FallbackTo",
+ "source":   {"type": "Agent", "cls": "Writer"},
+ "fallback": {"type": "Agent", "cls": "BackupWriter"}}
+```
+```python
+# Python
+agent(Writer).fallback_to(agent(BackupWriter))
+```
+
+### RecoverWith（异常恢复）
+
+```yaml
+# YAML
+- agent: Risky
+  recover: ErrorHandler
+```
+```json
+// JSON
+{"type": "RecoverWith",
+ "source":  {"type": "Agent", "cls": "Risky"},
+ "handler": {"type": "Agent", "cls": "ErrorHandler"}}
+```
+```python
+# Python
+agent(Risky).recover_with(agent(ErrorHandler))
+```
+
+### Loop（循环）
+
+```yaml
+# YAML
+- repeat:
+    agent: Refiner
+  max: 10
+```
+```json
+// JSON
+{"type": "Loop",
+ "body": {"type": "Agent", "cls": "Refiner"},
+ "max_iter": 10}
+```
+```python
+# Python
+loop(agent(Refiner), max_iter=10)
+```
+
+### Notify（旁路 fire-and-forget）
+
+```yaml
+# YAML
+- agent: Writer
+  notify: AuditLogger
+```
+```json
+// JSON
+{"type": "Notify",
+ "source": {"type": "Agent", "cls": "Writer"},
+ "side":   {"type": "Agent", "cls": "AuditLogger"}}
+```
+```python
+# Python
+agent(Writer).notify(agent(AuditLogger))
+```
+
+### Tap（同步副作用）
+
+```yaml
+# YAML
+- agent: Writer
+  tap: ProgressTracker
+```
+```json
+// JSON
+{"type": "Tap",
+ "source": {"type": "Agent", "cls": "Writer"},
+ "side":   {"type": "Agent", "cls": "ProgressTracker"}}
+```
+```python
+# Python
+agent(Writer).tap(agent(ProgressTracker))
+```
+
+### Guard（守卫）
+
+```yaml
+# YAML
+- agent: Writer
+  guard: QualityChecker
+```
+```json
+// JSON
+{"type": "Guard",
+ "source": {"type": "Agent", "cls": "Writer"},
+ "check":  {"type": "Agent", "cls": "QualityChecker"}}
+```
+```python
+# Python
+agent(Writer).guard(agent(QualityChecker))
+```
+
+### 含 callable 的 variant（仅 Python）
+
+| 操作 | Python | YAML/JSON |
+|------|--------|-----------|
+| 纯变换 | `.map(lambda x: x.upper())` | 不可 |
+| 条件过滤 | `.filter(lambda x: len(x) > 10)` | 不可（用 `.guard(agent(Checker))` 替代） |
+| 条件旁路 | `.divert_to(side, when=pred)` | 不可（用 `.notify(side)` 替代，无条件） |
+| 同步回调 | `.and_then(print)` | 不可（用 `.tap(agent(Logger))` 替代） |
+| 条件分支 | `.branch_on(pred, a, b)` | 不可（用 `.branch({Type: flow})` 替代） |
+| 异常处理 | `.recover(lambda e: default)` | 不可（用 `.recover_with(agent(Handler))` 替代） |
+
+## 三者互转
 
 ```
 YAML ←→ Flow ADT ←→ JSON (to_dict/from_dict)
 ```
 
-YAML 面向人类编写，JSON 面向机器传输，Flow ADT 面向代码组合。三者覆盖同一组可序列化 variant，无损互转。
+YAML 面向人类编写，JSON 面向机器传输，Python 面向代码组合。三者覆盖同一组可序列化 variant，无损互转。
