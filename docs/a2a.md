@@ -4,16 +4,17 @@ Single-machine A2A support for agent discovery and multi-turn conversations.
 
 ## Overview
 
-Two capabilities added to the agent layer:
+Three additions to the agent layer:
 
-1. **Capability discovery** — find agents by skill, not by address
-2. **Multi-turn** — agents exchange information mid-execution via `tell` + `receive`
+1. **AgentCard** — declare what an agent can do
+2. **Inquiry + INPUT_REQUIRED** — signal "I need more input" from `execute()`
+3. **discover()** — find agents by skill
 
-No new packages. No new communication primitives. Everything builds on existing actor messaging.
+No new communication primitives. Multi-turn is just `ask` in a loop.
 
 ## AgentCard
 
-Declare what an agent can do via a class attribute:
+Declare capabilities via a class attribute:
 
 ```python
 from everything_is_an_actor.agents.card import AgentCard
@@ -36,7 +37,6 @@ Find running agents by skill:
 
 ```python
 refs = system.discover("translation")
-# Returns list of ActorRef whose __card__ declares "translation"
 ```
 
 ## Multi-Turn Conversations
@@ -45,78 +45,87 @@ refs = system.discover("translation")
 
 ```python
 result = await self.context.ask(ref, Task(input="hello"))
+# result.status == TaskStatus.COMPLETED
 ```
 
 ### Multi-turn
 
-Both sides use `tell` + `receive`. Symmetric pattern.
+Child agent returns `Inquiry` when it needs more info. Parent asks again.
 
-**Child agent** — asks parent for more info:
+**Child agent:**
 
 ```python
+from everything_is_an_actor.agents.message import Inquiry
+
 class TranslateAgent(AgentActor[str, str]):
-    async def execute(self, input: str) -> str:
-        # Ask parent for language preference
-        await self.message.sender.tell(Inquiry("Chinese or English?"))
-        msg = await self.context.receive()
-        lang = msg.body
+    _pending: str | None = None
 
-        # Ask another question
-        await self.message.sender.tell(Inquiry("Formal or casual?"))
-        msg = await self.context.receive()
-        style = msg.body
-
-        result = f"{style} {lang}: {input}"
-        await self.message.sender.tell(result)
-        return result
+    async def execute(self, input: str) -> str | Inquiry:
+        if self._pending is None:
+            self._pending = input
+            return Inquiry("Chinese or English?")
+        else:
+            result = f"{input}: {self._pending}"
+            self._pending = None
+            return result
 ```
 
-**Parent agent** — delegates and handles inquiries:
+**Parent agent:**
 
 ```python
 class OrchestratorAgent(AgentActor[str, str]):
     async def execute(self, input: str) -> str:
         ref = await self.context.spawn(TranslateAgent, "translator")
-        await self.context.tell(ref, Task(input=input))
+        result = await self.context.ask(ref, Task(input=input))
 
-        while True:
-            msg = await self.context.receive()
-            match msg.body:
-                case Inquiry(question=q):
-                    await msg.sender.tell("Chinese")
-                case str() as result:
-                    return result
+        while result.status == TaskStatus.INPUT_REQUIRED:
+            answer = self.decide(result.output.question)
+            result = await self.context.ask(ref, Task(input=answer))
+
+        return result.output
 ```
 
-### Message
+Each round is a normal `ask` → `TaskResult`. The child maintains conversation state via `self`. No new communication mechanism.
 
-Every message in `execute()` is accessible via `self.message`:
+### Multiple rounds
 
-```python
-async def execute(self, input: str) -> str:
-    sender = self.message.sender  # who sent this task
-    body = self.message.body      # the payload
-    ...
-```
-
-`receive()` returns a `Message` with the same structure:
+Return `Inquiry` as many times as needed:
 
 ```python
-msg = await self.context.receive()
-msg.body    # payload
-msg.sender  # who sent it (Sender with .tell())
+class DetailedTranslateAgent(AgentActor[str, str]):
+    _text: str | None = None
+    _lang: str | None = None
+
+    async def execute(self, input: str) -> str | Inquiry:
+        if self._text is None:
+            self._text = input
+            return Inquiry("Chinese or English?")
+        elif self._lang is None:
+            self._lang = input
+            return Inquiry("Formal or casual?")
+        else:
+            result = f"{input} {self._lang}: {self._text}"
+            self._text = self._lang = None
+            return result
 ```
 
 ## Design Rationale
 
-### Why `tell` + `receive`, not `ask` + callback?
+### Why not callback / side-channel / receive?
 
-`ask` blocks the caller's mailbox — the actor can't process new messages until `ask` returns. For multi-turn, both sides need to send and receive freely. `tell` is non-blocking; `receive` pulls the next message from the mailbox.
+`execute()` already supports returning values. Returning `Inquiry` instead of a final result is the simplest possible signal. The parent uses `ask` — which already exists — in a loop. No new primitives needed.
 
 ### Why not a separate A2A package?
 
-`AgentSystem` already manages actor lifecycle, messaging, and discovery (via `VirtualActorRegistry`). A2A concepts (Card, Message, receive) are agent-layer concerns, not a new abstraction layer.
+AgentCard, Inquiry, and INPUT_REQUIRED are agent-layer concepts. They extend existing types (`AgentActor`, `TaskStatus`) rather than introducing new abstractions.
 
-### Why `__card__` as class attribute?
+### A2A mapping
 
-Agent capabilities are static metadata — they don't change per instance. A class attribute is the simplest correct representation. No decorator magic, no method override.
+| A2A concept | Framework equivalent |
+|-------------|---------------------|
+| Agent Card | `AgentActor.__card__` |
+| Task | `Task[I]` |
+| `input-required` | `TaskStatus.INPUT_REQUIRED` |
+| Artifact | `TaskResult[O].output` |
+| Streaming | `ask_stream()` |
+| Discovery | `AgentSystem.discover()` |

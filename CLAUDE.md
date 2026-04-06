@@ -117,19 +117,14 @@ Design constraints:
 A2A support lives in `agents/` — no separate package. Three additions:
 
 - `AgentCard`: frozen dataclass on `AgentActor.__card__` — static capability metadata (skills, description). Agents without `__card__` work as before, just not discoverable
-- `Message[T]`: user-facing envelope wrapping `body` + `Sender`. Framework sets `self.message` before `execute()`. `Sender` has `tell()` only — no ask, no callback
-- `context.receive()`: Erlang-style pull from mailbox within `execute()`. Returns `Message`. Stop sentinels must be re-enqueued and raise `ActorStoppedError`
-
-Interaction patterns:
-- **Single-shot**: `ask` — unchanged, promise-based
-- **Multi-turn**: both sides use `tell` + `receive`, symmetric. Parent `tell`s task, child `tell`s inquiry back, parent `receive`s and `tell`s answer, child `receive`s answer and `tell`s result
+- `Inquiry` + `TaskStatus.INPUT_REQUIRED`: `execute()` returns `Inquiry` to signal "need more input". Framework wraps it with `INPUT_REQUIRED` status. Parent asks again in a loop — no new communication primitive
 - `discover(skill)` on `AgentSystem`: queries `_root_cells` for actors whose `__card__` declares the skill
 
-Sender propagation: `context.tell()` and `context.ask()` populate `_Envelope.sender` with `self.context.self_ref`. System-level calls set `sender=None`.
+Multi-turn is just `ask` in a loop. Child is a stateful actor that tracks conversation state via `self`. Each round is a normal `execute()` call.
 
 ## Minimal public surface
 
-- `ActorContext` exposes: `self_ref`, `parent`, `children`, `spawn`, `ask`, `sequence`, `traverse`, `race`, `zip`, `stream`, `dispatch`, `dispatch_parallel`, `dispatch_stream`, `run_in_executor`, `receive`
+- `ActorContext` exposes: `self_ref`, `parent`, `children`, `spawn`, `ask`, `sequence`, `traverse`, `race`, `zip`, `stream`, `dispatch`, `dispatch_parallel`, `dispatch_stream`, `run_in_executor`
 - Internal state (`_active_sink`, `_current_task_id`, `_stream`) is private to its module
 - Do not add public attributes or methods to satisfy a single call site
 
