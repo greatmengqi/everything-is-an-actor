@@ -67,70 +67,93 @@ class TestAgentCard:
 # ── discover() ───────────────────────────────────────────
 
 
-class TestDiscover:
-    async def test_discover_by_skill(self):
+class TestDiscoverAll:
+    async def test_filter_by_skill(self):
         system = AgentSystem(ActorSystem())
         await system.spawn(TranslateAgent, "t1")
         await system.spawn(SearchAgent, "s1")
         await system.spawn(PlainAgent, "p1")
 
-        results = system.discover(lambda agents: [(r, c) for r, c in agents if "translation" in c.skills])
+        results = system.discover_all(lambda agents: [(r, c) for r, c in agents if "translation" in c.skills])
         assert len(results) == 1
         assert results[0][0].name == "t1"
 
         await system.shutdown()
 
-    async def test_discover_by_description(self):
+    async def test_filter_by_description(self):
         system = AgentSystem(ActorSystem())
         await system.spawn(TranslateAgent, "t1")
         await system.spawn(SearchAgent, "s1")
 
-        results = system.discover(lambda agents: [(r, c) for r, c in agents if "web" in c.description.lower()])
+        results = system.discover_all(lambda agents: [(r, c) for r, c in agents if "web" in c.description.lower()])
         assert len(results) == 1
         assert results[0][0].name == "s1"
 
         await system.shutdown()
 
-    async def test_discover_multiple_matches(self):
+    async def test_multiple_matches(self):
         system = AgentSystem(ActorSystem())
         await system.spawn(TranslateAgent, "t1")
         await system.spawn(SearchAgent, "s1")
 
-        results = system.discover(lambda agents: [(r, c) for r, c in agents if len(c.skills) >= 2])
+        results = system.discover_all(lambda agents: [(r, c) for r, c in agents if len(c.skills) >= 2])
         assert len(results) == 2
 
         await system.shutdown()
 
-    async def test_discover_no_match(self):
+    async def test_no_match(self):
         system = AgentSystem(ActorSystem())
         await system.spawn(TranslateAgent, "t1")
 
-        results = system.discover(lambda agents: [(r, c) for r, c in agents if "nonexistent" in c.skills])
+        results = system.discover_all(lambda agents: [(r, c) for r, c in agents if "nonexistent" in c.skills])
         assert results == []
 
         await system.shutdown()
 
-    async def test_discover_select_best(self):
-        """Match function picks ONE from many — selection, not filter."""
+    async def test_combined_predicate(self):
         system = AgentSystem(ActorSystem())
         await system.spawn(TranslateAgent, "t1")
         await system.spawn(SearchAgent, "s1")
 
-        results = system.discover(lambda agents: [max(agents, key=lambda rc: len(rc[1].skills))])
-        assert len(results) == 1
-
-        await system.shutdown()
-
-    async def test_discover_combined_predicate(self):
-        system = AgentSystem(ActorSystem())
-        await system.spawn(TranslateAgent, "t1")
-        await system.spawn(SearchAgent, "s1")
-
-        results = system.discover(
+        results = system.discover_all(
             lambda agents: [(r, c) for r, c in agents if "translation" in c.skills and "summarization" in c.skills]
         )
         assert len(results) == 1
         assert results[0][0].name == "t1"
+
+        await system.shutdown()
+
+
+class TestDiscoverOne:
+    async def test_select_by_skill(self):
+        system = AgentSystem(ActorSystem())
+        await system.spawn(TranslateAgent, "t1")
+        await system.spawn(SearchAgent, "s1")
+
+        result = system.discover_one(lambda agents: next(((r, c) for r, c in agents if "search" in c.skills), None))
+        assert result is not None
+        assert result[0].name == "s1"
+
+        await system.shutdown()
+
+    async def test_select_best_by_score(self):
+        system = AgentSystem(ActorSystem())
+        await system.spawn(TranslateAgent, "t1")
+        await system.spawn(SearchAgent, "s1")
+
+        result = system.discover_one(lambda agents: max(agents, key=lambda rc: len(rc[1].skills)) if agents else None)
+        assert result is not None
+
+        await system.shutdown()
+
+    async def test_no_match_returns_none(self):
+        system = AgentSystem(ActorSystem())
+        await system.spawn(TranslateAgent, "t1")
+
+        result = system.discover_one(
+            lambda agents: next(((r, c) for r, c in agents if "nonexistent" in c.skills), None)
+        )
+        assert result is None
 
         await system.shutdown()
 
