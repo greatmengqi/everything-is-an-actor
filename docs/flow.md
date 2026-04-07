@@ -326,3 +326,11 @@ from everything_is_an_actor.flow import (
     to_mermaid,
 )
 ```
+
+---
+
+## Further Reading
+
+- [Flow DSL vs Graph](superpowers/specs/2026-04-07-flow-vs-graph-analysis.md) — why Flow is the semantic source of truth, why graph is a derived view, and how to state the originality claim precisely.
+- [Flow DSL Spec](superpowers/specs/2026-04-07-flow-yaml-dsl-design.md) — YAML / JSON / Python equivalence, type validation rules, and protocol-oriented representation details.
+- [Flow API Design Spec](superpowers/specs/2026-04-05-flow-api-design.md) — the original design rationale for the ADT, combinators, and actor-native interpreter.

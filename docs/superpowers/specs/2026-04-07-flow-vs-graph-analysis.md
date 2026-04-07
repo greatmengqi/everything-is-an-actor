@@ -1,41 +1,32 @@
-# Flow DSL vs Graph — 表达能力与语义边界分析
+# Flow DSL vs Graph
 
-## 问题
+Semantics, representation, and originality boundaries for the project's Flow model.
 
-在 agent 编排里，常见有两种主表示：
+## Thesis
 
-- **图模型**：节点 + 边，强调拓扑关系、依赖关系、可视化编辑。
-- **Flow 模型**：顺序、并行、分支、恢复、循环等组合子构成的声明式程序，强调执行语义。
+For agent orchestration, `Flow` should be the semantic source of truth, `YAML` and `JSON` should be the portable representation, and graph should be a derived view for visualization and execution inspection.
 
-这里要回答的不是“图能不能运行”，而是更具体的问题：
+This is the key distinction:
 
-1. Flow 是否比图更适合作为 agent orchestration 的**规范表示**（canonical representation）？
-2. Flow 是否能被 `JSON` / `YAML` **精确表达**？
-3. 图在这个体系里应该是**源语言**，还是 **投影视图**？
+- **Graph-first systems** are excellent at showing topology.
+- **Flow-first systems** are better at defining composition semantics.
 
-## 结论
+Agent orchestration usually fails on semantic boundaries, not on drawing nodes and edges.
 
-结论分三层：
+## Questions this document answers
 
-### 0. 立场版（一句话）
+1. Why is `Flow` a better canonical representation than graph for agent orchestration?
+2. Why can `Flow` be expressed precisely in `YAML` and `JSON`?
+3. What exactly is original about this repository's Flow model, and what is not?
+4. What is the smallest useful semantic core for a Flow YAML DSL?
 
-如果只能押一个方向，我会押：
+## Executive summary
 
-> **用 Flow 做 agent 编排的语义主表示，用 YAML/JSON 做规范承载，用 Graph 做投影视图。**
+### 1. `YAML` and `JSON` can represent Flow precisely
 
-换句话说：
+They can, provided Flow is defined as a closed ADT with explicit variants and explicit composition rules.
 
-- 让 `Flow` 定义“这件事到底是什么意思”
-- 让 `YAML` / `JSON` 定义“这件事怎么被保存和传输”
-- 让 `Graph` 定义“这件事怎么被展示、编辑和观测”
-
-这比“直接把图当唯一真相”更可验证，也比“只有 DSL 没有图”更容易工程落地。
-
-### 1. `JSON` / `YAML` 可以精确表达 Flow
-
-前提是 Flow 不是“松散配置”，而是**有固定 variant 和组合语义的 ADT**。
-
-一旦 Flow 被定义为：
+Once the model is defined in terms of variants such as:
 
 - `Agent`
 - `FlatMap`
@@ -45,147 +36,117 @@
 - `Loop`
 - `Notify` / `Tap` / `Guard`
 
-那么 `JSON` / `YAML` 只是序列化载体，完全可以无损表达这棵语法树。
+then `YAML` and `JSON` are no longer vague configuration formats. They are serialization formats for the same syntax tree.
 
-### 2. Flow 比图更适合作为“语义主表示”
+### 2. Flow is a better semantic source of truth than graph
 
-原因不是它“更高级”，而是它更容易把以下信息变成**显式语义**：
+Not because it is more abstract, but because it makes the important parts explicit:
 
-- 输入输出类型
-- 组合方式
-- 数据传递规则
-- 失败传播规则
-- 恢复与补偿规则
-- 循环终止条件
-- 副作用与主路径的边界
+- input and output types
+- composition rules
+- data propagation rules
+- failure propagation rules
+- recovery semantics
+- loop termination semantics
+- side-effect boundaries
 
-这些信息在图里也可以存在，但往往会退化为：
+Graph can carry some of this information, but usually only indirectly, through node metadata, edge annotations, and engine-specific conventions. That works for visualization, but it is a weak place to anchor semantics.
 
-- 节点属性里的隐式约定
-- 边上的额外 metadata
-- 引擎内部 hardcode 的特殊分支
+### 3. Graph is still essential
 
-结果就是：图表达了“连线”，但没有直接表达“组合律”。
+This is not an anti-graph argument.
 
-### 3. 图更适合作为执行视图和可视化视图
+Graph remains the best surface for:
 
-图并没有过时。图非常适合：
+- editors
+- runtime inspection
+- Mermaid diagrams
+- trace playback
+- execution-plan visualization
 
-- 编辑器
-- 监控面板
-- Mermaid / DAG 可视化
-- 执行计划展开
-- Trace 回放
-
-因此更合理的分层是：
+The recommendation is not Flow *instead of* graph. It is Flow *under* graph.
 
 ```text
-Flow DSL / ADT      = 语义层（source of truth）
-JSON / YAML         = 持久化与传输层
-Graph / Mermaid DAG = 投影视图 / 执行视图
-Interpreter         = 运行时语义承载
+Flow DSL / ADT      = semantic layer (source of truth)
+YAML / JSON         = storage and transport layer
+Graph / Mermaid DAG = derived projection layer
+Interpreter         = execution semantics
 ```
 
-## 原创性边界
+## Originality boundary
 
-这里需要把“原创”说准确，否则很容易发生概念层面的误解。
+This section matters because originality claims are easy to overstate.
 
-### 不是在宣称“发明了 flow 这个概念”
+### What this repository is **not** claiming
 
-广义的 `flow`、`workflow`、`dataflow`、`DAG orchestration`、`reactive pipeline` 都早已有长期历史。
+It is **not** claiming to have invented any of the following general ideas:
 
-因此不应声称：
+- flow
+- workflow
+- dataflow
+- DAG orchestration
+- reactive pipelines
 
-- 首次发明了 flow
-- 首次发明了工作流编排
-- 首次发明了图之外的流程表示
+Those ideas all have substantial prior history.
 
-这些说法都会把“通用概念”与“本仓库中的特定模型”混为一谈。
+### What this repository **is** claiming
 
-### 原创的对象是什么
+The originality claim is about a *specific* Flow model for agent orchestration.
 
-更准确的说法是：**这里原创的是一套特定定义下的 agent-oriented Flow 模型**。
+The model combines these properties into one coherent semantic system:
 
-它至少包含以下组合特征：
+- `Flow[I, O]` as a typed ADT, not just a runtime graph
+- equivalent Python, `YAML`, and `JSON` representations over one semantic core
+- graph as a projection, not as the semantic authority
+- an actor-native interpreter that maps combinators onto the actor runtime
+- first-class primitives for recovery, quorum, loop, guard, and side-channel behavior
 
-- `Flow[I, O]` 作为类型化 ADT，而不是仅仅一组运行时节点
-- `YAML / JSON / Python` 三种等价表示，围绕同一语义核心无损互转
-- graph 作为派生视图，而不是语义本体
-- actor-native interpreter，把组合子解释为 actor runtime 上的执行语义
-- 面向 agent orchestration 的恢复、守卫、quorum、loop 等一等原语
+That is the right level of originality claim.
 
-换句话说，原创性不在 “flow” 这个单词，而在于：
+### Recommended wording
 
-> **首次系统化提出这一套面向 agent 编排的、类型化的、可序列化的、actor-native 的 Flow 语义体系。**
+Use language like this:
 
-### 推荐表述口径
+> This repository introduces an original Flow model for agent orchestration: a typed `Flow[I, O]` semantic core with equivalent Python, YAML, and JSON representations, where graph is a derived view rather than the source of truth.
 
-为了既保留原创性主张，又避免过度宣称，建议分三种口径使用。
+Avoid language like this:
 
-#### 1. 学术 / 设计口径
+- “we invented flow”
+- “we invented workflow orchestration”
+- “we are the first to represent orchestration without graphs”
 
-> 我们提出了一种面向 agent orchestration 的原创 Flow 模型：以 `Flow[I, O]` 为语义核心，以 `YAML / JSON / Python` 为等价表示，以 graph 为派生投影视图。
+## Why Flow can be represented precisely in YAML and JSON
 
-这个口径强调“提出了一种特定模型”，而不是宣称发明了整个 flow 范畴。
+“Precisely represented” means more than “serializable somehow”. It means the language has a stable, reversible, and checkable semantic mapping.
 
-#### 2. 对外介绍口径
+### 1. The structure is closed and enumerable
 
-> This repository introduces an original Flow model for agent orchestration, rather than claiming to invent the general notion of “flow”.
+The combinator set is finite. A parser can map each YAML or JSON fragment onto a known ADT variant instead of guessing behavior from free-form strings.
 
-这个口径适合 README、官网摘要、对外分享。
+For example:
 
-#### 3. 内部强表述口径
+- `steps` means sequential composition
+- `all` means shared-input broadcast parallelism
+- `each` means split-input distributed parallelism
+- `race` means first-complete wins
+- `at_least` means quorum semantics
+- `branch` means typed or tagged dispatch
+- `recover_with` means recovery through another flow
+- `fallback_to` means retry with the original input on an alternate path
+- `loop` means explicit iterative control
 
-> 我们不是首创 flow 这个词，但我们首创了这套特定定义下的 Flow 编排模型。
+### 2. Tree-shaped data matches composition naturally
 
-这个口径适合团队内部统一叙述，能同时保留自信和边界感。
+Flow is fundamentally a tree of compositions.
 
-### 判断原创性的实质标准
+`YAML` and `JSON` are already good at representing:
 
-如果未来需要更正式地主张原创性，可以围绕下面几个实质点，而不是围绕词汇本身：
+- arrays for ordered steps
+- objects for named parameters
+- nested objects for subflows
+- dictionaries for branch mappings
 
-- 是否定义了新的语义核心，而不是仅仅重命名现有 DAG
-- 是否给出了成体系的组合子代数与数据传递规则
-- 是否把 `YAML / JSON / Python / graph / runtime` 统一到同一个语义中心
-- 是否明确把 graph 降级为投影，而把 Flow ADT 提升为 source of truth
-- 是否形成了可以跨语言实现的协议层，而不是单一语言内部 API
-
-如果这些点成立，那么“原创 Flow 模型”就是对模型层创新的描述，而不是营销性夸张。
-
-## 为什么 Flow 能被 `JSON` / `YAML` 精确表达
-
-“能精确表达”不是指能写出某种配置文件，而是指下面四件事都成立。
-
-### 1. 结构可枚举
-
-Flow 的组合子集合是有限的、封闭的。
-
-例如：
-
-- 顺序 = `steps`
-- 广播并行 = `all`
-- 分发并行 = `each`
-- 竞争 = `race`
-- 法定人数 = `at_least`
-- 类型路由 = `branch`
-- 异常恢复 = `recover_with`
-- 兜底 = `fallback_to`
-- 循环 = `loop`
-
-这意味着 YAML/JSON 解析后可以落到确定的 ADT variant，而不是运行时靠字符串猜测语义。
-
-### 2. 嵌套结构天然匹配组合语义
-
-Flow 不是平面表，而是树。
-
-`YAML` / `JSON` 对树形结构的表达天然充分：
-
-- 顺序组合用数组
-- 命名参数用对象
-- 子 flow 用嵌套对象
-- 多分支映射用字典
-
-例如：
+Example:
 
 ```yaml
 steps:
@@ -198,253 +159,178 @@ steps:
       fallback: {agent: BackupWriter}
 ```
 
-这段 YAML 表达的不是“画了三段线”，而是**先顺序、再广播并行、再失败兜底**。
+This does not merely store topology. It stores ordered semantics: first sequence, then broadcast parallelism, then failure fallback.
 
-### 3. 语义边界可以静态校验
+### 3. The representation is statically checkable
 
-如果 Flow 是 ADT，就可以在上传 YAML 后做纯静态检查：
+Once Flow is an ADT, uploaded YAML can be validated *before* execution.
 
-- `flat_map(A, B)`：`A.O == B.I`
-- `race(A, B)`：输入类型一致，输出类型一致
-- `branch(source, mapping)`：`mapping` 覆盖 source 输出的可分派类型
-- `guard(A, check)`：`check` 的输出必须是 `bool`
+Examples:
 
-图模型当然也能加校验，但图通常先有节点和边，再事后补规则；Flow 则是规则先于可视化存在。
+- `flat_map(A, B)`: `A.O == B.I`
+- `race(A, B)`: same input type, same output type
+- `branch(source, mapping)`: branch keys must match the dispatch space of `source.O`
+- `guard(A, check)`: `check` must return `bool`
 
-### 4. 可逆映射更清晰
+Graph systems can add validation too, but they often do so after the graph model already exists. Flow makes the validation rules native to the model.
 
-理想情况应该是：
+### 4. The mappings can be reversible
+
+The ideal relationship is:
 
 ```text
-YAML ↔ Flow ADT ↔ JSON
+YAML <-> Flow ADT <-> JSON
 ```
 
-这要求三者都承载同一套语义，而不是：
+That only works if each layer carries the same semantics, rather than splitting meaning across:
 
-- YAML 丢一部分信息
-- 图补一部分信息
-- 运行时再偷偷推断一部分信息
+- YAML structure
+- graph annotations
+- runtime-only inference
 
-一旦信息分散在三处，格式虽然“能表示”，但就不是精确表达，而是拼凑表达。
+If meaning is scattered across those layers, the representation is no longer precise. It is patched together.
 
-## 图模型的强项与边界
+## Why graph is a weak semantic source of truth
 
-### 强项
+Graph is strong at expressing adjacency and dependencies.
 
-图模型最强的点不是语义，而是直观性。
+It is weaker at expressing the semantics that matter most for agents:
 
-- 人一眼能看懂拓扑
-- 方便做拖拽式编排
-- 适合展示依赖关系
-- 适合执行状态染色
-- 适合 trace 和 metrics 叠加
+- Is a value broadcast to every branch, or split across branches?
+- Does failure trigger retry, fallback, recovery, or cancellation?
+- Is a side path fire-and-forget, synchronous tap, or post-condition guard?
+- Does a loop feed back the intermediate value, or return a final terminal value?
+- Is a branch keyed by type, tag, predicate, or string lookup?
 
-如果目标是：
+Graph can represent these distinctions, but usually with extra node types, extra edge types, or engine-specific metadata. That makes graph an excellent execution view and a poor semantic center.
 
-- 低门槛工作流平台
-- 面向业务方的可视化编排
-- DAG 任务调度
+## Why agent orchestration needs Flow semantics more than classic DAGs do
 
-图通常是第一选择。
+### 1. Agents exchange typed messages, not just task completion signals
 
-### 边界
+Classic DAGs often care about task dependencies. Agent systems care much more about the shape and meaning of the values flowing between stages.
 
-图模型的问题在于：它对“线”很强，对“律”很弱。
+Questions like these matter constantly:
 
-例如在图里，下面几个问题经常没有统一的一等表示：
+- What exactly does the upstream agent return?
+- Can the next agent consume it safely?
+- Should this result be routed to a specialized agent?
+- Should the same input be sent to several agents for ensemble or quorum behavior?
 
-- 这是把同一个输入广播给多个分支，还是把 tuple 拆给不同分支？
-- 失败后是重试当前节点，还是回退到备用 flow？
-- side effect 是 fire-and-forget，还是同步 tap？
-- 循环的反馈值走哪条边，终止值走哪条边？
-- branch 是按 predicate、按 tag、按 type，还是按字符串路由？
+That makes agent orchestration look more like composable program construction than like generic job scheduling.
 
-图当然可以表示这些，但通常需要：
+### 2. Failure is part of the primary semantics
 
-- 特殊节点
-- 特殊边类型
-- 特殊属性字段
-- 特殊执行器约定
+In agent systems, these are normal paths, not edge cases:
 
-这会让“简单可视化”逐步演化成“隐式语义容器”。
+- model timeout
+- tool failure
+- structured output violation
+- guard rejection
+- partial quorum failure
 
-## 为什么 agent 编排更需要 Flow 语义层
+That is why primitives such as `recover_with`, `fallback_to`, `guard`, and `at_least` need to be first-class.
 
-agent 编排相比传统 DAG，有几个额外约束：
+### 3. Substitutability matters
 
-### 1. 输入输出不是简单文件依赖，而是类型化消息流
+Agent systems constantly need local replacement and local recomposition:
 
-传统 DAG 更关注任务是否完成。agent 编排更关注：
+- swap one agent implementation for another
+- package a subsequence into a reusable subflow
+- define a stable YAML skeleton and extend it in Python where callables are needed
 
-- 上游返回的到底是什么结构
-- 下游是否能消费它
-- 是否需要路由到不同 agent
-- 是否要把同一输入发给多个 agent 做 quorum / ensemble
+This is more natural when the source representation is a program-like ADT instead of a graph editing surface.
 
-因此 agent orchestration 更像**可组合程序**，不只是任务依赖图。
+## Recommended layering
 
-### 2. 失败不是边缘情况，而是主要语义
+The clean architecture is four-layered.
 
-LLM 超时、工具调用失败、结构化输出失败、下游拒绝、质量门禁失败，这些都不是异常边角，而是主路径的一部分。
+### 1. Flow ADT
 
-所以需要把这些语义直接放进模型里：
+Defines:
 
-- `recover_with`
-- `fallback_to`
-- `guard`
-- `at_least`
+- the combinator set
+- type signatures
+- data propagation
+- failure propagation
+- loop termination
 
-这类原语用 Flow 表达更自然。
+This is the semantic specification.
 
-### 3. 局部替换与组合性非常重要
+### 2. YAML / JSON
 
-agent 系统经常需要：
+Handles:
 
-- 替换某个 agent 为另一个实现
-- 把一小段 flow 封装成子 flow
-- 把 YAML 定义的骨架和 Python 定义的局部逻辑拼接
+- human authoring
+- versioned storage
+- cross-process transport
+- cross-language protocols
 
-如果主表示是 Flow ADT，这些都是程序级组合；如果主表示是图，通常会退化成编辑节点和边的结构操作。
+This layer should not invent semantics. It should carry Flow.
 
-## 推荐的分层模型
+### 3. Graph
 
-推荐把系统分成四层，而不是让图或 YAML 独自承担全部职责。
+Handles:
 
-### 1. Flow ADT：唯一语义源
+- Mermaid export
+- visual editors
+- runtime views
+- trace expansion
 
-这一层定义：
+Graph should be derived from Flow, not the other way around.
 
-- 有哪些组合子
-- 每个组合子的输入输出是什么
-- 数据如何传递
-- 错误如何传播
-- 循环如何终止
+### 4. Interpreter
 
-这是规范层。
-
-### 2. YAML / JSON：声明式外部表示
-
-这一层承担：
-
-- 人工编写
-- 版本化存储
-- 跨进程传输
-- 跨语言协议
-
-这一层不应该发明新语义，只负责承载 Flow ADT。
-
-### 3. Graph：投影视图
-
-这一层承担：
-
-- Mermaid 导出
-- Studio 编辑器
-- 运行态展示
-- Trace 展开
-
-图应该从 Flow 派生，而不是反过来成为唯一真相。
-
-### 4. Interpreter：执行语义
-
-这一层负责把 Flow ADT 解释为：
+Handles execution:
 
 - actor topology
 - ask / race / zip / supervision
-- A2A / gRPC / MCP / 本地 agent 调用
+- local agent invocation
+- A2A / gRPC / MCP dispatch
 
-这使得同一份 DSL 可以落到不同 runtime，而不改变上层表示。
+This lets one Flow program target multiple runtimes without changing its top-level semantics.
 
-## 对仓库当前方向的判断
+## Minimal Flow YAML semantic core
 
-当前设计方向是正确的：
+If the Flow DSL is meant to be real, its semantic core should stay small, but it must still cover the main orchestration needs.
 
-- `Flow[I, O]` 作为 ADT
-- YAML（人写）/ JSON（传输）/ Python（组合）三者等价
-- Mermaid graph 作为可视化产物
-- 类型校验在执行前完成
+### Minimal primitive set
 
-这条路线的关键收益不是“比图更炫”，而是：
+| Category | Primitive | Purpose |
+|----------|-----------|---------|
+| leaf | `agent` | invoke one agent |
+| sequential | `steps` | pass one stage's output into the next |
+| parallel | `all` | broadcast the same input to multiple flows |
+| parallel | `each` | distribute split inputs to multiple flows |
+| branching | `branch` | route by type or tag |
+| recovery | `fallback_to` / `recover_with` | define failure recovery paths |
+| constraint | `guard` | enforce quality or contract checks |
+| iteration | `loop` | continue until `Done` |
 
-- **语义集中**：组合语义只定义一次
-- **静态检查**：在运行前发现类型链问题
-- **跨语言**：规范先于实现，runtime 可以替换
-- **可视化降级**：图是衍生物，不绑架核心语义
+Derived capabilities can sit on top of this set:
 
-## 设计判断标准
+- `race`
+- `at_least`
+- `notify`
+- `tap`
 
-如果一个 Flow DSL 想真正优于图模型，至少要满足以下标准：
+### Minimal data rules
 
-### 1. 组合子集合小而完整
+The primitives are not enough by themselves. Data propagation rules must also be explicit.
 
-不能把一切都塞成任意脚本回调，否则 YAML 只是配置外壳，真正语义仍藏在代码里。
+| Primitive | Input rule | Output rule |
+|-----------|------------|-------------|
+| `agent` | consumes one input `I` | produces one output `O` |
+| `steps` | step `n` feeds step `n+1` | output of final step is the whole output |
+| `all` | broadcasts the same input to every branch | aggregates into tuple or list |
+| `each` | splits a compound input across branches | aggregates into tuple or list |
+| `branch` | consumes upstream output and selects one branch | returns selected branch output |
+| `fallback_to` | retries an alternate flow with the original input | returns the successful output |
+| `recover_with` | passes an exception value to a recovery flow | returns recovery output |
+| `guard` | checks upstream output while preserving the value by default | passes through on success, raises on failure |
+| `loop` | feeds `Continue` back into the next iteration, exits with `Done` | returns the `Done` payload |
 
-### 2. 数据传递规则显式
-
-必须清楚区分：
-
-- 顺序传递
-- tuple 拆分
-- 同输入广播
-- quorum 聚合
-- side-channel 穿透
-
-### 3. 错误语义是一等公民
-
-不能只靠全局 try/catch。恢复、兜底、守卫、取消策略都应该可组合。
-
-### 4. 图是派生结果，不是语义补丁区
-
-如果图上必须额外标很多运行时特殊属性，才能补全 YAML 没有的信息，说明语义分层失败了。
-
-## 最小 Flow YAML 语义核心
-
-如果要让 Flow DSL 真正成立，YAML 语义核心应该尽量小，但必须闭合到足以覆盖 agent 编排的主场景。
-
-### 最小原语集合
-
-建议至少保留下面八类：
-
-| 类别 | 原语 | 作用 |
-|------|------|------|
-| 叶子 | `agent` | 调用一个 agent |
-| 顺序 | `steps` | 上一步输出进入下一步 |
-| 并行 | `all` | 同一输入广播给多个 flow |
-| 并行 | `each` | tuple / 多输入分发给多个 flow |
-| 分支 | `branch` | 按类型或标签路由 |
-| 恢复 | `fallback_to` / `recover_with` | 失败后的备用路径 |
-| 约束 | `guard` | 质量门禁 / 契约校验 |
-| 迭代 | `loop` | 直到 `Done` 为止 |
-
-在这组最小原语之上，可以把一些能力看作派生能力：
-
-- `race`：竞争并行
-- `at_least`：quorum 并行
-- `notify`：异步旁路通知
-- `tap`：同步 side effect
-
-也就是说，DSL 不必一开始就追求“全能”，但必须先把最关键的语义边界封住。
-
-### 最小数据规则
-
-仅有原语还不够，还必须把数据传递规则写死。
-
-| 原语 | 输入规则 | 输出规则 |
-|------|----------|----------|
-| `agent` | 消费一个输入 `I` | 产出一个输出 `O` |
-| `steps` | 第 `n` 步的输出喂给第 `n+1` 步 | 最后一项输出为整体输出 |
-| `all` | 同一个输入广播给所有分支 | 聚合成 tuple / list |
-| `each` | 从复合输入中拆分到各分支 | 聚合成 tuple / list |
-| `branch` | 消费上游输出，按规则选一个分支 | 返回被选分支的输出 |
-| `fallback_to` | 失败时用原始输入重跑备用 flow | 返回成功方输出 |
-| `recover_with` | 失败时把异常值交给恢复 flow | 返回恢复 flow 输出 |
-| `guard` | 校验上游输出，但默认值继续穿透 | 成功则透传，失败则异常 |
-| `loop` | `Continue` 反馈到下一轮，`Done` 作为终值 | 返回 `Done` 内部值 |
-
-这张表很重要，因为它把“画线关系”提升为“值如何流动”的明确定义。
-
-### 最小 YAML 形态
-
-一个足够小、但已经有表达力的 YAML 骨架，可以长这样：
+### Minimal YAML shape
 
 ```yaml
 flow: AnswerPipeline
@@ -469,52 +355,58 @@ steps:
       fallback: {agent: SafePublisher}
 ```
 
-这个骨架已经覆盖：
+Even this small shape already covers sequential composition, branching, broadcast parallelism, guard checks, and fallback behavior.
 
-- 顺序
-- 分支
-- 广播并行
-- 守卫
-- 失败兜底
+### Minimal static validation set
 
-也就是说，不需要先做成“大而全图平台”，就已经可以支撑一套严肃的 agent orchestration 语义。
+The first validator does not need to be huge. It does need to be strict where the semantics matter.
 
-### 最小静态校验集合
+1. Adjacent `steps` nodes must type-check end-to-end.
+2. Every `all` branch must accept the same input type.
+3. `each` inputs must split cleanly across all child branches.
+4. `branch.mapping` must be non-empty and must match the dispatch space.
+5. `fallback_to` source and fallback flows must share input and output types.
+6. `recover_with` must accept an exception-shaped input.
+7. `guard.check` must return `bool`.
+8. `loop.body` must return `Continue[T] | Done[U]`.
 
-如果只做第一版校验器，建议先锁定以下规则：
+With these rules in place, the YAML is no longer “just config”. It is a statically bounded orchestration language.
 
-1. `steps` 相邻节点类型必须首尾相接
-2. `all` 的各分支输入类型必须一致
-3. `each` 的输入必须能拆分到所有子分支
-4. `branch` 的 `mapping` 必须非空，且 key 可匹配上游输出
-5. `fallback_to` 的主分支和备用分支输入输出必须一致
-6. `recover_with` 的恢复分支输入必须是异常类型
-7. `guard.check` 的输出必须是 `bool`
-8. `loop.body` 的输出必须是 `Continue[T] | Done[U]`
+## Implications for this repository
 
-只要这八类校验存在，这套 YAML DSL 就已经不是“配置文件”，而是一个有静态边界的编排语言。
+The current repository direction is coherent.
 
-## 最终判断
+The design already points toward:
 
-如果问题是：
+- `Flow[I, O]` as the ADT
+- Python, YAML, and JSON as equivalent representations
+- Mermaid graph as a visualization product
+- pre-execution type validation
 
-> Flow 模型是不是可以用 JSON 和 YAML 精确表达？
+That combination matters because it concentrates semantics in one place while still allowing portability, validation, and graph-based tooling.
 
-答案是：**可以，而且这正是它适合作为 agent orchestration canonical IR 的原因之一。**
+## Bottom line
 
-如果问题是：
+If the question is:
 
-> 它是不是因此就比图模型更适合 agent 编排？
+> Can Flow be represented precisely in JSON and YAML?
 
-更准确的答案是：
+the answer is yes, and that is one reason it works well as a canonical orchestration IR.
 
-- **作为语义主表示：是。**
-- **作为可视化、编辑、执行展开视图：不是，图仍然不可替代。**
+If the question is:
 
-所以最稳健的架构不是 “Flow 或 Graph 二选一”，而是：
+> Does that make Flow a better fit than graph for agent orchestration?
+
+the precise answer is:
+
+- **yes** as the semantic source of truth
+- **no** as a replacement for visualization and editing surfaces
+
+The right architecture is therefore not “Flow or graph”. It is:
 
 ```text
-Flow 定义语义，YAML/JSON 承载规范，Graph 负责投影，Interpreter 负责执行。
+Flow defines semantics.
+YAML and JSON carry the protocol.
+Graph provides the projection.
+The interpreter executes the meaning.
 ```
-
-这比“让图兼任全部角色”更适合 agent 编排，也比“只有 DSL 没有图”更利于工程落地。
