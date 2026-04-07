@@ -420,6 +420,27 @@ Apple M-series, Python 3.12, asyncio:
 | `ask_stream` chunk throughput | 227K chunks/s |
 | `AgentSystem.run()` latency p50 | 0.2 ms (spawn+run+stream) |
 
+## Citation
+
+If you use this software or build on the algebraic Flow model, please cite the accompanying paper:
+
+> **Beyond Graphs: Algebraic Primitives for Agent Orchestration**
+> Mengqi Chen and Qianhui TODO_LAST_NAME (2026).
+> arXiv:TODO.TODO &mdash; https://arxiv.org/abs/TODO.TODO
+
+```bibtex
+@article{chen2026beyond,
+  title         = {Beyond Graphs: Algebraic Primitives for Agent Orchestration},
+  author        = {Chen, Mengqi and TODO_LAST_NAME, Qianhui},
+  year          = {2026},
+  eprint        = {TODO.TODO},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.MA},
+}
+```
+
+GitHub renders the included [`CITATION.cff`](CITATION.cff) as a *Cite this repository* widget in the sidebar.
+
 ## License
 
 MIT
