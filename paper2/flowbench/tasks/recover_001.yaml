@@ -1,0 +1,63 @@
+task_id: recover_001
+category: recover-heavy
+minimum_combinator: recover
+
+prompt: |
+  Generate a Python implementation of the function specified below that
+  passes all the unit tests provided. Return your answer as a JSON object
+  with field `code` containing the complete function source. The system
+  has a primary code generator and several alternative generators
+  available; the primary generator is fast but unreliable on this
+  particular problem family, so your strategy should not abort if the
+  first attempt does not produce passing code.
+
+inputs:
+  signature: "def merge_intervals(intervals: list[list[int]]) -> list[list[int]]"
+  docstring: |
+    Given a list of intervals where each interval is [start, end],
+    merge all overlapping intervals and return the resulting list of
+    non-overlapping intervals sorted by start.
+  test_cases:
+    - input: [[1, 3], [2, 6], [8, 10], [15, 18]]
+      expected: [[1, 6], [8, 10], [15, 18]]
+    - input: [[1, 4], [4, 5]]
+      expected: [[1, 5]]
+    - input: []
+      expected: []
+    - input: [[1, 4], [0, 4]]
+      expected: [[0, 4]]
+
+ground_truth:
+  fields:
+    function_name: merge_intervals
+
+scorer:
+  type: rule_based
+  rules:
+    - "isinstance(output.get('code'), str)"
+    - "'def merge_intervals' in output['code']"
+    - "all_test_cases_pass(output['code'], 'merge_intervals', input['test_cases'])"
+
+constraints:
+  wall_clock_budget_s: 30.0
+  max_iterations: 4
+
+oracle:
+  serial_baseline_runtime_s: 60.0
+  notes: |
+    The primary generator (PrimaryCodeGen) is intentionally seeded to fail
+    on `merge_intervals` (it produces a syntactically valid but
+    semantically wrong implementation that passes the empty case but
+    fails the others). The backup generator (BackupCodeGen) is slower
+    (~20 s) but reliable. A template-based fallback (TemplateCodeGen)
+    takes ~5 s and is correct only for the canonical interval-merging
+    pattern. A naive serial chain Primary -> Backup -> Template takes
+    ~50-60 s in the failure case. The 30 s budget allows for at most
+    one fallback hop, so the planner must compose recover wisely.
+    Without recover, the trial fails because Primary always errors.
+
+available_agents:
+  - PrimaryCodeGen
+  - BackupCodeGen
+  - TemplateCodeGen
+  - CodeTester

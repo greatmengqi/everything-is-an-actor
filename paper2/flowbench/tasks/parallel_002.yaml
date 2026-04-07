@@ -1,0 +1,49 @@
+task_id: parallel_002
+category: parallel-heavy
+minimum_combinator: zip_all
+
+prompt: |
+  Given the title of an academic paper, return three independent pieces of
+  metadata about it as a single JSON object: `year` (publication year as
+  integer), `first_author` (string), and `citation_count` (integer estimate
+  from a major scholarly index). The three pieces are independent of each
+  other and can be obtained from separate lookup services. Your wall-clock
+  budget is tight relative to the latency of any individual service.
+
+inputs:
+  paper_title: "Attention Is All You Need"
+
+ground_truth:
+  fields:
+    year: 2017
+    first_author_substring: "vaswani"
+    citation_count_min: 100000
+
+scorer:
+  type: rule_based
+  rules:
+    - "output.get('year') == 2017"
+    - "isinstance(output.get('first_author'), str)"
+    - "'vaswani' in output['first_author'].lower()"
+    - "isinstance(output.get('citation_count'), int)"
+    - "output['citation_count'] >= 100000"
+
+constraints:
+  wall_clock_budget_s: 12.0
+  max_iterations: 2
+
+oracle:
+  serial_baseline_runtime_s: 30.0
+  notes: |
+    Three independent lookup agents are available: YearLookupAgent (~10 s),
+    AuthorLookupAgent (~10 s), and CitationLookupAgent (~10 s). Serial
+    invocation takes ~30 s. The 12 s budget rules out any serial
+    composition. Because the three results are independent and must all
+    appear in the final answer, the natural shape is zip_all over the
+    three agents producing a triple, then a small projection that
+    repackages the triple as the answer JSON.
+
+available_agents:
+  - YearLookupAgent
+  - AuthorLookupAgent
+  - CitationLookupAgent

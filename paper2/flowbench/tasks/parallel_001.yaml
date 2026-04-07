@@ -1,0 +1,73 @@
+task_id: parallel_001
+category: parallel-heavy
+minimum_combinator: traverse
+
+prompt: |
+  You are given the abstracts of 10 academic papers. For each paper, produce
+  a one-paragraph summary in your own words. Then produce a combined meta-review
+  paragraph that identifies the common themes across the papers and notes the
+  most-cited methodology family. The meta-review must explicitly reference every
+  paper by its ID (P001 ... P010). Return your answer as a JSON object with
+  fields `summaries` (list of {id, summary} objects) and `meta_review` (string).
+  Wall-clock budget is tight; design your approach accordingly.
+
+inputs:
+  papers:
+    - id: P001
+      abstract: "We propose a transformer-based approach to graph node classification..."
+    - id: P002
+      abstract: "This work introduces a contrastive pretraining objective for code..."
+    - id: P003
+      abstract: "We extend diffusion models to discrete sequence generation..."
+    - id: P004
+      abstract: "A novel benchmark for compositional reasoning in language models..."
+    - id: P005
+      abstract: "We study mechanistic interpretability of attention heads in 7B-scale..."
+    - id: P006
+      abstract: "Mixture-of-experts routing under sparsity constraints..."
+    - id: P007
+      abstract: "RLHF instability with high-variance reward models..."
+    - id: P008
+      abstract: "We characterize the loss landscape of small transformer language models..."
+    - id: P009
+      abstract: "Long-context retrieval augmentation via hierarchical chunking..."
+    - id: P010
+      abstract: "Causal scrubbing as a tool for circuit-level explanation..."
+
+ground_truth:
+  fields:
+    required_summary_count: 10
+    required_paper_ids_in_meta:
+      - P001
+      - P002
+      - P003
+      - P004
+      - P005
+      - P006
+      - P007
+      - P008
+      - P009
+      - P010
+
+scorer:
+  type: rule_based
+  rules:
+    - "len(output['summaries']) == 10"
+    - "all('summary' in s and len(s['summary'].split()) >= 20 for s in output['summaries'])"
+    - "all(pid in output['meta_review'] for pid in ['P001','P002','P003','P004','P005','P006','P007','P008','P009','P010'])"
+
+constraints:
+  wall_clock_budget_s: 30.0
+  max_iterations: 5
+
+oracle:
+  serial_baseline_runtime_s: 80.0
+  notes: |
+    Each per-paper summary takes approximately 7 seconds with Claude Opus 4.6
+    on a streaming endpoint. Ten serial summaries therefore take roughly 70 s,
+    plus another 10 s for the meta-review synthesis, giving a serial total
+    of ~80 s. The 30 s budget rules out any strictly serial approach.
+
+available_agents:
+  - SummarizerAgent
+  - MetaReviewAgent

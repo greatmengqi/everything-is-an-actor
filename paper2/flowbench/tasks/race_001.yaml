@@ -1,0 +1,44 @@
+task_id: race_001
+category: race-heavy
+minimum_combinator: race
+
+prompt: |
+  Look up the official PyPI URL for the package `numpy`. Return only the URL
+  string in a JSON object with field `url`. The system has multiple lookup
+  strategies available; some are fast but occasionally stale, others are
+  slower but always correct. Your wall-clock budget is tight: you should
+  return the first valid result rather than wait for every strategy to
+  finish.
+
+inputs:
+  package_name: numpy
+  expected_url_pattern: "^https://pypi\\.org/project/numpy/?$"
+
+ground_truth:
+  fields:
+    expected_url: "https://pypi.org/project/numpy/"
+
+scorer:
+  type: rule_based
+  rules:
+    - "isinstance(output.get('url'), str)"
+    - "output['url'].rstrip('/') == 'https://pypi.org/project/numpy'"
+
+constraints:
+  wall_clock_budget_s: 8.0
+  max_iterations: 3
+
+oracle:
+  serial_baseline_runtime_s: 25.0
+  notes: |
+    Three lookup strategies are available: PyPIDirectAgent (~3 s, may return
+    stale URL on cache miss), GoogleSearchAgent (~10 s, almost always
+    correct), and GitHubMirrorAgent (~12 s, always correct but very slow).
+    Calling them serially in worst-case order takes ~25 s. The 8 s budget
+    forces a planner that wants to be both fast AND robust to launch
+    multiple agents and accept the first valid result.
+
+available_agents:
+  - PyPIDirectAgent
+  - GoogleSearchAgent
+  - GitHubMirrorAgent

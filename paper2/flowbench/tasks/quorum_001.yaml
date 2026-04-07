@@ -1,0 +1,52 @@
+task_id: quorum_001
+category: quorum-heavy
+minimum_combinator: at_least
+
+prompt: |
+  Classify the sentiment of the following review as either `positive` or
+  `negative`. Return your answer as a JSON object with field `sentiment`.
+  Five independent classifier agents are available; each one has a known
+  individual error rate of approximately 30 percent. Your final answer
+  must be reliable enough to be wrong on no more than 10 percent of
+  reviews of comparable length, so design your strategy with that
+  reliability target in mind.
+
+inputs:
+  review: |
+    The product arrived two days late and the packaging was visibly
+    damaged. However, once I unpacked it the device worked exactly as
+    advertised, and the customer service team issued a partial refund
+    for the late delivery without me having to ask twice. Overall I am
+    satisfied and would buy from this seller again.
+
+ground_truth:
+  fields:
+    sentiment: positive
+
+scorer:
+  type: rule_based
+  rules:
+    - "output.get('sentiment') == 'positive'"
+
+constraints:
+  wall_clock_budget_s: 10.0
+  max_iterations: 3
+
+oracle:
+  serial_baseline_runtime_s: 25.0
+  notes: |
+    Each classifier takes ~5 seconds; five serial classifications take
+    ~25 s. The 10 s budget rules out serial classification of all five.
+    The reliability target (10 percent error rate) cannot be met by any
+    single classifier (each has ~30 percent error), so the planner must
+    invoke multiple classifiers in parallel and combine their results
+    via majority vote --- which is exactly what at_least(3, ...) provides
+    under Validated semantics.
+
+available_agents:
+  - SentimentClassifierA
+  - SentimentClassifierB
+  - SentimentClassifierC
+  - SentimentClassifierD
+  - SentimentClassifierE
+  - QuorumAggregator
