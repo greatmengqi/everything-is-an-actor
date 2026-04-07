@@ -22,6 +22,8 @@ The actor model solves all of these. `everything-is-an-actor` brings it to Pytho
 | **Core** (`everything_is_an_actor`) | Generic actor primitives: mailbox, supervision, middleware |
 | **Agents** (`everything_is_an_actor.agents`) | AI-specific abstractions: `Task`, `AgentActor`, streaming events |
 
+The project also introduces an original `Flow` model for agent orchestration: a typed `Flow[I, O]` semantic core that can be represented equivalently in Python, `YAML`, and `JSON`, while graph remains a derived view for visualization and execution inspection.
+
 ---
 
 ## Install

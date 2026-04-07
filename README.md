@@ -4,6 +4,8 @@ Asyncio-native Actor framework for Python agent systems — supervision trees, e
 
 Inspired by Erlang/Akka. Built for AI agent orchestration.
 
+This repository also introduces an original `Flow` model for agent orchestration: a typed `Flow[I, O]` representation centered on composition semantics, with `YAML`, `JSON`, and Python as equivalent forms, and graph as a derived visualization rather than the semantic source of truth.
+
 **[Documentation](https://greatmengqi.github.io/everything-is-an-actor/)** · [Getting Started](https://greatmengqi.github.io/everything-is-an-actor/getting-started/) · [Agent Layer](https://greatmengqi.github.io/everything-is-an-actor/agents/) · [API Reference](https://greatmengqi.github.io/everything-is-an-actor/api/agent-actor/)
 
 ## Install
