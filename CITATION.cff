@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use this software or build on the ideas in the accompanying paper, please cite both."
+title: "everything-is-an-actor"
+abstract: >-
+  Asyncio-native Actor framework for Python agent systems with supervision
+  trees, event streaming, and composable Flow orchestration grounded in
+  symmetric monoidal category theory.
+type: software
+version: "0.1.8"
+license: MIT
+url: "https://github.com/greatmengqi/everything-is-an-actor"
+repository-code: "https://github.com/greatmengqi/everything-is-an-actor"
+keywords:
+  - actor-model
+  - asyncio
+  - agent-orchestration
+  - flow-api
+  - category-theory
+  - python
+authors:
+  - given-names: Mengqi
+    family-names: Chen
+  - given-names: Qianhui
+    family-names: TODO_LAST_NAME
+
+preferred-citation:
+  type: article
+  title: "Beyond Graphs: Algebraic Primitives for Agent Orchestration"
+  year: 2026
+  authors:
+    - given-names: Mengqi
+      family-names: Chen
+    - given-names: Qianhui
+      family-names: TODO_LAST_NAME
+  identifiers:
+    - type: other
+      value: "arXiv:TODO.TODO"
+      description: "arXiv preprint identifier (replace after arXiv moderation completes)"
+  url: "https://arxiv.org/abs/TODO.TODO"

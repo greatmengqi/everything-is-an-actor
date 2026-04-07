@@ -6,19 +6,32 @@ Architecture overview and key design decisions for `everything-is-an-actor`.
 
 ## Architecture
 
-The framework has two independent layers:
+The framework has five layers with a strict downward dependency direction:
 
-```
-┌─────────────────────────────────────────────┐
-│  Agent layer  (everything_is_an_actor.agents)      │
-│  Task · AgentActor · AgentSystem · streaming │
-├─────────────────────────────────────────────┤
-│  Core layer   (everything_is_an_actor)             │
-│  Actor · ActorRef · ActorSystem · Mailbox    │
-└─────────────────────────────────────────────┘
+```mermaid
+graph TB
+    int["<b>Integrations</b><br/>LangChain adapter"]
+    moa["<b>MOA</b><br/>moa_layer · moa_tree · MoASystem · LayerOutput"]
+    flow["<b>Flow ADT</b><br/>Flow · combinators · interpreter · serialize · viz"]
+    agent["<b>Agent layer</b><br/>Task · AgentActor · AgentSystem · streaming"]
+    core["<b>Core layer</b><br/>Actor · ActorRef · ActorSystem · Mailbox"]
+
+    int --> moa --> flow --> agent --> core
+
+    style int fill:#b8c9d9,stroke:#7a9bb5,color:#2c3e50
+    style moa fill:#c4b8d9,stroke:#9b7ab5,color:#2c3e50
+    style flow fill:#d9c4b8,stroke:#b59b7a,color:#2c3e50
+    style agent fill:#b8d9c4,stroke:#7ab59b,color:#2c3e50
+    style core fill:#d9d4b8,stroke:#b5b07a,color:#2c3e50
 ```
 
-The core layer is a general-purpose actor runtime. The agent layer is a set of AI-specific abstractions built on top of it — no new primitives, no forking. Either layer can be used independently.
+Dependency direction: `integrations/ → flow/ → agents/ → core/` (and `moa/ → flow/ → agents/ → core/`).
+
+- **Core** — general-purpose actor runtime, usable independently
+- **Agents** — AI-specific abstractions (Task protocol, streaming events) built on core
+- **Flow** — composable orchestration ADT with categorical combinators, interpreted over agents
+- **MOA** — Mixture-of-Agents pattern library built on Flow primitives
+- **Integrations** — adapters for external frameworks (LangChain)
 
 ---
 
@@ -51,12 +64,24 @@ Two primitives:
 
 When a child actor raises, its parent's `supervisor_strategy()` is called with the exception. The default is `OneForOneStrategy` (restart only the failing child, up to 3 times per 60 s).
 
-```
-               system
-              /      \
-           parent    other
-          /      \
-       child_A  child_B ← crashes
+```mermaid
+graph TB
+    system((system))
+    parent((parent))
+    other((other))
+    childA((child_A))
+    childB((child_B))
+
+    system --- parent
+    system --- other
+    parent --- childA
+    parent --- childB
+
+    style childB fill:#d9a3a3,stroke:#b57a7a,color:#2c3e50
+    style system fill:#b8c9d9,stroke:#7a9bb5,color:#2c3e50
+    style parent fill:#b8d9c4,stroke:#7ab59b,color:#2c3e50
+    style other fill:#b8d9c4,stroke:#7ab59b,color:#2c3e50
+    style childA fill:#b8d9c4,stroke:#7ab59b,color:#2c3e50
 ```
 
 With `OneForOneStrategy`: only `child_B` is restarted. With `AllForOneStrategy`: both `child_A` and `child_B` are restarted.
@@ -163,10 +188,14 @@ The Free monad separates workflow description from interpretation, enabling test
 
 Every message to an `AgentActor` is a `Task`. This is the contract between orchestrators and workers:
 
-```
-Task(input, id, event_sink_ref)
-    ↓ on_receive
-TaskResult(task_id, output, status)
+```mermaid
+graph LR
+    T["Task(input, id, event_sink_ref)"]
+    R["TaskResult(task_id, output, status)"]
+    T -->|on_receive| R
+
+    style T fill:#b8c9d9,stroke:#7a9bb5,color:#2c3e50
+    style R fill:#b8d9c4,stroke:#7ab59b,color:#2c3e50
 ```
 
 The `id` field is a uuid hex generated at construction time. It becomes the `task_id` in all emitted events, enabling event stream consumers to correlate events across a distributed call tree.
@@ -207,12 +236,18 @@ AI agents produce intermediate output (LLM tokens, progress updates, child agent
 
 Every `TaskEvent` is routed to a **sink** — an `_EventCollectorActor` that feeds a `RunStream`. The routing path:
 
-```
-AgentActor._emit_event()
-    → _active_sink.tell(TaskEvent)
-    → _EventCollectorActor.on_receive()
-    → RunStream.put()
-    → caller's async for loop
+```mermaid
+graph LR
+    A["AgentActor._emit_event()"]
+    B["_active_sink.tell(TaskEvent)"]
+    C["_EventCollectorActor.on_receive()"]
+    D["RunStream.put()"]
+    E["caller's async for loop"]
+
+    A --> B --> C --> D --> E
+
+    style A fill:#b8c9d9,stroke:#7a9bb5,color:#2c3e50
+    style E fill:#b8d9c4,stroke:#7ab59b,color:#2c3e50
 ```
 
 ### Sink lifecycle
@@ -229,13 +264,18 @@ The per-ask sink (`event_sink_ref`) takes precedence over the run-level sink (`_
 
 `asyncio.create_task()` copies the current `contextvars.Context` into the new task. This is the mechanism by which the event sink propagates to child actors without any explicit wiring:
 
-```
-run() sets _run_event_sink = collector
-    │
-    └─ create_task(_drive) ──→ context copied
-                                AgentActor.__init__ reads _run_event_sink
-                                ask() → create_task → context copied again
-                                    └─ child AgentActor.__init__ gets same sink
+```mermaid
+graph TB
+    run["run() sets _run_event_sink = collector"]
+    drive["create_task(_drive)<br/>context copied"]
+    init["AgentActor.__init__<br/>reads _run_event_sink"]
+    ask["ask() → create_task<br/>context copied again"]
+    child["child AgentActor.__init__<br/>gets same sink"]
+
+    run --> drive --> init --> ask --> child
+
+    style run fill:#b8c9d9,stroke:#7a9bb5,color:#2c3e50
+    style child fill:#b8d9c4,stroke:#7ab59b,color:#2c3e50
 ```
 
 ### RunStream

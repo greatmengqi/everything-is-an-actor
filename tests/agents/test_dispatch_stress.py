@@ -37,7 +37,7 @@ async def test_dispatch_parallel_100_concurrent():
             )
             return [r.output for r in results]
 
-    system = ActorSystem("stress", executor_workers=4)
+    system = ActorSystem("stress")
     ref = await system.spawn(FanOutAgent, "fanout")
     start = time.monotonic()
     result = await system.ask(ref, Task(input=100), timeout=30.0)
@@ -59,7 +59,7 @@ async def test_dispatch_parallel_500_concurrent():
             )
             return len(results)
 
-    system = ActorSystem("stress", executor_workers=4)
+    system = ActorSystem("stress")
     ref = await system.spawn(MassiveFanOut, "fanout")
     start = time.monotonic()
     result = await system.ask(ref, Task(input=500), timeout=60.0)
@@ -87,7 +87,7 @@ async def test_dispatch_sequential_1000():
                 count += 1
             return count
 
-    system = ActorSystem("stress", executor_workers=4)
+    system = ActorSystem("stress")
     ref = await system.spawn(SequentialCaller, "seq")
     start = time.monotonic()
     result = await system.ask(ref, Task(input=1000), timeout=60.0)
@@ -106,7 +106,7 @@ async def test_dispatch_sequential_1000():
 
 async def test_dispatch_reuse_ref_1000():
     """1000 dispatches to a persistent actor — no spawn/stop overhead."""
-    system = ActorSystem("stress", executor_workers=4)
+    system = ActorSystem("stress")
     persistent = await system.spawn(EchoAgent, "persistent")
 
     class ReuseCaller(AgentActor[int, int]):
@@ -152,7 +152,7 @@ async def test_dispatch_nested_depth_10():
         return ChainAgent
 
     root_cls = make_chain(10)
-    system = ActorSystem("stress", executor_workers=4)
+    system = ActorSystem("stress")
     ref = await system.spawn(root_cls, "chain-root")
     start = time.monotonic()
     result = await system.ask(ref, Task(input="deep"), timeout=30.0)
@@ -184,7 +184,7 @@ async def test_dispatch_mixed_workload():
                 total += len(r.output)
             return {"parallel": len(batch1), "sequential": total}
 
-    system = ActorSystem("stress", executor_workers=4)
+    system = ActorSystem("stress")
     ref = await system.spawn(MixedOrchestrator, "mixed")
     start = time.monotonic()
     result = await system.ask(ref, Task(input=50), timeout=30.0)

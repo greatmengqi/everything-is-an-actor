@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, Task, TaskResult
 from everything_is_an_actor.agents.system import AgentSystem
 
@@ -69,7 +70,7 @@ def format_sse(event) -> str:
 
 
 async def handle_request(user_query: str) -> None:
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     print(f"=== Research run for: {user_query!r} ===\n")
     async for event in system.run(ResearchOrchestrator, user_query, run_id="demo-run"):

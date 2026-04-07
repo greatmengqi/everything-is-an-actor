@@ -11,6 +11,7 @@ build/
 
 # Virtual environments
 .venv/
+.venv312/
 venv/
 env/
 
@@ -35,6 +36,7 @@ log/
 
 # Project
 .omc/
+.claude/settings.local.json
 uv.lock
 
 # MkDocs

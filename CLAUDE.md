@@ -6,30 +6,44 @@ Coding principles for `everything-is-an-actor`. Follow these when writing or rev
 
 ## Layer separation
 
-The codebase has three layers:
+The codebase has five layers:
 
 ```
-everything_is_an_actor.moa      ← MOA orchestration pattern (MoATree, MoABuilder)
-everything_is_an_actor.agents   ← AI-specific (Task, AgentActor, streaming)
-everything_is_an_actor.core     ← generic actor runtime (Actor, ActorRef, ActorSystem)
+everything_is_an_actor.integrations  ← LLM adapters (LangChain, OpenAI, Anthropic)
+everything_is_an_actor.flow          ← Flow ADT + categorical combinators + actor interpreter
+everything_is_an_actor.moa           ← MOA pattern library (moa_layer, moa_tree, MoASystem)
+everything_is_an_actor.agents        ← AI-specific (Task, AgentActor, streaming, A2A multi-turn)
+everything_is_an_actor.core          ← generic actor runtime (Actor, ActorRef, ActorSystem)
 ```
 
-Dependency direction: `moa/ → agents/ → core/` only.
+Dependency direction: `integrations/ → flow/ → agents/ → core/` (and `moa/ → flow/ → agents/ → core/`).
 
-- `core/` must not import from `agents/` or `moa/`
-- `agents/` must not import from `moa/`
-- `moa/` only uses public APIs from `agents/` and `core/`
+- `core/` must not import from `agents/`, `moa/`, `flow/`, or `integrations/`
+- `agents/` must not import from `moa/`, `flow/`, or `integrations/`
+- `flow/` must not import from `moa/` or `integrations/`
+- `moa/` imports from `flow/`, `agents/`, and `core/` — it is a pattern library on top of Flow
 - Never reach into `_cell`, `_cell.actor`, or other private internals from outside the owning module — use factory patterns or messages instead
+
+## Flow API coding constraints
+
+- `Flow[I, O]` is a pure ADT — all variants are `@dataclass(frozen=True)`, no execution until interpreted
+- Combinators build ADT nodes (data); the `Interpreter` gives them meaning against the actor runtime
+- Method-chain API (`map`, `flat_map`, `zip`, `branch`, `recover`, etc.) returns new frozen nodes — never mutates
+- `_Branch.mapping` is normalized to `MappingProxyType` in `__post_init__` — dict input is defensively copied
+- `_ZipAll.flows` and `_Race.flows` are normalized to tuples in `__post_init__`
+- Constructor functions (`agent`, `pure`, `race`, `zip_all`, `loop`, `at_least`) validate invariants at creation time (e.g., `zip_all` requires >= 2 flows)
+- Serialization (`to_dict`/`from_dict`): only structural variants (no lambdas) are serializable; variants containing callables raise `TypeError`
+- `at_least(n, *flows)` uses Validated semantics (accumulate errors), not fail-fast Either — domain exceptions go to `QuorumResult.failed`, system exceptions (`MemoryError`) propagate immediately
+- The interpreter spawns ephemeral actors per `_Agent` node; cleanup is in `finally` blocks
 
 ## MOA coding constraints
 
-- `MoATree` and `MoANode` are `@dataclass(frozen=True)` — must remain immutable
-- `MoANode.proposers` and `MoATree.nodes` are tuples, normalized in `__post_init__` (defensive copy)
-- `ProposerSpec` is recursive: `type[AgentActor] | MoATree` (leaf or subtree)
-- `min_success` invariants enforced at construction: `>= 1` and `<= len(proposers)`
-- Validated semantics in `_run_proposers`: domain exceptions are recovered into failed `TaskResult`; system exceptions (`MemoryError`, `SystemExit`) propagate immediately
+MOA is a pattern library built on Flow — it uses `at_least`, `agent`, `pure`, `flat_map` from the Flow layer.
+
+- `moa_layer()` composes: `pure(_inject_directive) → at_least(min_success, proposers) → agent(aggregator) → map(_extract_directive)`
+- `moa_tree()` wraps input as `(input, None)`, chains layers via `flat_map`, unwraps final result
 - `LayerOutput(result, directive)`: plain output resets directive; `LayerOutput` injects `{"input": current, "directive": directive}` into next layer
-- `proposer_timeout` flows: `MoANode → ResolvedNode → context.ask(timeout=...)`
+- `MoASystem` owns the full `ActorSystem → AgentSystem` lifecycle — a convenience wrapper, not a new runtime
 
 ## Virtual Actor model (Orleans style)
 
@@ -96,10 +110,20 @@ Design constraints:
 - Ephemeral actors spawned by `dispatch()` or `dispatch_stream()` must be stopped in a `finally` block — no exceptions
 - `ref.stop()` + `await ref.join()` is the canonical cleanup pair
 - `dispatch_stream()` uses an async generator `try/finally` so cleanup runs even when the caller breaks early
+- Flow interpreter cleanup: each `_interpret_agent` spawns + stops in `try/finally`, then removes from `_root_cells`
+
+## A2A multi-turn protocol
+
+A2A support lives in `agents/` — no separate package. Two additions:
+
+- `AgentCard`: frozen dataclass on `AgentActor.__card__` — static capability metadata (name, description, skills). Agents without `__card__` work as before, just not discoverable
+- `discover_one(match)` / `discover_all(match)` on `AgentSystem`: match function receives full catalog (root + children, recursively) of `(ActorRef, AgentCard)` pairs, returns selection. Strategy is caller's — filter, score, LLM, anything
+
+Multi-turn is a usage pattern, not a framework feature. Actor is already a state machine — `execute()` is called per message, `self` tracks conversation state, parent decides when the conversation is done via an ask loop. No new types, no new status, no framework involvement.
 
 ## Minimal public surface
 
-- `ActorContext` exposes only what actors need: `self_ref`, `parent`, `children`, `spawn`, `dispatch`, `dispatch_parallel`, `dispatch_stream`, `run_in_executor`
+- `ActorContext` exposes: `self_ref`, `parent`, `children`, `spawn`, `ask`, `sequence`, `traverse`, `race`, `zip`, `stream`, `dispatch`, `dispatch_parallel`, `dispatch_stream`, `run_in_executor`
 - Internal state (`_active_sink`, `_current_task_id`, `_stream`) is private to its module
 - Do not add public attributes or methods to satisfy a single call site
 
@@ -125,9 +149,18 @@ Design constraints:
 - Do not assert internal state (e.g., `_active_runs` dict contents) unless testing the specific invariant
 - Concurrency and cleanup tests must use real `asyncio` — no mocking of `asyncio.wait`, `asyncio.gather`, or task scheduling
 - A passing test that relies on mocked internals is worse than no test
+- Every async test file **must** have `pytestmark = pytest.mark.anyio` at module level — without it, async tests silently fail with "async def functions are not natively supported"
+- Do not use `pytest.mark.asyncio` — the project uses `anyio` as the async backend
 
 ## Progressive API
 
 - Every new abstraction must have a zero-knowledge entry point (plain class with `execute()`)
 - Upgrading from Level 1 → 4 must not require rewriting existing logic
 - More power should require more explicit opt-in, not hidden defaults
+
+## Documentation
+
+- All user-facing docs are in English
+- Diagrams use Mermaid format with Morandi color palette
+- Doc site config: `mkdocs.yml` with Material theme
+- All new features must have a corresponding doc page in `docs/` and be added to the `mkdocs.yml` nav

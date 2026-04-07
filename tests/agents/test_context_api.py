@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 
+from everything_is_an_actor.core.system import ActorSystem
 from everything_is_an_actor.agents import AgentActor, AgentSystem, Task, TaskResult
 from everything_is_an_actor.agents.task import StreamEvent, StreamResult
 
@@ -51,7 +52,7 @@ class UpperAgent(AgentActor[str, str]):
 
 
 async def test_ask_returns_result():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
@@ -65,7 +66,7 @@ async def test_ask_returns_result():
 
 
 async def test_ask_ephemeral_child_cleaned_up():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
@@ -78,7 +79,7 @@ async def test_ask_ephemeral_child_cleaned_up():
 
 
 async def test_ask_propagates_exception():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
@@ -97,7 +98,7 @@ async def test_ask_propagates_exception():
 
 
 async def test_sequence_returns_all_results_in_order():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
@@ -115,7 +116,7 @@ async def test_sequence_returns_all_results_in_order():
 
 
 async def test_sequence_empty_returns_empty_list():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
@@ -137,7 +138,7 @@ async def test_sequence_cancels_siblings_on_failure():
             side_effects.append(input)
             return input
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
@@ -161,7 +162,7 @@ async def test_sequence_cancels_siblings_on_failure():
 
 
 async def test_traverse_maps_inputs_through_agent():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
@@ -175,7 +176,7 @@ async def test_traverse_maps_inputs_through_agent():
 
 
 async def test_traverse_empty_returns_empty():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, list]):
         async def execute(self, input: str) -> list:
@@ -193,7 +194,7 @@ async def test_traverse_empty_returns_empty():
 
 
 async def test_race_returns_fastest_result():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
@@ -220,7 +221,7 @@ async def test_race_cancels_losers():
             completed.append(value)
             return value
 
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
@@ -237,14 +238,15 @@ async def test_race_cancels_losers():
     await system.shutdown()
 
 
-async def test_race_propagates_exception_if_first_fails():
-    system = AgentSystem()
+async def test_race_propagates_exception_if_all_fail():
+    """race raises when ALL racers fail (first_completed prefers success)."""
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
             r: TaskResult[str] = await self.context.race([
-                (FailAgent, Task(input="bad")),
-                (SlowAgent, Task(input="10:never")),
+                (FailAgent, Task(input="bad1")),
+                (FailAgent, Task(input="bad2")),
             ])
             return r.output
 
@@ -255,7 +257,7 @@ async def test_race_propagates_exception_if_first_fails():
 
 
 async def test_race_raises_on_empty():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
@@ -274,7 +276,7 @@ async def test_race_raises_on_empty():
 
 
 async def test_zip_returns_pair():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, tuple]):
         async def execute(self, input: str) -> tuple:
@@ -291,7 +293,7 @@ async def test_zip_returns_pair():
 
 
 async def test_zip_cancels_on_failure():
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, tuple]):
         async def execute(self, input: str) -> tuple:
@@ -313,7 +315,7 @@ async def test_zip_cancels_on_failure():
 
 async def test_stream_yields_child_chunks():
     """stream() propagates child task_chunk events to the caller."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, list]):
         async def execute(self, input: str):
@@ -339,7 +341,7 @@ async def test_stream_yields_child_chunks():
 
 async def test_stream_ephemeral_child_cleaned_up():
     """Ephemeral child is stopped after stream ends — no leaks."""
-    system = AgentSystem()
+    system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, list]):
         async def execute(self, input: str):
