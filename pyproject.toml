@@ -8,18 +8,19 @@ version = "0.1.6"
 description = "Asyncio-native Actor framework for Python agent systems"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "BUSL-1.1"
 keywords = ["actor", "asyncio", "agent", "concurrency", "supervision"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries",
     "Framework :: AsyncIO",
 ]
-dependencies = []
+dependencies = [
+    "anyio[asyncio]>=4",
+]
 
 [project.optional-dependencies]
 redis = ["redis[hiredis]>=7.4.0"]
@@ -30,7 +31,6 @@ docs = [
 ]
 dev = [
     "pytest>=8.0",
-    "anyio[asyncio]>=4.0",
     "pytest-anyio>=0.0.0",
     "ruff>=0.4",
 ]
@@ -40,9 +40,6 @@ packages = ["everything_is_an_actor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-    "asyncio: mark test as async (used by pytest-asyncio)",
-]
 
 [tool.ruff]
 line-length = 120
