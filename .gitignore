@@ -41,6 +41,3 @@ uv.lock
 
 # MkDocs
 site/
-
-# Rust
-rust_core/target/
