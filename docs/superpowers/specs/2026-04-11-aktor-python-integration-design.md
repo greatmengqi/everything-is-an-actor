@@ -1,9 +1,46 @@
 # aktor — Python Integration Boundary: In-Process vs Out-of-Process
 
-**Status**: Draft — decision pending
+> ## ⚠️ SUPERSEDED
+>
+> **This document is superseded by**
+> [`2026-04-11-aktor-a2a-first-architecture.md`](./2026-04-11-aktor-a2a-first-architecture.md).
+>
+> **What was wrong with this spec:** it framed "how does the Rust
+> runtime invoke Python tasks" as a **core architectural question** and
+> proposed a private RPC protocol (protobuf over UDS). That framing is
+> an over-design one abstraction layer too low.
+>
+> Once distributed multi-agent integration is taken seriously, **every
+> agent-to-agent boundary is a network boundary**, and the industry has
+> already standardized on Google's [A2A
+> protocol](https://github.com/google/A2A) (HTTP + JSON-RPC + AgentCard
+> discovery) for that boundary. Under the A2A-first framing:
+>
+> - The "first-party Python worker" and "third-party external agent"
+>   distinction disappears — both are A2A servers, aktor is the A2A
+>   client in both cases.
+> - aktor does **not** need a private Rust↔Python bridge. The bridge is
+>   A2A, same protocol it uses for everything else.
+> - Python becomes one of many possible agent implementation languages,
+>   not the privileged one. Any A2A-compliant framework (LangGraph,
+>   AutoGen, CrewAI, bare FastAPI) is a first-class participant.
+> - The Python SDK becomes an ergonomic wrapper around A2A, not a
+>   required protocol shim.
+>
+> The Route A vs Route B debate below still has **residual value** as
+> an analysis of performance trade-offs for first-party workers, in
+> case A2A overhead ever needs an optimization escape hatch. That is a
+> v3 concern, not a v1 architectural decision.
+>
+> **Read the A2A-first spec instead. This document is kept for
+> historical traceability of the design evolution.**
+>
+> ---
+
+**Status**: Superseded on 2026-04-11 (same day as written).
 **Date**: 2026-04-11
 **Depends on**: [`2026-04-11-aktor-rust-repo-design.md`](./2026-04-11-aktor-rust-repo-design.md)
-**Decision owner**: user
+**Superseded by**: [`2026-04-11-aktor-a2a-first-architecture.md`](./2026-04-11-aktor-a2a-first-architecture.md)
 **Scope**: choose how the Rust `aktor` runtime invokes Python-implemented
 business tasks, and sketch the resulting architecture.
 
