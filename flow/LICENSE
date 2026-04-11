@@ -4,7 +4,10 @@ Parameters
 
 Licensor: everything-is-an-actor contributors
 Licensed Work: actor-for-agents
-Additional Use Grant: None
+Additional Use Grant: You may use the Licensed Work for any purpose, including
+  internal commercial use, except selling, licensing, or otherwise providing
+  the Licensed Work or a substantially similar product to third parties for
+  commercial gain.
 Change Date: 2029-04-09
 Change License: Apache License, Version 2.0
 
@@ -33,19 +36,19 @@ distribute the Licensed Work.
 
 3. Additional Use Grant
 
-You may use the Licensed Work solely for:
-- Internal development purposes within Your organization
-- Personal learning and research
-- Forking the repository for making contributions (subject to same license terms)
-- Providing hosted or managed services to Your organization's internal users
+You may use the Licensed Work for any purpose — including internal use within
+a for-profit organization — except selling, licensing, or otherwise providing
+the Licensed Work or a substantially similar product to third parties for
+commercial gain.
 
 4. Restrictions
 
-You may NOT use the Licensed Work to:
-- Build or offer a competing agent runtime or orchestration service as a
-  commercial SaaS product to third parties
-- Create a white-label product using the Licensed Work for commercial purposes
-- Redistribute the Licensed Work as a standalone commercial product
+You may NOT:
+- Offer the Licensed Work as a hosted or managed service to third parties
+- Distribute the Licensed Work as an on-premise product sold to third parties
+- Embed the Licensed Work in a product or service sold to third parties where
+  the Licensed Work constitutes a primary component of that product's value
+- License or sublicense the Licensed Work to third parties for commercial gain
 
 5. Change Date
 
@@ -62,9 +65,9 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 LICENSED WORK OR THE USE OR OTHER DEALINGS IN THE LICENSED WORK.
 
-7. Additional Rights
+7. Commercial License
 
-If You wish to use the Licensed Work for uses not permitted above,
+If You wish to use the Licensed Work in a manner not permitted above,
 You must obtain a separate commercial license from the Licensor.
 
 This License is Copyright (C) 2025 everything-is-an-actor contributors.
