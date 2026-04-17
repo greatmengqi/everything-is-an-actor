@@ -78,6 +78,36 @@ Design constraints:
 - Supervision (`supervisor_strategy`) handles restart/stop/escalate
 - `join()` suppresses only `CancelledError`; actor teardown failures must propagate
 
+## Exceptions must leave a trace — never silently swallowed
+
+The first instinct in cleanup paths, fire-and-forget tasks, and user-callback
+loops is `except Exception: pass` so the surrounding flow doesn't break. That
+turns the exception into a black hole — operators have no way to know
+something failed. **Catching is allowed; swallowing is not.**
+
+- `except Exception: pass` is banned. Every catch must end with at least
+  `logger.exception(...)` (preferred — captures stack), or a deliberate
+  `logger.warning/error(...)` if the exception type is expected and the
+  stack would be noise.
+- `except BaseException` is almost always wrong. If you must catch
+  `asyncio.CancelledError`, do it in a separate, explicit `except` arm
+  (CancelledError is `BaseException` since 3.8 — bare `except Exception`
+  doesn't catch it, and you don't want it to).
+- Fire-and-forget tasks have no caller to receive the exception — the
+  logger is the only signal channel. Use `logger.exception` so the
+  traceback is preserved.
+- Callback loops (dead-letter listeners, deactivation hooks, middleware)
+  must isolate failures (one bad callback can't block the others) AND
+  log them. Both, not either.
+- The one exception is `join()` / similar "wait for completion" APIs that
+  intentionally swallow `CancelledError` because the cancellation has
+  already been handled upstream — those need an inline comment explaining
+  *why* the swallow is correct.
+
+If the catch is genuinely a no-op (e.g. cleaning up an already-cleaned
+resource), write `# noqa: BLE001 — already cleaned` and an explanation,
+not bare `pass`.
+
 ## Fail-fast over deferred detection
 
 - Invalid state at call boundaries raises immediately (duplicate `run_id`, stopped actor, etc.)
