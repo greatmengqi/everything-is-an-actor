@@ -48,6 +48,12 @@ class AgentSystem:
     def __init__(self, system: ActorSystem) -> None:
         self._actor_system = system
         self._active_runs: dict[str, ActorRef] = {}
+        # Install the agent-layer stream adapter so ActorRef._ask_stream works
+        # without core/ depending on agents.task / agents.run_stream.
+        if system._stream_adapter is None:
+            from everything_is_an_actor.agents.stream_adapter import AgentStreamAdapter
+
+            system._stream_adapter = AgentStreamAdapter()
 
     @property
     def actor_system(self) -> ActorSystem:
@@ -78,9 +84,7 @@ class AgentSystem:
         ``backend`` is reserved for M5 (distributed actor execution).
         Currently ignored — all actors run in-process.
         """
-        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
-
-        validate_agent_actor_compatibility(actor_cls, mode="agent")
+        actor_cls.__validate_spawn_class__(mode="agent")
 
         return await self._actor_system.spawn(
             actor_cls,
@@ -265,7 +269,7 @@ class AgentSystem:
                 await stream.close()
                 self._active_runs.pop(run_id, None)
 
-        ComposableFuture.eager(_drive(), name=f"run:{run_id}")
+        ComposableFuture.fire_and_forget(_drive(), name=f"run:{run_id}")
 
         async for event in stream:
             yield event

@@ -175,7 +175,7 @@ class VirtualActorRegistry:
             await self._store.put(key)
 
             # Monitor for deactivation in background
-            ComposableFuture.eager(
+            ComposableFuture.fire_and_forget(
                 self._watch_deactivation(key, ref),
                 name=f"virtual-watch:{key}",
             )

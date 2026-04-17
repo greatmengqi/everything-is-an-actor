@@ -196,15 +196,21 @@ async def test_no_memory_leak_repeated_resolve():
 
 
 @pytest.mark.asyncio
-async def test_coro_released_after_resolve():
-    """Coroutine reference is released after first resolve."""
+async def test_outcome_cached_after_resolve():
+    """Outcome is cached after first resolve — subsequent awaits don't re-run."""
+    run_count = 0
+
     async def work():
+        nonlocal run_count
+        run_count += 1
         return 42
 
     cf = Cf(work())
-    assert cf._coro is not None
-    await cf
-    assert cf._coro is None  # released for GC
+    assert cf._outcome is None  # not yet awaited — task scheduled but not observed
+    assert await cf == 42
+    assert cf._outcome is not None  # resolved and cached
+    assert await cf == 42  # second await hits cache
+    assert run_count == 1  # coroutine ran exactly once
 
 
 # ==================================================================

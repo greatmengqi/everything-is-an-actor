@@ -25,6 +25,7 @@ from everything_is_an_actor.core.ref import (
     ActorStoppedError,
     MailboxFullError,
     ReplyChannel,
+    StreamAdapter,
     _Envelope,
     _ReplyMessage,
     _ReplyRegistry,
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 _MIDDLEWARE_HOOK_TIMEOUT = 10.0
 _MAX_DEAD_LETTERS = 10000
-_MAX_CONSECUTIVE_FAILURES = 10
+_DEFAULT_MAX_CONSECUTIVE_FAILURES = 10
 
 
 def _timed(coro: Any) -> ComposableFuture:
@@ -64,9 +65,11 @@ class ActorSystem:
         name: str = "system",
         *,
         max_dead_letters: int = _MAX_DEAD_LETTERS,
+        max_consecutive_failures: int = _DEFAULT_MAX_CONSECUTIVE_FAILURES,
         reply_channel: ReplyChannel | None = None,
         mailbox_cls: type[Mailbox] = MemoryMailbox,
         dispatchers: dict[str, Dispatcher] | None = None,
+        stream_adapter: StreamAdapter | None = None,
     ) -> None:
         import uuid as _uuid
 
@@ -81,6 +84,13 @@ class ActorSystem:
         self._mailbox_cls = mailbox_cls
         self._dispatchers: dict[str, Dispatcher] = dispatchers or {}
         self._dispatchers_started: set[str] = set()
+        # Streaming is a higher-layer concern. core/ does not know what a
+        # Task or StreamEvent is — an adapter is installed by agents/.
+        self._stream_adapter: StreamAdapter | None = stream_adapter
+        # Root actor circuit breaker — if a root actor raises this many
+        # consecutive times without being wrapped by a supervisor, stop it.
+        # Non-root actors follow their parent's ``SupervisorStrategy``.
+        self._max_consecutive_failures = max_consecutive_failures
 
     async def spawn(
         self,
@@ -100,9 +110,7 @@ class ActorSystem:
             dispatcher: Named dispatcher key. When set, handler execution
                 is offloaded via ``Dispatcher.dispatch()``.
         """
-        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
-
-        validate_agent_actor_compatibility(actor_cls, mode="single")
+        actor_cls.__validate_spawn_class__(mode="single")
 
         if self._shutting_down:
             raise RuntimeError("Cannot spawn actor: system is shutting down")
@@ -348,6 +356,20 @@ class _ActorCell:
 
         has_sync_receive = find_sync_handler(self.actor_cls, "receive") is not None
 
+        # Reject async handler + dispatcher — conceptually incoherent.
+        # Dispatchers exist to offload blocking work to a thread pool;
+        # async handlers don't block. Bridging one back via ComposableFuture.result()
+        # spawns a new event loop per message and breaks any cross-loop
+        # object (ContextVars, registered Futures) that on_receive touches.
+        # Use sync receive() if the handler is blocking, or omit dispatcher
+        # for async handlers.
+        if not has_sync_receive and self._dispatcher is not None:
+            raise ValueError(
+                f"Actor '{self.actor_cls.__name__}' has async on_receive() but was spawned with "
+                f"dispatcher — dispatchers only offload blocking sync work. Either implement "
+                f"sync receive() for blocking logic, or spawn without dispatcher for async logic."
+            )
+
         if has_sync_receive and self._dispatcher:
             # Sync actor + dispatcher: offload receive() via dispatcher.dispatch()
             async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
@@ -362,13 +384,6 @@ class _ActorCell:
                     self.actor.receive,
                     message,  # type: ignore[union-attr]
                 )
-        elif self._dispatcher:
-            # Async actor + dispatcher: bridge async handler into dispatcher thread
-            async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
-                return await self._dispatcher.dispatch(  # type: ignore[union-attr]
-                    lambda msg: ComposableFuture(self.actor.on_receive(msg)).result(),  # type: ignore[union-attr]
-                    message,
-                )
         else:
             # Async actor, no dispatcher: direct execution on caller loop
             async def _inner_handler(_ctx: ActorMailboxContext, message: Any) -> Any:
@@ -379,12 +394,29 @@ class _ActorCell:
         else:
             self._receive_chain = _inner_handler
 
-        for mw in self._middlewares:
-            try:
+        # LIFO unwind on partial failure: if middleware[k].on_started or
+        # actor.on_started raises, any middleware[0..k-1] whose on_started
+        # succeeded must see on_stopped to release what it acquired.
+        # Timeout is now treated as initialization failure (was: silently
+        # downgraded to a warning, which left middleware in a half-started
+        # state while message delivery continued).
+        started_mws: list[Middleware] = []
+        try:
+            for mw in self._middlewares:
                 await _timed(mw.on_started(self.ref))
-            except TimeoutError:
-                logger.warning("Middleware %s.on_started timed out for %s", type(mw).__name__, self.path)
-        await self.actor.on_started()
+                started_mws.append(mw)
+            await self.actor.on_started()
+        except BaseException:
+            for mw in reversed(started_mws):
+                try:
+                    await _timed(mw.on_stopped(self.ref))
+                except Exception:
+                    logger.exception(
+                        "Middleware %s.on_stopped failed during start-unwind for %s",
+                        type(mw).__name__,
+                        self.path,
+                    )
+            raise
 
         self._run_future, self._cancel_run = ComposableFuture.eager(
             self._run(),
@@ -428,10 +460,8 @@ class _ActorCell:
         mailbox: Mailbox | None = None,
         middlewares: list[Middleware] | None = None,
     ) -> ActorRef[MsgT, RetT]:
-        # Validate AgentActor compatibility at spawn-time
-        from everything_is_an_actor.core.validation import validate_agent_actor_compatibility
-
-        validate_agent_actor_compatibility(actor_cls, mode="single")
+        # Validate at spawn-time via the class-level hook (no core → agents coupling)
+        actor_cls.__validate_spawn_class__(mode="single")
 
         if name in self.children:
             raise ValueError(f"Child '{name}' already exists under {self.path}")
@@ -486,7 +516,12 @@ class _ActorCell:
 
                 try:
                     if not isinstance(msg, _Envelope):
-                        continue
+                        # Unknown payload on the mailbox — protocol invariant violated.
+                        # Let supervision handle it rather than silently dropping.
+                        raise TypeError(
+                            f"Mailbox protocol violation for {self.path}: "
+                            f"expected _Envelope or _Stop, got {type(msg).__name__}"
+                        )
 
                     ctx = ActorMailboxContext(self.ref, msg.sender, "ask" if msg.correlation_id else "tell")
                     result = await self._receive_chain(ctx, msg.payload)  # type: ignore[misc]
@@ -520,14 +555,15 @@ class _ActorCell:
                         await self.parent._handle_child_failure(self, exc)
                     else:
                         consecutive_failures += 1
+                        limit = self.system._max_consecutive_failures
                         logger.error(
                             "Uncaught error in root actor %s (%d/%d): %s",
                             self.path,
                             consecutive_failures,
-                            _MAX_CONSECUTIVE_FAILURES,
+                            limit,
                             exc,
                         )
-                        if consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+                        if consecutive_failures >= limit:
                             logger.error("Root actor %s hit consecutive failure limit — stopping", self.path)
                             break
         except asyncio.CancelledError:
@@ -658,13 +694,18 @@ class _ActorCell:
 
     async def _restart_child(self, child: _ActorCell, error: Exception) -> None:
         logger.info("Supervisor %s: restarting %s after %s", self.path, child.path, type(error).__name__)
-        # Stop the old actor (but keep the cell and mailbox)
+        # Discard the old actor (but keep the cell and mailbox). Restart is
+        # NOT graceful shutdown — it is crash recovery. We call
+        # ``on_pre_restart`` (default no-op) on the old instance so business
+        # code that genuinely needs to release something across restart
+        # boundaries has an explicit hook, and we do NOT invoke
+        # ``on_stopped`` (which is reserved for actual shutdown).
         old_actor = child.actor
         if old_actor is not None:
             try:
-                await old_actor.on_stopped()
+                await old_actor.on_pre_restart(error)
             except Exception:
-                logger.exception("Error in on_stopped during restart of %s", child.path)
+                logger.exception("Error in on_pre_restart during restart of %s", child.path)
 
         # Notify middleware of restart (reset per-instance state)
         for mw in child._middlewares:

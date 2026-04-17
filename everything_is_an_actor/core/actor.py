@@ -197,11 +197,16 @@ class ActorContext:
         *,
         timeout: float = 300.0,
     ) -> ComposableFuture[list[Any]]:
-        """Map inputs through the same agent concurrently. Returns ComposableFuture."""
-        from everything_is_an_actor.agents.task import Task
+        """Map inputs through the same actor concurrently. Returns ComposableFuture.
 
+        Each ``inp`` is lifted into the target's message type via
+        ``target.__wrap_traverse_input__(inp)`` — a no-op for plain actors,
+        ``Task(input=inp)`` for ``AgentActor``. Keeps ``core/`` unaware of
+        ``Task``.
+        """
+        target_cls: type[Actor[Any, Any]] = target if isinstance(target, type) else target._cell.actor_cls
         return self.sequence(
-            [(target, Task(input=inp)) for inp in inputs],
+            [(target, target_cls.__wrap_traverse_input__(inp)) for inp in inputs],
             timeout=timeout,
         )
 
@@ -211,11 +216,33 @@ class ActorContext:
         *,
         timeout: float = 300.0,
     ) -> ComposableFuture[Any]:
-        """Return first completed result; cancel the rest. Returns ComposableFuture."""
+        """True first-wins race — whichever task finishes first determines the
+        outcome, success or failure. Losers are cancelled.
+
+        If you want the first **successful** result and are willing to wait
+        past a failure for it, use ``first_success`` instead.
+        """
         from everything_is_an_actor.core.composable_future import ComposableFuture
 
         if not tasks:
             return ComposableFuture.failed(ValueError("race() requires at least one task"))
+        return ComposableFuture.race(*(self.ask(t, msg, timeout=timeout) for t, msg in tasks))
+
+    def first_success(
+        self,
+        tasks: list[tuple[type[Actor[Any, Any]] | ActorRef[Any, Any], Any]],
+        *,
+        timeout: float = 300.0,
+    ) -> ComposableFuture[Any]:
+        """Return the first **successful** result. Skips over failures — only
+        raises when every task has failed. Losers are cancelled on success.
+
+        Contrast with ``race``, which is outcome-agnostic first-wins.
+        """
+        from everything_is_an_actor.core.composable_future import ComposableFuture
+
+        if not tasks:
+            return ComposableFuture.failed(ValueError("first_success() requires at least one task"))
         return ComposableFuture.first_completed(*(self.ask(t, msg, timeout=timeout) for t, msg in tasks))
 
     def zip(
@@ -384,12 +411,50 @@ class Actor(Generic[MsgT, RetT]):
         """Called on the *new* instance before resuming after a crash."""
         ...
 
+    async def on_pre_restart(self, error: Exception) -> None:
+        """Called on the *old* instance right before it is discarded in a restart.
+
+        Use this to release resources that are *not* tied to the actor's
+        normal graceful-shutdown contract (``on_stopped``). ``on_stopped``
+        is for graceful shutdown; restart is a crash recovery event and
+        must not silently invoke graceful shutdown logic.
+
+        Default: no-op.
+        """
+
     def supervisor_strategy(self) -> SupervisorStrategy:
         """Override to customize how this actor supervises its children.
 
         Default: OneForOne, up to 3 restarts per 60 seconds, always restart.
         """
         return OneForOneStrategy()
+
+    @classmethod
+    def __validate_spawn_class__(cls, *, mode: str = "unknown") -> None:
+        """Framework hook: class-level validation run before ``spawn()``.
+
+        Subclasses override this to enforce class-level invariants
+        (e.g., handler signature requirements) without forcing the
+        core layer to know about subclass-specific rules.
+
+        Default: no-op. ``AgentActor`` overrides it to enforce async
+        ``execute()`` and warn on legacy sync handlers.
+
+        Args:
+            mode: The system mode (e.g., 'single', 'multi-loop'), passed
+                for richer error messages. No core semantics.
+        """
+
+    @classmethod
+    def __wrap_traverse_input__(cls, inp: Any) -> Any:
+        """Framework hook: lift a raw ``traverse`` input into the actor's message type.
+
+        Default: identity — a plain ``Actor[T, U]`` with message type ``T``
+        accepts ``T`` directly. ``AgentActor`` overrides this to wrap the
+        input as ``Task(input=inp)`` so ``traverse`` can stay in ``core/``
+        without importing from ``agents/``.
+        """
+        return inp
 
     def stop_policy(self) -> StopPolicy:
         """Override to define when this actor stops itself automatically.

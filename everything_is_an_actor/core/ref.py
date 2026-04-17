@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Generic, Protocol, TypeVar, runtime_checkable
 
 from everything_is_an_actor.core.composable_future import ComposableFuture
 from everything_is_an_actor.core.frees import Free, Suspend
@@ -17,6 +17,29 @@ else:
 
 MsgT = TypeVar("MsgT")
 RetT = TypeVar("RetT")
+
+
+@runtime_checkable
+class StreamAdapter(Protocol):
+    """Extension point: how a higher layer turns a single ask into a stream.
+
+    ``core/`` has no notion of ``Task``/``StreamEvent``/``RunStream`` — those
+    belong to ``agents/``. Streaming is therefore modelled as an adapter
+    installed on ``ActorSystem._stream_adapter``. ``ActorRef._ask_stream``
+    delegates to it so the reverse dependency never exists.
+
+    ``AgentSystem`` installs an ``AgentStreamAdapter`` automatically.
+    """
+
+    def ask_stream(
+        self,
+        ref: "ActorRef[Any, Any]",
+        message: Any,
+        *,
+        timeout: float,
+    ) -> AsyncIterator[Any]:
+        """Open a stream for a single ask. Must be an async generator."""
+        ...
 
 
 class ActorRef(Generic[MsgT, RetT]):
@@ -79,53 +102,24 @@ class ActorRef(Generic[MsgT, RetT]):
         return ComposableFuture(_ask())
 
     async def _ask_stream(self, message: MsgT, *, timeout: float = 30.0):  # type: ignore[return]
-        """Stream TaskEvents from a single ask to an AgentActor (internal).
+        """Delegate to the system's installed ``StreamAdapter``.
 
-        Use ``system.ask_stream(ref, msg)`` or ``actor.context.stream(target, msg)`` instead.
+        ``core/`` does not know what streaming means — the adapter (installed
+        by ``AgentSystem`` or user code) defines event types and the
+        per-ask sink protocol. Use ``system.ask_stream(ref, msg)`` or
+        ``actor.context.stream(target, msg)`` instead of calling this directly.
         """
-        from everything_is_an_actor.agents.run_stream import RunStream, make_collector_cls
-        from everything_is_an_actor.agents.task import StreamEvent, StreamResult, Task
-
         if self._cell.stopped:
             raise ActorStoppedError(f"Actor {self.path} is stopped")
 
-        stream_id = uuid.uuid4().hex
-        stream = RunStream()
-        system = self._cell.system
-
-        collector_ref = await system.spawn(make_collector_cls(stream), f"_ask-collector-{stream_id}")
-
-        # Inject per-ask sink so on_receive picks it up without re-spawning the actor
-        tagged = (
-            Task(input=message.input, id=message.id, event_sink_ref=collector_ref)
-            if isinstance(message, Task)
-            else message
-        )  # type: ignore[attr-defined]
-
-        run_exc: list[BaseException] = []
-        run_result: list[Any] = []
-
-        async def _drive() -> None:
-            try:
-                run_result.append(await self._ask(tagged, timeout=timeout))
-            except Exception as exc:
-                run_exc.append(exc)
-            finally:
-                collector_ref.stop()
-                await collector_ref.join()
-                system._root_cells.pop(f"_ask-collector-{stream_id}", None)
-                await stream.close()
-
-        ComposableFuture.eager(_drive(), name=f"ask-stream:{stream_id}")
-
-        async for event in stream:
-            yield StreamEvent(event=event)
-
-        if run_exc:
-            raise run_exc[0]
-
-        if run_result:
-            yield StreamResult(result=run_result[0])
+        adapter = self._cell.system._stream_adapter
+        if adapter is None:
+            raise RuntimeError(
+                "Streaming requires a StreamAdapter. Wrap your ActorSystem with "
+                "AgentSystem, or pass stream_adapter= to ActorSystem()."
+            )
+        async for item in adapter.ask_stream(self, message, timeout=timeout):
+            yield item
 
     def stop(self) -> None:
         """Request graceful shutdown."""
@@ -209,7 +203,11 @@ class ActorRef(Generic[MsgT, RetT]):
         return NotImplemented
 
     def __hash__(self) -> int:
-        return id(self._cell)
+        # Hash on path, not cell identity. Path is unique per cell, so
+        # in-process refs to the same actor still collide correctly, and
+        # path-based hashing stays consistent across cross-process views
+        # of the same logical actor (where ``id(_cell)`` is meaningless).
+        return hash(self.path)
 
 
 class ActorStoppedError(Exception):

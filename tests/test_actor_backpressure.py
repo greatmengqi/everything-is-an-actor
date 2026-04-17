@@ -51,22 +51,18 @@ async def test_memory_mailbox_fail_policy_rejects_ask_when_full():
         mailbox=MemoryMailbox(1, backpressure_policy=BACKPRESSURE_FAIL),
     )
 
-    # Fill queue with tell first
-    await system.tell(ref, "inc")
-
-    # Then ask may be rejected when queue still full
-    got_reject = False
-    for _ in range(30):
-        try:
-            await system.ask(ref, "inc", timeout=0.02)
-        except MailboxFullError:
-            got_reject = True
-            break
-        except asyncio.TimeoutError:
-            pass
-
+    # Fire many concurrent asks while the mailbox is size-1 and the actor is
+    # busy with each message — at least one should hit a full queue and be
+    # rejected with MailboxFullError. Concurrent firing avoids a race where
+    # the actor drains the queue between sequential attempts.
+    results = await asyncio.gather(
+        *(system.ask(ref, "inc", timeout=0.5) for _ in range(20)),
+        return_exceptions=True,
+    )
     await system.shutdown()
-    assert got_reject
+
+    rejected = [r for r in results if isinstance(r, MailboxFullError)]
+    assert rejected, f"Expected at least one MailboxFullError, got: {[type(r).__name__ for r in results]}"
 
 
 @pytest.mark.anyio

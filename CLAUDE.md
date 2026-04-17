@@ -132,16 +132,108 @@ Multi-turn is a usage pattern, not a framework feature. Actor is already a state
 - No blocking calls inside the actor loop — use `context.run_in_executor(fn, *args)` for blocking I/O or CPU-bound work
 - Do not use `time.sleep` — use `asyncio.sleep`
 
-## Lazy imports for circular dependency breaking
+## Dispatcher is for blocking work only
 
-- `ref.py` is core; it cannot top-level import from `agents/`
-- Import `agents/` types inside method bodies when needed:
-  ```python
-  async def ask_stream(self, ...):
-      from everything_is_an_actor.agents.run_stream import RunStream, make_collector_cls
-      ...
-  ```
-- This is a deliberate pattern — keep it consistent
+`Dispatcher` (and `PoolDispatcher`) exist solely to offload **blocking sync
+work** to a thread pool. Combining a dispatcher with an **async** handler is
+conceptually incoherent and the runtime rejects it at `spawn` time
+(`ValueError: async on_receive ... but was spawned with dispatcher`).
+
+- Sync actor (`def receive`) + dispatcher: receive is called inside the pool.
+  This is the intended use.
+- Sync actor, no dispatcher: receive is auto-offloaded via the default executor.
+- Async actor (`async def on_receive`), no dispatcher: handler runs on the
+  caller loop. No offloading needed — async handlers don't block.
+- Async actor + dispatcher: **rejected**. Bridging async handlers into a
+  thread pool requires a throwaway event loop per message, which breaks
+  any cross-loop object the handler touches (ContextVars, registered
+  futures, sink propagation). If the async handler needs to offload
+  blocking work within its body, use `context.run_in_executor(fn, *args)`.
+
+The same rule extends to `AgentActor` — async `execute()` + dispatcher is
+rejected. Implement sync `receive()` on the subclass if the handler is
+genuinely blocking.
+
+## ComposableFuture contracts
+
+`ComposableFuture` is eager by default — Scala `Future` semantics. Constructing
+one from a coroutine in an async context immediately schedules it as an
+`asyncio.Task`; the effect is on the wire, not queued. In a sync context (no
+running loop) the coroutine is retained and scheduled on first `await` /
+`result()`. Do not rely on lazy-description semantics: there is no point at
+which `ComposableFuture(coro)` "hasn't run yet" inside an async function.
+
+### `race` vs `first_success` — named for their true semantics
+
+- `ComposableFuture.race(...)` and `ActorContext.race(...)`:
+  **first-wins, outcome-agnostic**. Whichever branch finishes first —
+  success or failure — determines the result. Losers are cancelled. Aligns
+  with Scala `Future.firstCompletedOf` and `cats.effect.IO.race`.
+- `ComposableFuture.first_completed(...)` and `ActorContext.first_success(...)`:
+  **success-biased**. Failures are skipped; the call waits for any
+  success to arrive, and only raises when every branch has failed.
+
+Pick the one whose semantics match the call site. Do not fall back to `race`
+just because "we want whichever finishes first" — if a fast failure would
+be a wrong answer, you want `first_success`.
+
+### `eager` vs `fire_and_forget` — cancel handle is not optional
+
+- `ComposableFuture.eager(coro, *, name)` returns an `EagerHandle` with
+  `.future` and `.cancel`. Keep both alive; dropping the handle drops the
+  interrupt channel. Tuple unpacking `fut, cancel = Cf.eager(coro)` still
+  works for the common `_run_future, _cancel_run = ...` pattern.
+- `ComposableFuture.fire_and_forget(coro, *, name)` is the explicit
+  "I give up interrupt control" API. Use it when the task must run to
+  completion regardless — cleanup watchers, background event drainers,
+  side-effect logging. The name documents intent at the call site.
+
+Do **not** use `eager` and then ignore the return value. That pattern
+silently lost the cancel callable before the split; it now leaves the
+caller holding an `EagerHandle` they never inspect, which is equally
+useless. `fire_and_forget` says what you mean.
+
+### `promise()` — cross-loop safe for resolve/reject, not for await
+
+`ComposableFuture.promise()` returns `(cf, resolve_fn, reject_fn)`. The
+resolve/reject callables are **thread- and loop-safe** (they hop back to
+the owner loop via `call_soon_threadsafe`). The returned `cf` must be
+**awaited on the same loop that called `promise()`** — the underlying
+`asyncio.Future` is owner-loop-bound. Cross-loop `await` is rejected with
+an explicit `RuntimeError`, not silent breakage.
+
+Use this pattern to bridge events from outside the owner loop (worker
+threads, MQ listeners, other subsystems) into code that awaits on the
+owner loop — never the reverse.
+
+## Upward extension from core: use hooks and adapters, not imports
+
+`core/` must have zero imports from `agents/`, `flow/`, `moa/`, `integrations/`
+— eager **or** lazy. A method-body `from everything_is_an_actor.agents import ...`
+is still a reverse dependency; it only postpones the failure to runtime. Do not
+reintroduce it.
+
+When `core/` behaviour must be parameterized by a higher layer, prefer:
+
+1. **Class-level hooks on `Actor`** — the subclass provides the specialization.
+   - `Actor.__validate_spawn_class__(cls, *, mode)` — per-class spawn-time validation
+     (`AgentActor` uses this to enforce async `execute()`).
+   - `Actor.__wrap_traverse_input__(cls, inp)` — per-class input lifting
+     (`AgentActor` wraps as `Task(input=inp)` so `ActorContext.traverse` stays in core).
+
+2. **Adapter protocols injected on `ActorSystem`** — higher layers install a
+   concrete implementation.
+   - `StreamAdapter` (defined in `core/ref.py`) is the streaming hook.
+     `ActorRef._ask_stream` delegates to `self._cell.system._stream_adapter`;
+     `AgentSystem.__init__` installs `AgentStreamAdapter` which knows about
+     `Task` / `StreamEvent`.
+
+Why this pattern beats lazy imports:
+- `core/` stays independently importable, testable, and distributable
+- The dependency direction in the type system matches the dependency direction
+  in the runtime — no hidden reverse edges
+- Adapters are swappable (e.g. a distributed `StreamAdapter` backed by MQ)
+- Hooks make the extension point explicit in the `Actor` contract
 
 ## Tests validate behavior contracts, not implementation
 

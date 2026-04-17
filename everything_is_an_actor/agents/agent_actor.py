@@ -114,6 +114,52 @@ class AgentActor(Actor[Task[InputT], TaskResult[OutputT]], Generic[InputT, Outpu
                 stacklevel=2,
             )
 
+    @classmethod
+    def __wrap_traverse_input__(cls, inp: Any) -> Any:
+        """Wrap a raw input as a ``Task`` so ``ActorContext.traverse`` works
+        against AgentActor without ``core/`` importing ``Task``.
+        """
+        return Task(input=inp)
+
+    @classmethod
+    def __validate_spawn_class__(cls, *, mode: str = "unknown") -> None:
+        """Enforce AgentActor handler shape at spawn-time.
+
+        - Async ``execute()`` is required; sync ``execute()`` is a hard error.
+        - Sync ``receive()`` / ``on_receive()`` is deprecated — warn with
+          migration path. Will become a hard error in a future version.
+        """
+        super().__validate_spawn_class__(mode=mode)
+
+        from everything_is_an_actor.core.validation import find_sync_handler
+
+        sync_handler = find_sync_handler(cls, "receive", "on_receive")
+        if sync_handler is not None:
+            defining_cls, attr = sync_handler
+            warnings.warn(
+                f"DEPRECATION: Actor '{cls.__name__}' has sync {attr}() "
+                f"(defined in '{defining_cls.__name__}'). "
+                "AgentActor now requires async execute() instead of sync receive(). "
+                "This will become a hard error in a future version. "
+                "Please migrate by implementing 'async def execute(self, input)' instead. "
+                "See docs/COMPATIBILITY_MATRIX.md for migration guide.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+
+        if "execute" not in cls.__dict__:
+            return
+
+        execute_method = cls.__dict__.get("execute")
+        if execute_method is not None and not (
+            inspect.iscoroutinefunction(execute_method) or inspect.isasyncgenfunction(execute_method)
+        ):
+            raise TypeError(
+                f"Actor '{cls.__name__}' has sync execute() method; "
+                "AgentActor requires async execute(). "
+                "Change 'def execute(self, input)' to 'async def execute(self, input)'."
+            )
+
     # ------------------------------------------------------------------
     # Public API — override these
     # ------------------------------------------------------------------
