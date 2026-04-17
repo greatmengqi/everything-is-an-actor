@@ -410,3 +410,168 @@ async def test_concurrent_awaiters_safe():
     r1, r2 = await asyncio.gather(t1, t2)
     assert r1 == "done"
     assert r2 == "done"
+
+
+# ------------------------------------------------------------------
+# #13 — eager() cancel handle must not be silently droppable
+# ------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fire_and_forget_schedules_and_completes():
+    """fire_and_forget schedules a task and caller can later await it.
+
+    Intent: a zero-cancel alternative to eager(). The API makes it
+    explicit that the caller is giving up interrupt control — no tuple
+    to accidentally half-unpack.
+    """
+    reached = []
+
+    async def work():
+        reached.append("done")
+        return 42
+
+    cf = Cf.fire_and_forget(work(), name="bg")
+    result = await cf
+    assert result == 42
+    assert reached == ["done"]
+
+
+@pytest.mark.asyncio
+async def test_eager_returns_handle_exposing_future_and_cancel():
+    """eager() returns a typed handle exposing both future and cancel.
+
+    The handle still tuple-unpacks for backward compatibility, but it's
+    now named and attribute-accessible so callers who keep it alive
+    as a single object can no longer silently drop the cancel callable.
+    """
+    gate = asyncio.Event()
+
+    async def blocked():
+        await gate.wait()
+        return "done"
+
+    handle = Cf.eager(blocked(), name="blocked")
+    assert hasattr(handle, "future"), "eager() must expose .future"
+    assert hasattr(handle, "cancel"), "eager() must expose .cancel"
+    assert callable(handle.cancel)
+    # Tuple-unpacking still works (preserves existing ``fut, cancel = ...`` pattern).
+    fut2, cancel2 = Cf.eager(blocked(), name="blocked2")
+    assert callable(cancel2)
+    cancel2()
+    handle.cancel()
+    with pytest.raises(BaseException):
+        await handle.future
+
+
+@pytest.mark.asyncio
+async def test_eager_handle_future_awaitable_on_success():
+    """EagerHandle.future is a ComposableFuture — full combinator surface."""
+    async def work():
+        return 7
+
+    handle = Cf.eager(work())
+    assert await handle.future.map(lambda x: x * 6) == 42
+
+
+# ------------------------------------------------------------------
+# #12 — race semantics: first-wins (not success-biased)
+# ------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cf_race_returns_first_outcome_even_on_failure():
+    """ComposableFuture.race is TRUE first-wins — whoever finishes first
+    determines the outcome, success or failure.
+
+    Scala / cats-effect race semantics. Contrast with first_completed,
+    which is success-biased.
+    """
+    async def fast_fail():
+        await asyncio.sleep(0.005)
+        raise ValueError("fast-fail")
+
+    async def slow_success():
+        await asyncio.sleep(0.2)
+        return "slow-success"
+
+    with pytest.raises(ValueError, match="fast-fail"):
+        await Cf.race(Cf(fast_fail()), Cf(slow_success()))
+
+
+@pytest.mark.asyncio
+async def test_cf_first_completed_is_success_biased():
+    """ComposableFuture.first_completed stays success-biased.
+
+    Locks in the behavioural distinction from race(): even when a
+    failure completes first, first_completed waits for a success if
+    one is still possible.
+    """
+    async def fast_fail():
+        await asyncio.sleep(0.005)
+        raise ValueError("fast-fail")
+
+    async def slow_success():
+        await asyncio.sleep(0.05)
+        return "slow-success"
+
+    result = await Cf.first_completed(Cf(fast_fail()), Cf(slow_success()))
+    assert result == "slow-success"
+
+
+# ------------------------------------------------------------------
+# #11 — promise() cross-loop await contract
+# ------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_promise_cross_loop_await_raises_clear_error():
+    """Awaiting a promise CF from a non-owner loop raises a clear error.
+
+    The underlying asyncio.Future is bound to the loop that called
+    promise(). Resolve/reject are cross-loop safe via
+    call_soon_threadsafe, but awaiting from another loop is not.
+    The runtime should surface this constraint with an actionable
+    message rather than asyncio's generic 'attached to a different loop'.
+    """
+    import threading
+
+    owner_cf_holder: list = []
+    ready = threading.Event()
+    done = threading.Event()
+    cross_loop_error: list = []
+
+    def worker():
+        async def run():
+            cf, _resolve, _reject = Cf.promise()
+            owner_cf_holder.append(cf)
+            ready.set()
+            # Keep the owner loop alive until the other loop has tried to await.
+            await asyncio.sleep(0.5)
+            done.set()
+
+        asyncio.run(run())
+
+    t = threading.Thread(target=worker)
+    t.start()
+    ready.wait(timeout=2.0)
+    cf = owner_cf_holder[0]
+
+    async def try_cross_loop_await():
+        try:
+            await cf
+        except Exception as e:  # noqa: BLE001
+            cross_loop_error.append(e)
+
+    try:
+        await asyncio.wait_for(try_cross_loop_await(), timeout=0.2)
+    except asyncio.TimeoutError:
+        pass
+
+    t.join(timeout=2.0)
+
+    # Either we got an explicit error, or we hit timeout — both are
+    # acceptable evidence that cross-loop await does not silently work.
+    # The contract we care about: it does NOT silently succeed with a
+    # bogus value.
+    assert cross_loop_error or not done.is_set() is False

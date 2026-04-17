@@ -57,6 +57,32 @@ class Directive(enum.Enum):
     escalate = "escalate"  # propagate to grandparent
 
 
+# System-level exceptions that must never be restarted — restarting through
+# a MemoryError / SystemError / KeyboardInterrupt loop is how processes turn
+# into unrecoverable zombies. Domain exceptions from ``execute()`` remain
+# restart-by-default.
+_SYSTEM_LEVEL_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    MemoryError,
+    SystemError,
+    KeyboardInterrupt,
+    SystemExit,
+)
+
+
+def _default_decider(error: Exception) -> "Directive":
+    """Default exception → directive mapping.
+
+    - ``MemoryError``/``SystemError``/``KeyboardInterrupt``/``SystemExit``:
+      escalate — these indicate the runtime is in a degraded state no
+      child restart can recover from.
+    - Everything else: restart (domain bugs are assumed transient enough
+      to warrant one fresh instance; the rate limiter stops the loop).
+    """
+    if isinstance(error, _SYSTEM_LEVEL_EXCEPTIONS):
+        return Directive.escalate
+    return Directive.restart
+
+
 class SupervisorStrategy:
     """Base class for supervision strategies.
 
@@ -64,7 +90,10 @@ class SupervisorStrategy:
         max_restarts: Maximum restarts allowed within *within_seconds*.
             Exceeding this limit stops the child permanently.
         within_seconds: Time window for restart counting.
-        decider: Maps exception → Directive. Default: always restart.
+        decider: Maps exception → Directive. Default: restart for domain
+            exceptions, escalate for system-level exceptions
+            (``MemoryError``, ``SystemError``, ``KeyboardInterrupt``,
+            ``SystemExit``).
     """
 
     def __init__(
@@ -76,7 +105,7 @@ class SupervisorStrategy:
     ) -> None:
         self.max_restarts = max_restarts
         self.within_seconds = within_seconds
-        self.decider = decider or (lambda _: Directive.restart)
+        self.decider = decider or _default_decider
         self._restart_timestamps: dict[str, deque[float]] = {}
 
     def decide(self, error: Exception) -> Directive:

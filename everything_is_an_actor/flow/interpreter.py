@@ -158,7 +158,7 @@ class Interpreter:
             case _DivertTo(source=source, side=side, when=when):
                 result = await self._interpret(source, input)
                 if when(result):
-                    ComposableFuture.eager(_divert_side(self._interpret, side, result))
+                    ComposableFuture.fire_and_forget(_divert_side(self._interpret, side, result))
                 return result
 
             case _AndThen(source=source, callback=callback):

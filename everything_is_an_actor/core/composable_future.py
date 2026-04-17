@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Coroutine
+from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, TypeVar, Generic, Sequence
 
 import anyio
@@ -106,50 +107,99 @@ class ComposableFuture(Generic[T]):
         result = cf.result(timeout=5.0)
     """
 
-    __slots__ = ("_coro", "_outcome", "_resolving")
+    __slots__ = ("_coro", "_task", "_owner_loop", "_outcome")
 
-    def __init__(self, coro: Awaitable[T]) -> None:
-        self._coro: Awaitable[T] | None = coro
+    def __init__(self, coro_or_task: Awaitable[T]) -> None:
+        """Eager (in async context) / lazy-fallback (in sync context) constructor.
+
+        - In an async context (``get_running_loop()`` succeeds), the coroutine
+          is scheduled immediately as an ``asyncio.Task``. This matches Scala
+          ``Future`` semantics: the effect starts now, awaiters observe an
+          in-flight computation.
+        - In a sync context (no running loop), the coroutine is retained
+          and scheduled on first ``await`` / ``result()``. This keeps
+          ``ComposableFuture(coro).map(f).result()`` working when no loop
+          is running yet.
+
+        Unawaited chains built inside an async context leak no "coroutine was
+        never awaited" warnings because the coroutine is owned by a Task.
+        """
         self._outcome: Try[T] | None = None
-        self._resolving: asyncio.Event | None = None
+        self._coro: Awaitable[T] | None = None
+        self._task: asyncio.Future[T] | None = None
+        self._owner_loop: asyncio.AbstractEventLoop | None = None
+        if isinstance(coro_or_task, (asyncio.Task, asyncio.Future)):
+            self._task = coro_or_task
+            self._owner_loop = coro_or_task.get_loop()
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Sync context — keep coroutine until first resolve/result.
+            self._coro = coro_or_task
+            return
+        self._task = asyncio.ensure_future(coro_or_task, loop=loop)
+        self._owner_loop = loop
 
-    def _wrap(self, coro: Awaitable[U]) -> ComposableFuture[U]:
-        """Create a child future."""
-        return ComposableFuture(coro)
+    def _wrap_deferred(self, factory: Callable[[], Awaitable[U]]) -> ComposableFuture[U]:
+        """Build a child future from a zero-arg coroutine factory.
+
+        In an async context, the coroutine is scheduled immediately. In a
+        sync context (no loop), it is retained as a lazy thunk and resolved
+        on first use — necessary to keep ``of(x).map(f).result()`` working
+        from plain threads.
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            cf: ComposableFuture[U] = object.__new__(ComposableFuture)
+            cf._outcome = None
+            cf._coro = factory()
+            cf._task = None
+            cf._owner_loop = None
+            return cf
+        return ComposableFuture(factory())
 
     async def _resolve(self) -> T:
-        """Resolve the awaitable, caching the result for subsequent calls.
+        """Await the underlying task, caching the outcome as ``Try[T]``.
 
-        First awaiter runs the coroutine and caches the outcome as ``Try[T]``.
-        Concurrent awaiters wait on an ``asyncio.Event`` barrier
-        until the first one finishes, then read the cache.
+        ``asyncio.Task`` is resolve-once by construction and supports
+        concurrent awaiters natively — no barrier required. The ``_outcome``
+        cache is purely a fast-path for ``result()`` and repeated awaits.
+
+        If constructed in sync context (``_task is None`` but ``_coro`` set),
+        schedule now on the current running loop.
+
+        Cross-loop contract: the underlying ``_task`` is bound to
+        ``self._owner_loop``. Awaiting from a different loop is rejected
+        with a clear error rather than asyncio's generic "attached to a
+        different loop" — this surfaces the contract enforced by
+        ``promise()``: resolve/reject are cross-loop safe, but **awaiting
+        must happen on the owner loop**.
         """
-        # Fast path: already resolved
         if self._outcome is not None:
             return self._outcome.get()
-
-        # Another awaiter is resolving — wait for it
-        if self._resolving is not None:
-            await self._resolving.wait()
-            if self._outcome is not None:
-                return self._outcome.get()
-            raise RuntimeError("ComposableFuture resolved without outcome")
-
-        # First awaiter — claim the resolve slot
-        self._resolving = asyncio.Event()
+        if self._task is None and self._coro is not None:
+            loop = asyncio.get_running_loop()
+            self._task = asyncio.ensure_future(self._coro, loop=loop)
+            self._coro = None
+            self._owner_loop = loop
+        if self._owner_loop is not None:
+            current = asyncio.get_running_loop()
+            if current is not self._owner_loop:
+                raise RuntimeError(
+                    "ComposableFuture awaited from a different event loop than the one "
+                    "it was scheduled on. Cross-loop await is not supported — use "
+                    "ComposableFuture.promise() + resolve/reject (cross-loop safe) to "
+                    "signal between loops, or await on the owner loop."
+                )
         try:
-            coro = self._coro
-            result = await coro  # type: ignore[misc]
+            result = await self._task  # type: ignore[misc]
             self._outcome = Success(result)
-            self._coro = None  # release coroutine for GC
             return result
         except Exception as e:
             self._outcome = Failure(e)
-            self._coro = None
             raise
-        finally:
-            self._resolving.set()
-            self._resolving = None  # release Event for GC
 
     # =================================================================
     #  EXECUTION — await / blocking
@@ -159,34 +209,46 @@ class ComposableFuture(Generic[T]):
         return self._resolve().__await__()
 
     def result(self, timeout: float | None = None) -> T:
-        """Blocking get — works from any non-async thread.
+        """Blocking get — must be called from a non-async thread.
 
-        Raises RuntimeError if called from within a running event loop
-        (use ``await`` instead).
+        Bridges back to the future's owner loop via
+        ``run_coroutine_threadsafe`` so tasks, futures, and contextvars
+        created on the owner loop remain valid. Previously this used
+        ``asyncio.run()`` which created a fresh loop — unsafe whenever the
+        CF referenced any cross-loop object.
         """
-        # Fast path: already resolved
         if self._outcome is not None:
             return self._outcome.get()
 
-        # Reject if called from within an async context
         try:
             asyncio.get_running_loop()
         except RuntimeError:
-            pass  # No running loop — good, we're in a sync thread
+            pass  # sync thread — OK
         else:
             raise RuntimeError(
                 "ComposableFuture.result() called from within a running event loop. Use 'await' instead."
             )
 
-        # Sync thread — run in a fresh event loop
-        if timeout is not None:
+        if self._owner_loop is None:
+            # Lazy CF built in sync context (no task scheduled yet).
+            # Spin up a throwaway loop to run the retained coroutine.
+            if timeout is not None:
 
-            async def _timed() -> T:
-                with anyio.fail_after(timeout):
-                    return await self._resolve()
+                async def _timed() -> T:
+                    with anyio.fail_after(timeout):
+                        return await self._resolve()
 
-            return asyncio.run(_timed())
-        return asyncio.run(self._resolve())
+                return asyncio.run(_timed())
+            return asyncio.run(self._resolve())
+
+        import concurrent.futures as _cf
+
+        handle = asyncio.run_coroutine_threadsafe(self._resolve(), self._owner_loop)
+        try:
+            return handle.result(timeout)
+        except _cf.TimeoutError as e:
+            handle.cancel()
+            raise TimeoutError(str(e)) from e
 
     # =================================================================
     #  PRIMITIVES — Categorical basis
@@ -197,10 +259,10 @@ class ComposableFuture(Generic[T]):
     def map(self, fn: Callable[[T], U]) -> ComposableFuture[U]:
         """Functor fmap.  ``(A → B) → F[A] → F[B]``"""
 
-        async def _mapped():
+        async def _mapped() -> U:
             return fn(await self._resolve())
 
-        return self._wrap(_mapped())
+        return self._wrap_deferred(_mapped)
 
     # -- Monad --------------------------------------------------------
 
@@ -212,10 +274,10 @@ class ComposableFuture(Generic[T]):
         any ``async def`` returns one, and ``ComposableFuture`` is one.
         """
 
-        async def _flat_mapped():
+        async def _flat_mapped() -> U:
             return await fn(await self._resolve())
 
-        return self._wrap(_flat_mapped())
+        return self._wrap_deferred(_flat_mapped)
 
     # -- Applicative / Product ----------------------------------------
 
@@ -227,7 +289,7 @@ class ComposableFuture(Generic[T]):
         original exception propagates.
         """
 
-        async def _zipped():
+        async def _zipped() -> tuple[T, U]:
             tasks = [asyncio.ensure_future(self._resolve()), asyncio.ensure_future(other._resolve())]
             try:
                 a, b = await asyncio.gather(*tasks)
@@ -236,7 +298,7 @@ class ComposableFuture(Generic[T]):
                 await _cancel_and_wait(tasks)
                 raise
 
-        return self._wrap(_zipped())
+        return self._wrap_deferred(_zipped)
 
     def ap(self, fn_future: ComposableFuture[Callable[[T], U]]) -> ComposableFuture[U]:
         """Applicative apply.  ``F[A] → F[A → B] → F[B]``
@@ -250,24 +312,24 @@ class ComposableFuture(Generic[T]):
     def recover(self, fn: Callable[[Exception], T]) -> ComposableFuture[T]:
         """Handle exceptions synchronously.  MonadError ``handleError``."""
 
-        async def _recovered():
+        async def _recovered() -> T:
             try:
                 return await self._resolve()
             except Exception as e:
                 return fn(e)
 
-        return self._wrap(_recovered())
+        return self._wrap_deferred(_recovered)
 
     def recover_with(self, fn: Callable[[Exception], Awaitable[T]]) -> ComposableFuture[T]:
         """Handle exceptions with async recovery.  MonadError ``handleErrorWith``."""
 
-        async def _recovered():
+        async def _recovered() -> T:
             try:
                 return await self._resolve()
             except Exception as e:
                 return await fn(e)
 
-        return self._wrap(_recovered())
+        return self._wrap_deferred(_recovered)
 
     # =================================================================
     #  DERIVED — Composed from primitives
@@ -279,13 +341,13 @@ class ComposableFuture(Generic[T]):
         ``map(a → a if p(a) else raise ValueError)``
         """
 
-        async def _filtered():
+        async def _filtered() -> T:
             result = await self._resolve()
             if not predicate(result):
                 raise ValueError(f"ComposableFuture.filter predicate failed for {result!r}")
             return result
 
-        return self._wrap(_filtered())
+        return self._wrap_deferred(_filtered)
 
     def transform(
         self,
@@ -294,13 +356,13 @@ class ComposableFuture(Generic[T]):
     ) -> ComposableFuture[U]:
         """Bifunctor-like — transform both success and failure paths."""
 
-        async def _transformed():
+        async def _transformed() -> U:
             try:
                 return success(await self._resolve())
             except Exception as e:
                 return failure(e)
 
-        return self._wrap(_transformed())
+        return self._wrap_deferred(_transformed)
 
     def fallback_to(self, other: Callable[[], Awaitable[T]]) -> ComposableFuture[T]:
         """Alternative ``orElse`` — on failure, try fallback factory.
@@ -308,25 +370,25 @@ class ComposableFuture(Generic[T]):
         Takes a zero-arg callable to avoid unawaited coroutine warnings.
         """
 
-        async def _fallback():
+        async def _fallback() -> T:
             try:
                 return await self._resolve()
             except Exception:
                 return await other()
 
-        return self._wrap(_fallback())
+        return self._wrap_deferred(_fallback)
 
     # -- Side effects -------------------------------------------------
 
     def and_then(self, fn: Callable[[T], Any]) -> ComposableFuture[T]:
         """Side effect on success (logging, metrics). Returns original value."""
 
-        async def _tapped():
+        async def _tapped() -> T:
             result = await self._resolve()
             fn(result)
             return result
 
-        return self._wrap(_tapped())
+        return self._wrap_deferred(_tapped)
 
     def on_complete(
         self,
@@ -335,7 +397,7 @@ class ComposableFuture(Generic[T]):
     ) -> ComposableFuture[T]:
         """Attach callbacks for side effects. Returns original result/error."""
 
-        async def _observed():
+        async def _observed() -> T:
             try:
                 result = await self._resolve()
             except Exception as e:
@@ -346,18 +408,18 @@ class ComposableFuture(Generic[T]):
                 on_success(result)
             return result
 
-        return self._wrap(_observed())
+        return self._wrap_deferred(_observed)
 
     # -- Timeout ------------------------------------------------------
 
     def with_timeout(self, seconds: float) -> ComposableFuture[T]:
         """Fail with ``TimeoutError`` if not complete within *seconds*."""
 
-        async def _timed():
+        async def _timed() -> T:
             with anyio.fail_after(seconds):
                 return await self._resolve()
 
-        return self._wrap(_timed())
+        return self._wrap_deferred(_timed)
 
     # =================================================================
     #  CONSTRUCTORS — Monad return, MonadError raise, Traverse
@@ -367,9 +429,9 @@ class ComposableFuture(Generic[T]):
     def of(value: T) -> ComposableFuture[T]:
         """Monad return / pure.  Lift a value into an already-resolved future."""
         cf: ComposableFuture[T] = object.__new__(ComposableFuture)
-        cf._coro = None
+        cf._task = None
+        cf._owner_loop = None
         cf._outcome = Success(value)
-        cf._resolving = None
         return cf
 
     @staticmethod
@@ -449,9 +511,9 @@ class ComposableFuture(Generic[T]):
     def failed(error: Exception) -> ComposableFuture[Any]:
         """MonadError ``raiseError``.  Already-failed future."""
         cf: ComposableFuture[Any] = object.__new__(ComposableFuture)
-        cf._coro = None
+        cf._task = None
+        cf._owner_loop = None
         cf._outcome = Failure(error)
-        cf._resolving = None
         return cf
 
     @staticmethod
@@ -496,9 +558,13 @@ class ComposableFuture(Generic[T]):
                 except Exception as e:
                     return Failure(e)
 
-            def _suppress_exception(t: asyncio.Task[Any]) -> None:
-                if not t.cancelled() and t.exception() is not None:
-                    pass  # consumed
+            def _retrieve_exception(t: asyncio.Task[Any]) -> None:
+                # Reading ``t.exception()`` marks the exception as retrieved,
+                # which is what silences asyncio's "Task exception was never
+                # retrieved" warning. The call itself is the side effect —
+                # the returned value is intentionally discarded.
+                if not t.cancelled():
+                    t.exception()
 
             tasks = [asyncio.ensure_future(_await_one(f)) for f in futures]
 
@@ -524,7 +590,7 @@ class ComposableFuture(Generic[T]):
                             await asyncio.gather(*pending, return_exceptions=True)
                     else:
                         for p in pending:
-                            p.add_done_callback(_suppress_exception)
+                            p.add_done_callback(_retrieve_exception)
                     return outcome.value
 
             # All tasks completed without success
@@ -600,24 +666,63 @@ class ComposableFuture(Generic[T]):
             with anyio.CancelScope(shield=True):
                 return await self._resolve()
 
-        return self._wrap(_shielded())
+        return self._wrap_deferred(_shielded)
 
     @staticmethod
     def eager(
         coro: Coroutine[Any, Any, T],
         *,
         name: str | None = None,
-    ) -> tuple[ComposableFuture[T], Callable[[], None]]:
+    ) -> "EagerHandle[T]":
         """Start a coroutine eagerly as a background task.
 
-        Returns ``(future, cancel)`` — the future for join/await,
-        the cancel callable to interrupt the running task.
-
-        Used by the actor runtime for long-lived message loops.
+        Returns an ``EagerHandle`` exposing both ``.future`` (for join/await)
+        and ``.cancel`` (to interrupt the running task). The handle is also
+        tuple-unpackable so ``fut, cancel = ComposableFuture.eager(...)`` keeps
+        working. If you genuinely don't need the cancel callable — use
+        ``fire_and_forget`` instead; dropping an ``EagerHandle`` on the floor
+        drops the interrupt channel.
         """
         task = asyncio.create_task(coro, name=name)
 
         def _cancel() -> None:
             task.cancel()
 
-        return ComposableFuture(task), _cancel
+        return EagerHandle(ComposableFuture(task), _cancel)
+
+    @staticmethod
+    def fire_and_forget(
+        coro: Coroutine[Any, Any, T],
+        *,
+        name: str | None = None,
+    ) -> ComposableFuture[T]:
+        """Schedule a coroutine as a background task with NO cancel handle.
+
+        This is the explicit "I am giving up interrupt control" API. Use it
+        where the current code is ``ComposableFuture.eager(coro, name=...)``
+        with the return value discarded — that pattern silently loses the
+        cancel callable; this one makes the intent visible.
+
+        If you later need to cancel, reach for ``eager()`` instead.
+        """
+        task = asyncio.create_task(coro, name=name)
+        return ComposableFuture(task)
+
+
+@dataclass(frozen=True)
+class EagerHandle(Generic[T]):
+    """Handle returned by ``ComposableFuture.eager``.
+
+    Exposes the scheduled future and a cancel callable as named attributes so
+    callers cannot drop the cancel channel by failing to unpack a tuple.
+    Iterable for backward compatibility with the old tuple return shape —
+    ``fut, cancel = Cf.eager(coro)`` still works.
+    """
+
+    future: "ComposableFuture[T]"
+    cancel: Callable[[], None]
+
+    def __iter__(self):
+        yield self.future
+        yield self.cancel
+

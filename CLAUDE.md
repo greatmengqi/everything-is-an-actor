@@ -78,6 +78,36 @@ Design constraints:
 - Supervision (`supervisor_strategy`) handles restart/stop/escalate
 - `join()` suppresses only `CancelledError`; actor teardown failures must propagate
 
+## Exceptions must leave a trace — never silently swallowed
+
+The first instinct in cleanup paths, fire-and-forget tasks, and user-callback
+loops is `except Exception: pass` so the surrounding flow doesn't break. That
+turns the exception into a black hole — operators have no way to know
+something failed. **Catching is allowed; swallowing is not.**
+
+- `except Exception: pass` is banned. Every catch must end with at least
+  `logger.exception(...)` (preferred — captures stack), or a deliberate
+  `logger.warning/error(...)` if the exception type is expected and the
+  stack would be noise.
+- `except BaseException` is almost always wrong. If you must catch
+  `asyncio.CancelledError`, do it in a separate, explicit `except` arm
+  (CancelledError is `BaseException` since 3.8 — bare `except Exception`
+  doesn't catch it, and you don't want it to).
+- Fire-and-forget tasks have no caller to receive the exception — the
+  logger is the only signal channel. Use `logger.exception` so the
+  traceback is preserved.
+- Callback loops (dead-letter listeners, deactivation hooks, middleware)
+  must isolate failures (one bad callback can't block the others) AND
+  log them. Both, not either.
+- The one exception is `join()` / similar "wait for completion" APIs that
+  intentionally swallow `CancelledError` because the cancellation has
+  already been handled upstream — those need an inline comment explaining
+  *why* the swallow is correct.
+
+If the catch is genuinely a no-op (e.g. cleaning up an already-cleaned
+resource), write `# noqa: BLE001 — already cleaned` and an explanation,
+not bare `pass`.
+
 ## Fail-fast over deferred detection
 
 - Invalid state at call boundaries raises immediately (duplicate `run_id`, stopped actor, etc.)
@@ -132,16 +162,125 @@ Multi-turn is a usage pattern, not a framework feature. Actor is already a state
 - No blocking calls inside the actor loop — use `context.run_in_executor(fn, *args)` for blocking I/O or CPU-bound work
 - Do not use `time.sleep` — use `asyncio.sleep`
 
-## Lazy imports for circular dependency breaking
+## Python compatibility floor: 3.12
 
-- `ref.py` is core; it cannot top-level import from `agents/`
-- Import `agents/` types inside method bodies when needed:
-  ```python
-  async def ask_stream(self, ...):
-      from everything_is_an_actor.agents.run_stream import RunStream, make_collector_cls
-      ...
-  ```
-- This is a deliberate pattern — keep it consistent
+`pyproject.toml` declares `requires-python = ">=3.12"`. Any contribution must
+run on a stock 3.12 interpreter — do NOT use 3.13+-only features
+(e.g. PEP 702 `@deprecated`, PEP 705 `ReadOnly` TypedDict, `copy.replace`,
+the new free-threaded build flags).
+
+3.12 features are in scope and may be used freely:
+- PEP 695 generic syntax — `class Foo[T]:`, `def f[T](...)`, `type Alias = ...`
+- PEP 692 `TypedDict` unpacking in `**kwargs`
+- `typing.override` decorator
+- `asyncio.TaskGroup`, `typing.Self`
+
+Existing code uses the classic `TypeVar` / `Generic[T]` / `Protocol[T]` forms
+for historical reasons; both styles are equivalent at runtime, mix freely.
+Do not run a stylistic migration just to switch forms.
+
+## Dispatcher is for blocking work only
+
+`Dispatcher` (and `PoolDispatcher`) exist solely to offload **blocking sync
+work** to a thread pool. Combining a dispatcher with an **async** handler is
+conceptually incoherent and the runtime rejects it at `spawn` time
+(`ValueError: async on_receive ... but was spawned with dispatcher`).
+
+- Sync actor (`def receive`) + dispatcher: receive is called inside the pool.
+  This is the intended use.
+- Sync actor, no dispatcher: receive is auto-offloaded via the default executor.
+- Async actor (`async def on_receive`), no dispatcher: handler runs on the
+  caller loop. No offloading needed — async handlers don't block.
+- Async actor + dispatcher: **rejected**. Bridging async handlers into a
+  thread pool requires a throwaway event loop per message, which breaks
+  any cross-loop object the handler touches (ContextVars, registered
+  futures, sink propagation). If the async handler needs to offload
+  blocking work within its body, use `context.run_in_executor(fn, *args)`.
+
+The same rule extends to `AgentActor` — async `execute()` + dispatcher is
+rejected. Implement sync `receive()` on the subclass if the handler is
+genuinely blocking.
+
+## ComposableFuture contracts
+
+`ComposableFuture` is eager by default — Scala `Future` semantics. Constructing
+one from a coroutine in an async context immediately schedules it as an
+`asyncio.Task`; the effect is on the wire, not queued. In a sync context (no
+running loop) the coroutine is retained and scheduled on first `await` /
+`result()`. Do not rely on lazy-description semantics: there is no point at
+which `ComposableFuture(coro)` "hasn't run yet" inside an async function.
+
+### `race` vs `first_success` — named for their true semantics
+
+- `ComposableFuture.race(...)` and `ActorContext.race(...)`:
+  **first-wins, outcome-agnostic**. Whichever branch finishes first —
+  success or failure — determines the result. Losers are cancelled. Aligns
+  with Scala `Future.firstCompletedOf` and `cats.effect.IO.race`.
+- `ComposableFuture.first_completed(...)` and `ActorContext.first_success(...)`:
+  **success-biased**. Failures are skipped; the call waits for any
+  success to arrive, and only raises when every branch has failed.
+
+Pick the one whose semantics match the call site. Do not fall back to `race`
+just because "we want whichever finishes first" — if a fast failure would
+be a wrong answer, you want `first_success`.
+
+### `eager` vs `fire_and_forget` — cancel handle is not optional
+
+- `ComposableFuture.eager(coro, *, name)` returns an `EagerHandle` with
+  `.future` and `.cancel`. Keep both alive; dropping the handle drops the
+  interrupt channel. Tuple unpacking `fut, cancel = Cf.eager(coro)` still
+  works for the common `_run_future, _cancel_run = ...` pattern.
+- `ComposableFuture.fire_and_forget(coro, *, name)` is the explicit
+  "I give up interrupt control" API. Use it when the task must run to
+  completion regardless — cleanup watchers, background event drainers,
+  side-effect logging. The name documents intent at the call site.
+
+Do **not** use `eager` and then ignore the return value. That pattern
+silently lost the cancel callable before the split; it now leaves the
+caller holding an `EagerHandle` they never inspect, which is equally
+useless. `fire_and_forget` says what you mean.
+
+### `promise()` — cross-loop safe for resolve/reject, not for await
+
+`ComposableFuture.promise()` returns `(cf, resolve_fn, reject_fn)`. The
+resolve/reject callables are **thread- and loop-safe** (they hop back to
+the owner loop via `call_soon_threadsafe`). The returned `cf` must be
+**awaited on the same loop that called `promise()`** — the underlying
+`asyncio.Future` is owner-loop-bound. Cross-loop `await` is rejected with
+an explicit `RuntimeError`, not silent breakage.
+
+Use this pattern to bridge events from outside the owner loop (worker
+threads, MQ listeners, other subsystems) into code that awaits on the
+owner loop — never the reverse.
+
+## Upward extension from core: use hooks and adapters, not imports
+
+`core/` must have zero imports from `agents/`, `flow/`, `moa/`, `integrations/`
+— eager **or** lazy. A method-body `from everything_is_an_actor.agents import ...`
+is still a reverse dependency; it only postpones the failure to runtime. Do not
+reintroduce it.
+
+When `core/` behaviour must be parameterized by a higher layer, prefer:
+
+1. **Class-level hooks on `Actor`** — the subclass provides the specialization.
+   - `Actor.__validate_spawn_class__(cls, *, mode)` — per-class spawn-time validation
+     (`AgentActor` uses this to enforce async `execute()`).
+   - `Actor.__wrap_traverse_input__(cls, inp)` — per-class input lifting
+     (`AgentActor` wraps as `Task(input=inp)` so `ActorContext.traverse` stays in core).
+
+2. **Adapter protocols injected on `ActorSystem`** — higher layers install a
+   concrete implementation.
+   - `StreamAdapter` (defined in `core/ref.py`) is the streaming hook.
+     `ActorRef._ask_stream` delegates to `self._cell.system._stream_adapter`;
+     `AgentSystem.__init__` installs `AgentStreamAdapter` which knows about
+     `Task` / `StreamEvent`.
+
+Why this pattern beats lazy imports:
+- `core/` stays independently importable, testable, and distributable
+- The dependency direction in the type system matches the dependency direction
+  in the runtime — no hidden reverse edges
+- Adapters are swappable (e.g. a distributed `StreamAdapter` backed by MQ)
+- Hooks make the extension point explicit in the `Actor` contract
 
 ## Tests validate behavior contracts, not implementation
 

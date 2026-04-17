@@ -312,6 +312,107 @@ class TestDeadLetters:
         assert received[-1].message == "orphan"
         await system.shutdown()
 
+    @pytest.mark.anyio
+    async def test_dead_letter_callback_failure_is_logged(self, caplog):
+        """A buggy dead-letter callback must not turn the dead-letter sink into
+        a black hole: the callback exception must surface through the logger,
+        and good callbacks registered after the bad one must still run.
+        """
+        import logging
+
+        system = ActorSystem("test")
+
+        def bad_cb(dl):
+            raise RuntimeError("callback bug")
+
+        good_received: list = []
+        system.on_dead_letter(bad_cb)
+        system.on_dead_letter(lambda dl: good_received.append(dl))
+
+        ref = await system.spawn(EchoActor, "echo")
+        ref.stop()
+        await asyncio.sleep(0.05)
+
+        with caplog.at_level(logging.WARNING, logger="everything_is_an_actor.core.system"):
+            await system.tell(ref, "orphan")
+
+        # The bad callback's exception must surface
+        surfaced = [
+            r
+            for r in caplog.records
+            if r.name == "everything_is_an_actor.core.system"
+            and ("callback bug" in r.getMessage() or r.exc_info is not None)
+        ]
+        assert surfaced, (
+            "Dead-letter callback exception was silently swallowed. Records: "
+            f"{[(r.name, r.levelname, r.getMessage()) for r in caplog.records]}"
+        )
+
+        # And isolation: a failing callback must not block subsequent callbacks
+        assert len(good_received) >= 1, (
+            "A failing callback blocked later callbacks — they should be isolated"
+        )
+
+        await system.shutdown()
+
+
+class TestOnStoppedGuarantees:
+    @pytest.mark.anyio
+    async def test_on_stopped_retry_cancellation_surfaces(self, caplog):
+        """When ``on_stopped`` raises CancelledError on both initial call AND
+        retry, the retry's cancellation must be logged.
+
+        Today the retry uses bare ``except Exception`` which does not catch
+        ``asyncio.CancelledError`` (3.8+ — it is a ``BaseException`` subclass,
+        not ``Exception``). The retry's cancellation propagates silently to
+        the outer ``shield``, leaving zero observable trace despite the
+        CLAUDE.md contract claiming 'on_stopped is guaranteed'.
+        """
+        import logging
+
+        attempts = {"n": 0}
+
+        class DoubleCancelStop(Actor):
+            async def on_receive(self, message):
+                return message
+
+            async def on_stopped(self):
+                attempts["n"] += 1
+                raise asyncio.CancelledError("user-raised cancel")
+
+        system = ActorSystem("test")
+        ref = await system.spawn(DoubleCancelStop, "twice")
+
+        with caplog.at_level(logging.WARNING, logger="everything_is_an_actor.core.system"):
+            ref.stop()
+            await ref.join()
+
+        # Both attempts must have run (initial + retry).
+        assert attempts["n"] == 2, (
+            f"Expected on_stopped to run twice (initial + retry); ran {attempts['n']}"
+        )
+
+        msgs = [r.getMessage() for r in caplog.records]
+        # First cancel → existing 'retrying once' notice
+        assert any("retrying once" in m for m in msgs), (
+            f"First cancel log missing. Records: {msgs}"
+        )
+        # Second cancel must produce a DISTINCT log entry describing the retry
+        # outcome (today: silent — the bare ``except Exception`` does not catch
+        # ``CancelledError``, so the retry's outcome is invisible).
+        retry_outcome = [
+            m
+            for m in msgs
+            if "retrying once" not in m  # exclude the initial notice
+            and "retry" in m.lower()
+        ]
+        assert retry_outcome, (
+            "Retry's outcome must produce a separate log entry beyond the "
+            f"initial 'retrying once' notice. Got messages: {msgs}"
+        )
+
+        await system.shutdown()
+
 
 class TestDuplicateNames:
     @pytest.mark.anyio

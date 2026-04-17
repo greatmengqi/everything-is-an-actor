@@ -814,7 +814,7 @@ class ComposableStream(Generic[T]):
                     await sem.acquire()
                     async with lock:
                         active += 1
-                    ComposableFuture.eager(_run_sub(item))
+                    ComposableFuture.fire_and_forget(_run_sub(item))
                 producer_done.set()
                 async with lock:
                     if active == 0:

@@ -144,8 +144,9 @@ class TestFastMailboxCrossLoop:
 
 class TestNamedDispatchers:
     async def test_named_dispatchers_basic(self):
+        # Dispatchers offload blocking sync work — use sync receive().
         class Echo(Actor[str, str]):
-            async def on_receive(self, message):
+            def receive(self, message):
                 return f"echo:{message}"
 
         system = ActorSystem("test", dispatchers={
@@ -162,6 +163,17 @@ class TestNamedDispatchers:
             await system.spawn(Actor, "x", dispatcher="gpu")
         await system.shutdown()
 
+    async def test_async_handler_with_dispatcher_rejected(self):
+        """Async on_receive + dispatcher is a conceptual error — must be rejected at spawn."""
+        class AsyncEcho(Actor[str, str]):
+            async def on_receive(self, message):
+                return message
+
+        system = ActorSystem("test", dispatchers={"io": PoolDispatcher(pool_size=1)})
+        with pytest.raises(ValueError, match="async on_receive"):
+            await system.spawn(AsyncEcho, "bad", dispatcher="io")
+        await system.shutdown()
+
     async def test_lazy_start(self):
         """Dispatcher is started lazily on first spawn, not at system init."""
         d = PoolDispatcher(pool_size=1)
@@ -169,7 +181,7 @@ class TestNamedDispatchers:
         assert d._pool is None
 
         class Echo(Actor[str, str]):
-            async def on_receive(self, message):
+            def receive(self, message):
                 return message
 
         ref = await system.spawn(Echo, "e", dispatcher="io")
@@ -223,7 +235,15 @@ class TestAutoDispatch:
 
 
 class TestDispatcherAgentActor:
-    async def test_agent_actor_with_named_dispatcher(self):
+    async def test_async_agent_actor_with_dispatcher_rejected(self):
+        """AgentActor with async execute + dispatcher is rejected at spawn.
+
+        AgentActor's on_receive is framework-managed async, so combining it
+        with a dispatcher would route each message through a throwaway event
+        loop — breaking ContextVars, pending futures, and sink propagation.
+        Users who want AgentActor handlers to offload blocking work should
+        override sync ``receive()`` instead of async ``execute()``.
+        """
         class UpperAgent(AgentActor[str, str]):
             async def execute(self, input: str) -> str:
                 return input.upper()
@@ -231,21 +251,6 @@ class TestDispatcherAgentActor:
         system = ActorSystem("test", dispatchers={
             "io": PoolDispatcher(pool_size=1),
         })
-        ref = await system.spawn(UpperAgent, "upper", dispatcher="io")
-        result: TaskResult[str] = await system.ask(ref, Task(input="hello"))
-        assert result.output == "HELLO"
-        await system.shutdown()
-
-    async def test_agent_actor_multiple_asks(self):
-        class Reverser(AgentActor[str, str]):
-            async def execute(self, input: str) -> str:
-                return input[::-1]
-
-        system = ActorSystem("test", dispatchers={
-            "io": PoolDispatcher(pool_size=2),
-        })
-        ref = await system.spawn(Reverser, "rev", dispatcher="io")
-        for word in ["hello", "world", "test"]:
-            result = await system.ask(ref, Task(input=word))
-            assert result.output == word[::-1]
+        with pytest.raises(ValueError, match="async on_receive"):
+            await system.spawn(UpperAgent, "upper", dispatcher="io")
         await system.shutdown()

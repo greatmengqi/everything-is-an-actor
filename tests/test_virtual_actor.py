@@ -581,3 +581,62 @@ async def test_reactivation_after_failed_on_stopped():
     assert r2 == "ok:second"
 
     await system.shutdown()
+
+
+# ── Observability of teardown failures ────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_watch_deactivation_logs_join_failures(caplog):
+    """`_watch_deactivation` must not silently swallow failures from `ref.join()`.
+
+    Per CLAUDE.md: 'join() suppresses only CancelledError; actor teardown
+    failures must propagate.' Inside the fire-and-forget watcher there is no
+    caller to propagate to — so the failure must at minimum surface through
+    the logger, otherwise a crashing actor teardown disappears without trace.
+
+    Cleanup invariants (registry entry removal, callback dispatch) must still
+    hold even when join() raises.
+    """
+    import logging
+
+    system = ActorSystem("test_watch_logs")
+    registry = VirtualActorRegistry(system)
+
+    class _FailingJoinRef:
+        name = "v:failing"
+        is_alive = False
+
+        async def join(self) -> None:
+            raise RuntimeError("simulated teardown crash")
+
+    fake_ref = _FailingJoinRef()
+    key = "FakeAgent:failing"
+    registry._active[key] = fake_ref  # type: ignore[assignment]
+
+    callback_keys: list[str] = []
+    registry.on_deactivate(lambda k: callback_keys.append(k))
+
+    with caplog.at_level(logging.WARNING, logger="everything_is_an_actor.core.virtual"):
+        await registry._watch_deactivation(key, fake_ref)  # type: ignore[arg-type]
+
+    # The failure must surface through the logger.
+    surfaced = [
+        r
+        for r in caplog.records
+        if r.name == "everything_is_an_actor.core.virtual"
+        and (
+            "simulated teardown crash" in r.getMessage()
+            or r.exc_info is not None
+        )
+    ]
+    assert surfaced, (
+        "Expected join() failure to be logged with WARNING+ severity; got: "
+        f"{[(r.name, r.levelname, r.getMessage()) for r in caplog.records]}"
+    )
+
+    # Cleanup invariants still hold despite the join failure.
+    assert key not in registry._active
+    assert callback_keys == [key], "deactivation callback must still fire"
+
+    await system.shutdown()

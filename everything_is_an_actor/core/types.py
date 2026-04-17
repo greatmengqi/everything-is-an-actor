@@ -133,6 +133,9 @@ class Left(Either[E, A]):
             return False
         return self.value == other.value
 
+    def __hash__(self) -> int:
+        return hash(("Left", self.value))
+
     def map(self, f: Callable[[A], B]) -> Either[E, B]:
         return self  # type: ignore[return-value]
 
@@ -164,6 +167,9 @@ class Right(Either[E, A]):
         if not isinstance(other, Right):
             return False
         return self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash(("Right", self.value))
 
     def map(self, f: Callable[[A], B]) -> Either[E, B]:
         return Right(f(self.value))  # type: ignore[return-value]
@@ -260,6 +266,9 @@ class Success(Try[T]):
             return False
         return self.value == other.value
 
+    def __hash__(self) -> int:
+        return hash(("Success", self.value))
+
 
 class Failure(Try[T]):
     """Failure branch of Try — holds a caught exception.
@@ -301,6 +310,12 @@ class Failure(Try[T]):
         if not isinstance(other, Failure):
             return False
         return self.error == other.error
+
+    def __hash__(self) -> int:
+        # Exception objects are hashable by identity by default; `repr` is
+        # stable across identical error payloads in practice and avoids
+        # surprising "same error but different hash" cases.
+        return hash(("Failure", repr(self.error)))
 
 
 def try_apply(f: Callable[[], T]) -> Try[T]:

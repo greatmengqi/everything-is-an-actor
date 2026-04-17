@@ -239,12 +239,81 @@ async def test_race_cancels_losers():
 
 
 async def test_race_propagates_exception_if_all_fail():
-    """race raises when ALL racers fail (first_completed prefers success)."""
+    """race propagates the first failure — true first-wins semantics.
+
+    This replaces an earlier expectation where race() waited for any
+    success before raising (success-biased first_completed). Under the
+    corrected naming, race() is first-wins: whichever branch finishes
+    first — success or failure — wins. If you want the old
+    success-biased behaviour, use ``ctx.first_success``.
+    """
     system = AgentSystem(ActorSystem())
 
     class OrchestratorAgent(AgentActor[str, str]):
         async def execute(self, input: str) -> str:
             r: TaskResult[str] = await self.context.race([
+                (FailAgent, Task(input="bad1")),
+                (FailAgent, Task(input="bad2")),
+            ])
+            return r.output
+
+    ref = await system.spawn(OrchestratorAgent, "orch")
+    with pytest.raises(ValueError, match="fail:bad"):
+        await system.ask(ref, Task(input="go"))
+    await system.shutdown()
+
+
+async def test_race_first_failure_wins_over_slow_success():
+    """race: a fast failure wins over a slow success. NEW contract (#12).
+
+    Locks in the first-wins semantic. Before this change, ctx.race was
+    aliased to first_completed and would wait for slow_success.
+    """
+    system = AgentSystem(ActorSystem())
+
+    class OrchestratorAgent(AgentActor[str, str]):
+        async def execute(self, input: str) -> str:
+            r: TaskResult[str] = await self.context.race([
+                (FailAgent, Task(input="early")),
+                (SlowAgent, Task(input="0.2:late")),
+            ])
+            return r.output
+
+    ref = await system.spawn(OrchestratorAgent, "orch")
+    with pytest.raises(ValueError, match="fail:early"):
+        await system.ask(ref, Task(input="go"))
+    await system.shutdown()
+
+
+async def test_first_success_prefers_success_over_early_failure():
+    """ctx.first_success: success-biased — waits past a failure for a success.
+
+    NEW API (#12). Replaces the old ctx.race behaviour for callers who
+    genuinely want "give me the first successful result".
+    """
+    system = AgentSystem(ActorSystem())
+
+    class OrchestratorAgent(AgentActor[str, str]):
+        async def execute(self, input: str) -> str:
+            r: TaskResult[str] = await self.context.first_success([
+                (FailAgent, Task(input="early")),
+                (SlowAgent, Task(input="0.05:late")),
+            ])
+            return r.output
+
+    ref = await system.spawn(OrchestratorAgent, "orch")
+    result = await system.ask(ref, Task(input="go"))
+    assert result.output == "late"
+    await system.shutdown()
+
+
+async def test_first_success_raises_when_all_fail():
+    """ctx.first_success raises only when every branch fails."""
+    system = AgentSystem(ActorSystem())
+
+    class OrchestratorAgent(AgentActor[str, str]):
+        async def execute(self, input: str) -> str:
+            r: TaskResult[str] = await self.context.first_success([
                 (FailAgent, Task(input="bad1")),
                 (FailAgent, Task(input="bad2")),
             ])

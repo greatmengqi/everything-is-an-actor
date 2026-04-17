@@ -175,7 +175,7 @@ class VirtualActorRegistry:
             await self._store.put(key)
 
             # Monitor for deactivation in background
-            ComposableFuture.eager(
+            ComposableFuture.fire_and_forget(
                 self._watch_deactivation(key, ref),
                 name=f"virtual-watch:{key}",
             )
@@ -188,7 +188,11 @@ class VirtualActorRegistry:
         try:
             await ref.join()
         except Exception:
-            pass
+            # join() already suppresses CancelledError; anything reaching here
+            # is a real teardown failure. We're inside a fire-and-forget task
+            # with no caller to propagate to — surface it through the logger
+            # so the signal isn't silently lost.
+            logger.exception("Virtual actor join() failed during deactivation: %s", key)
         await self._store.delete(key)
         self._active.pop(key, None)
         # Clean up root cell
