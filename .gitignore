@@ -37,6 +37,7 @@ log/
 # Project
 .omc/
 .claude/settings.local.json
+proto/
 uv.lock
 
 # MkDocs

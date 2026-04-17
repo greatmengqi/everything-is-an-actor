@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "docs",
+      "runtimeExecutable": "mkdocs",
+      "runtimeArgs": ["serve"],
+      "port": 8000
+    },
+    {
+      "name": "tests",
+      "runtimeExecutable": "pytest",
+      "runtimeArgs": ["tests/", "-x", "--tb=short"],
+      "port": 0
+    }
+  ]
+}
