@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-04-02T00:00:00",
+  "description": "Actor System 性能基准 - 请根据实际测试结果更新",
+  "results": [
+    {
+      "test_name": "tell_FastMailbox_AsyncActor",
+      "msg_per_sec": 150000,
+      "avg_latency_ms": 0.7,
+      "p99_latency_ms": 3.0,
+      "peak_memory_mb": 100
+    },
+    {
+      "test_name": "ask_FastMailbox_AsyncActor",
+      "msg_per_sec": 50000,
+      "avg_latency_ms": 2.0,
+      "p99_latency_ms": 8.0,
+      "peak_memory_mb": 100
+    },
+    {
+      "test_name": "multi_actor_ask_N=100",
+      "msg_per_sec": 120000,
+      "avg_latency_ms": 0.8,
+      "p99_latency_ms": 4.0,
+      "peak_memory_mb": 150
+    },
+    {
+      "test_name": "single_loop_N=100",
+      "msg_per_sec": 100000,
+      "avg_latency_ms": 1.0,
+      "p99_latency_ms": 5.0,
+      "peak_memory_mb": 120
+    },
+    {
+      "test_name": "multi_loop_workers=4",
+      "msg_per_sec": 80000,
+      "avg_latency_ms": 1.2,
+      "p99_latency_ms": 6.0,
+      "peak_memory_mb": 180
+    },
+    {
+      "test_name": "cross_loop_N=4",
+      "msg_per_sec": 60000,
+      "avg_latency_ms": 1.5,
+      "p99_latency_ms": 7.0,
+      "peak_memory_mb": 150
+    },
+    {
+      "test_name": "single_agent_ask_N=10000",
+      "msg_per_sec": 30000,
+      "avg_latency_ms": 3.0,
+      "p99_latency_ms": 10.0,
+      "peak_memory_mb": 200
+    },
+    {
+      "test_name": "streaming_output_N=100",
+      "msg_per_sec": 25000,
+      "avg_latency_ms": 4.0,
+      "p99_latency_ms": 12.0,
+      "peak_memory_mb": 180
+    }
+  ]
+}
